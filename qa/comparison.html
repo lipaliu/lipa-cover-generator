@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LIPA Design QA Comparison</title>
+    <style>
+      body {
+        margin: 0;
+        background: #0e0f16;
+        color: #f2f0ea;
+        font:
+          13px -apple-system,
+          BlinkMacSystemFont,
+          "SF Pro Text",
+          sans-serif;
+      }
+
+      main {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+        padding: 24px;
+        align-items: start;
+      }
+
+      figure {
+        margin: 0;
+        display: grid;
+        gap: 10px;
+      }
+
+      figcaption {
+        color: rgba(242, 240, 234, 0.74);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      img {
+        width: 100%;
+        border: 1px solid rgba(242, 240, 234, 0.16);
+        border-radius: 10px;
+        background: #11121a;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <figure>
+        <figcaption>Source Visual Target</figcaption>
+        <img src="../public/samples/source-visual-target.png" alt="Source visual target" />
+      </figure>
+      <figure>
+        <figcaption>Implementation</figcaption>
+        <img src="./implementation-mobile-500.png" alt="Implementation screenshot" />
+      </figure>
+    </main>
+  </body>
+</html>

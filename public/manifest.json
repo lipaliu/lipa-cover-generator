@@ -1,0 +1,18 @@
+{
+  "name": "封面生成器",
+  "short_name": "LIPA",
+  "description": "上传底图并生成小红书/抖音封面。",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#11111a",
+  "theme_color": "#11111a",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icons/lipa-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
