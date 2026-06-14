@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, extname, join } from "node:path";
 import { promisify } from "node:util";
 import OpenAI, { toFile } from "openai";
+import { ProxyAgent, setGlobalDispatcher } from "undici";
 import { buildPlanUserPrompt, fallbackPlans, skillPrompt } from "./prompts.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -50,6 +51,22 @@ function loadLocalEnv() {
 }
 
 loadLocalEnv();
+
+function configureProxy() {
+  const proxyUrl =
+    process.env.HTTPS_PROXY ||
+    process.env.https_proxy ||
+    process.env.HTTP_PROXY ||
+    process.env.http_proxy ||
+    process.env.ALL_PROXY ||
+    process.env.all_proxy ||
+    "";
+
+  if (!proxyUrl) return;
+  setGlobalDispatcher(new ProxyAgent(proxyUrl));
+}
+
+configureProxy();
 
 app.use(express.json({ limit: "35mb" }));
 
