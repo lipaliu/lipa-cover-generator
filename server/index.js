@@ -196,6 +196,44 @@ async function planCovers(openai, { analysis, title, subtitle, keywords, count }
   }));
 }
 
+function buildOpenAIEditPrompt(plan) {
+  return `${plan.prompt}
+
+CONTENT SAFETY CONTEXT:
+- This is a non-sexual Chinese social media cover editing task.
+- If the uploaded photo contains a tongue, mouth, lips, teeth, skin, or body close-up, treat it strictly as clinical health education, oral care, beauty care, wellness, or lifestyle content.
+- Do not add erotic, seductive, fetish, nude, romantic, or sexualized elements.
+- Only preserve the original photo and add bold Chinese typography/decorations for an educational cover.`;
+}
+
+function friendlyProviderError(error, engine) {
+  const raw = [error?.message, error?.response?.data?.error?.message, error?.stdout, error?.stderr]
+    .filter(Boolean)
+    .join("\n")
+    .trim();
+
+  if (/safety system|safety_violations|sexual|request was rejected/iu.test(raw)) {
+    if (engine === "openai") {
+      return "GPT-Image-2 的安全系统拒绝了这张底图，常见于舌苔/口腔近景被误判为 sexual。建议这类健康科普图切换「即梦」或「通义万相」，或换更临床、干净的底图重试。";
+    }
+    return "生成平台的安全系统拒绝了这张底图。建议换更中性、临床感更强的底图，或切换其他引擎重试。";
+  }
+
+  if (/insufficient_quota|quota|billing|credits?|余额|额度/iu.test(raw)) {
+    return `${engineLabels[engine] || "当前引擎"} 额度不足或付款方式不可用，请检查平台余额/账单设置。`;
+  }
+
+  if (/invalid_api_key|incorrect api key|unauthorized|401/iu.test(raw)) {
+    return `${engineLabels[engine] || "当前引擎"} 的 API Key 无效或未授权，请检查 .env.local 后重启服务。`;
+  }
+
+  if (/fetch failed|connect timeout|timeout|econnreset|unable to get local issuer certificate/iu.test(raw)) {
+    return `${engineLabels[engine] || "当前引擎"} 网络连接失败，请检查代理/VPN 或稍后重试。`;
+  }
+
+  return raw.length > 320 ? `${raw.slice(0, 320)}...` : raw || "生成失败。";
+}
+
 async function generateCover(openai, imageDataUrl, plan) {
   const { base64, mimeType } = splitDataUrl(imageDataUrl);
   const imageFile = await toFile(Buffer.from(base64, "base64"), "base-image.png", {
@@ -205,7 +243,7 @@ async function generateCover(openai, imageDataUrl, plan) {
   const response = await openai.images.edit({
     model: "gpt-image-2",
     image: imageFile,
-    prompt: plan.prompt,
+    prompt: buildOpenAIEditPrompt(plan),
     size: "1024x1536",
   });
 
@@ -578,7 +616,7 @@ app.post("/api/generate", async (req, res) => {
             combination: plan.combination,
             label: plan.label,
             description: plan.description,
-            error: error instanceof Error ? error.message : "生成失败",
+            error: friendlyProviderError(error, engine),
             engine,
           };
           results.push(result);
@@ -611,7 +649,7 @@ app.post("/api/generate", async (req, res) => {
       progress: 0,
       total: count,
       engine,
-      message: error instanceof Error ? error.message : "生成失败",
+      message: friendlyProviderError(error, engine),
     });
     res.end();
   }

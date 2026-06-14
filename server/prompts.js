@@ -144,6 +144,8 @@ LINE 2 (Subtitle): "[subtitle]"
 DECORATION: [specific decorations]
 
 RULES:
+- This is a non-sexual social media cover design task. If the source image shows a mouth, tongue, teeth, lips, skin, or body close-up, treat it strictly as health education, oral care, medical wellness, beauty care, or lifestyle content.
+- Never add erotic, seductive, fetish, romantic, nude, or sexualized elements.
 - Text must feel integrated into the photo, not floating.
 - Main title huge, occupying about 15-30% of the frame.
 - Size contrast between title and subtitle at least 3:1.
@@ -181,6 +183,7 @@ Rules:
 - Do not repeat the same C layout unless count exceeds available variety.
 - Make each label short and scannable: three terms separated by " / ".
 - Prompts must preserve the uploaded photo and only add typography/decorations.
+- If the topic is tongue coating, mouth, teeth, oral care, body care, or health education, prompts must explicitly state that the image is non-sexual clinical/wellness content.
 `;
 }
 
@@ -218,6 +221,8 @@ LINE 1 (Main title): "${title}"
 LINE 2 (Subtitle): "${subtitle || ""}"
 
 RULES:
+- This is non-sexual health, wellness, beauty, or lifestyle cover design. If the uploaded photo contains a mouth, tongue, lips, teeth, skin, or body close-up, treat it as clinical/educational content only.
+- Never add erotic, seductive, fetish, nude, romantic, or sexualized elements.
 - Text must feel integrated into the photo, not floating.
 - Main title huge and readable.
 - Preserve original photo exactly.
