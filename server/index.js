@@ -382,6 +382,15 @@ function extractSubmitId(text) {
 }
 
 function extractImageReferenceFromText(text) {
+  let parsed = null;
+  try {
+    parsed = parseJsonObject(text, null);
+  } catch {
+    parsed = null;
+  }
+  const jsonPath = parsed?.result_json?.images?.find((image) => image?.path)?.path;
+  if (jsonPath) return jsonPath;
+
   const dataUrlMatch = /data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+/iu.exec(text);
   if (dataUrlMatch?.[0]) return dataUrlMatch[0];
 
@@ -406,7 +415,7 @@ async function dreaminaOutputToDataUrl(output, downloadDir) {
   const reference = extractImageReferenceFromText(output);
   if (!reference) return "";
   if (reference.startsWith("/")) return localImageToDataUrl(reference);
-  return imageReferenceToDataUrl(reference);
+  return "";
 }
 
 async function queryDreaminaResult(submitId, downloadDir, pollSeconds) {
