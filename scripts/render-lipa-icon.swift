@@ -23,8 +23,8 @@ func rounded(_ rect: CGRect, _ radius: CGFloat) -> NSBezierPath {
 
 func drawCenteredText(_ text: String, in rect: CGRect, fontSize: CGFloat, color textColor: NSColor, kern: CGFloat = 0) {
   let paragraph = NSMutableParagraphStyle()
-  paragraph.alignment = .center
-  let font = NSFont(name: "Georgia-Bold", size: fontSize) ?? NSFont.systemFont(ofSize: fontSize, weight: .black)
+  paragraph.alignment = .left
+  let font = NSFont.systemFont(ofSize: fontSize, weight: .bold)
   let attributes: [NSAttributedString.Key: Any] = [
     .font: font,
     .foregroundColor: textColor,
@@ -46,34 +46,20 @@ image.lockFocus()
 NSColor.clear.setFill()
 NSRect(x: 0, y: 0, width: size, height: size).fill()
 
-let outer = CGRect(x: 22, y: 22, width: 468, height: 468)
-let outerPath = rounded(outer, 108)
+let outer = CGRect(x: 26, y: 26, width: 460, height: 460)
+let outerPath = rounded(outer, 54)
 let shadow = NSShadow()
-shadow.shadowColor = color("#281125", 0.34)
-shadow.shadowBlurRadius = 38
-shadow.shadowOffset = NSSize(width: 0, height: -18)
+shadow.shadowColor = color("#6F5D91", 0.28)
+shadow.shadowBlurRadius = 24
+shadow.shadowOffset = NSSize(width: 0, height: -10)
 NSGraphicsContext.saveGraphicsState()
 shadow.set()
-NSGradient(colors: [color("#281125"), color("#5E3D84"), color("#A68AC5")])?.draw(in: outerPath, angle: 135)
+color("#B9A6DD").setFill()
+outerPath.fill()
 NSGraphicsContext.restoreGraphicsState()
 
-let inset = outer.insetBy(dx: 26, dy: 26)
-let insetPath = rounded(inset, 86)
-color("#FFFFFF", 0.08).setFill()
-insetPath.fill()
-color("#FFFFFF", 0.22).setStroke()
-insetPath.lineWidth = 3
-insetPath.stroke()
-
-let shine = rounded(CGRect(x: 56, y: 320, width: 400, height: 122), 54)
-NSGradient(colors: [color("#FFFFFF", 0.28), color("#FFFFFF", 0.02)])?.draw(in: shine, angle: 90)
-
-drawCenteredText("LIPA", in: CGRect(x: 72, y: 238, width: 368, height: 116), fontSize: 108, color: color("#FFFFFF"), kern: 2)
-drawCenteredText("COVER", in: CGRect(x: 72, y: 150, width: 368, height: 82), fontSize: 48, color: color("#D8F2DA"), kern: 5)
-
-let footerPath = rounded(CGRect(x: 142, y: 98, width: 228, height: 26), 13)
-color("#D8F2DA", 0.18).setFill()
-footerPath.fill()
+drawCenteredText("Lipa", in: CGRect(x: 72, y: 252, width: 368, height: 96), fontSize: 96, color: color("#FFFFFF"), kern: -6)
+drawCenteredText("Cover", in: CGRect(x: 72, y: 160, width: 368, height: 82), fontSize: 70, color: color("#FFFFFF"), kern: -4)
 
 image.unlockFocus()
 

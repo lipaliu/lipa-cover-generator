@@ -706,8 +706,8 @@ export function App() {
         <header className="topbar">
           <button className="brand" type="button" onClick={resetDemo} aria-label="重置示例">
             <span className="brand-logo-mark" aria-hidden="true">
-              <strong>LIPA</strong>
-              <em>COVER</em>
+              <strong>Lipa</strong>
+              <em>Cover</em>
             </span>
             <span className="brand-copy">
               <strong>封面生成器</strong>
@@ -856,39 +856,35 @@ export function App() {
                     <b>01</b>
                     <span>分析底图颜色</span>
                   </div>
-                  <div className="dominant-color-block" style={{ background: detectedColor }}>
-                    <span>主色</span>
-                    <strong>{detectedColor}</strong>
-                  </div>
-                  <div className="image-color-row" aria-label="底图颜色组成">
-                    {imageColors.map((color) => (
-                      <button
-                        key={color}
-                        type="button"
-                        style={{ "--swatch-color": color } as CSSProperties}
-                        onClick={() => {
-                          setEditLayer((previous) => ({ ...previous, accent: color }));
-                          if (runState === "demo") setRunState("idle");
-                        }}
-                      >
-                        <i />
-                        <span>{color}</span>
-                      </button>
-                    ))}
+                  <div className="pantone-card" aria-label="底图颜色组成">
+                    <div className="pantone-strip">
+                      {imageColors.map((color) => (
+                        <span key={color} style={{ background: color }} />
+                      ))}
+                    </div>
+                    <div className="pantone-meta">
+                      <strong>IMAGE PALETTE</strong>
+                      <small>主色 {detectedColor}</small>
+                    </div>
+                    <div className="pantone-hex-list">
+                      {imageColors.map((color) => (
+                        <span key={color}>{color}</span>
+                      ))}
+                    </div>
                   </div>
                 </article>
 
                 <article className="simple-color-card">
                   <div className="simple-step-title">
                     <b>02</b>
-                    <span>选择字体颜色</span>
+                    <span>字体颜色建议</span>
                   </div>
                   <div className="type-color-preview" style={{ background: detectedColor, color: editLayer.color }}>
                     <strong>HELLO</strong>
-                    <span>标题预览</span>
+                    <span>{editLayer.color} · {contrastGrade(currentContrast)}</span>
                   </div>
-                  <div className="font-color-row" aria-label="字体颜色">
-                    {fontColorOptions.map((color) => {
+                  <div className="font-suggestion-row" aria-label="字体颜色建议">
+                    {fontColorOptions.slice(0, 4).map((color) => {
                       const ratio = contrastRatio(color, detectedColor);
                       return (
                         <button
@@ -908,6 +904,18 @@ export function App() {
                       );
                     })}
                   </div>
+                  <label className="custom-color-picker">
+                    <span>自定义</span>
+                    <input
+                      type="color"
+                      value={editLayer.color}
+                      onChange={(event) => {
+                        setEditLayer((previous) => ({ ...previous, color: event.target.value.toUpperCase() }));
+                        if (runState === "demo") setRunState("idle");
+                      }}
+                    />
+                    <em>{editLayer.color}</em>
+                  </label>
                 </article>
               </div>
             </section>

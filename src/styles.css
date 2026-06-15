@@ -2240,41 +2240,40 @@ html {
 }
 
 .brand-logo-mark {
-  width: 88px;
-  height: 58px;
-  padding: 7px 10px 8px;
+  width: 74px;
+  height: 74px;
+  padding: 10px 9px;
   display: grid;
   align-content: center;
-  justify-items: center;
-  gap: 0;
-  border: 1px solid rgba(255, 255, 255, 0.34);
-  border-radius: 16px;
-  background:
-    linear-gradient(145deg, rgba(255, 255, 255, 0.2), transparent 36%),
-    linear-gradient(135deg, #281125 0%, #5e3d84 56%, #a68ac5 100%);
+  justify-items: start;
+  gap: 2px;
+  border: 0;
+  border-radius: 10px;
+  background: #b9a6dd;
   color: #fff;
   box-shadow:
-    0 16px 32px rgba(63, 35, 91, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+    0 12px 24px rgba(113, 87, 148, 0.24),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
 }
 
 .brand-logo-mark strong,
 .brand-logo-mark em {
   display: block;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "SF Pro Display", "SF Pro Text", Inter, -apple-system, BlinkMacSystemFont, sans-serif;
   font-style: normal;
-  font-weight: 900;
-  letter-spacing: 0.04em;
-  line-height: 0.9;
-  text-shadow: 0 2px 8px rgba(23, 8, 28, 0.38);
+  font-weight: 760;
+  letter-spacing: -0.075em;
+  line-height: 1;
+  color: #fff;
+  text-shadow: none;
 }
 
 .brand-logo-mark strong {
-  font-size: 23px;
+  font-size: 24px;
 }
 
 .brand-logo-mark em {
-  font-size: 13px;
+  font-size: 18px;
 }
 
 .brand-copy {
@@ -2342,7 +2341,6 @@ html {
   font-size: 14px;
 }
 
-.dominant-color-block,
 .type-color-preview {
   min-height: 82px;
   padding: 14px;
@@ -2352,22 +2350,10 @@ html {
   overflow: hidden;
 }
 
-.dominant-color-block {
-  color: #fff;
-  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.42);
-}
-
-.dominant-color-block span,
 .type-color-preview span {
   font-size: 11px;
   font-weight: 760;
   opacity: 0.76;
-}
-
-.dominant-color-block strong {
-  font-family: "SFMono-Regular", "SF Mono", ui-monospace, monospace;
-  font-size: 18px;
-  letter-spacing: 0.02em;
 }
 
 .type-color-preview {
@@ -2376,23 +2362,76 @@ html {
 }
 
 .type-color-preview strong {
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "SF Pro Display", "SF Pro Text", Inter, -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 34px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
+  font-weight: 860;
+  letter-spacing: 0;
   line-height: 1;
   text-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
 }
 
-.image-color-row,
-.font-color-row {
+.pantone-card {
+  overflow: hidden;
+  display: grid;
+  border: 1px solid var(--lipa-line);
+  border-radius: 10px;
+  background: #fff;
+}
+
+.pantone-strip {
+  height: 108px;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.pantone-strip span {
+  min-width: 0;
+}
+
+.pantone-meta {
+  padding: 12px 14px 8px;
+  display: grid;
+  gap: 3px;
+}
+
+.pantone-meta strong {
+  color: #281125;
+  font-size: 18px;
+  font-weight: 960;
+  letter-spacing: 0.02em;
+}
+
+.pantone-meta small {
+  color: rgba(40, 17, 37, 0.52);
+  font-family: "SFMono-Regular", "SF Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.pantone-hex-list {
+  padding: 0 14px 14px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pantone-hex-list span {
+  padding: 5px 7px;
+  border-radius: 999px;
+  background: #f5f1f8;
+  color: rgba(40, 17, 37, 0.72);
+  font-family: "SFMono-Regular", "SF Mono", ui-monospace, monospace;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.font-suggestion-row {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 
-.image-color-row button,
-.font-color-row button {
+.font-suggestion-row button {
   min-width: 0;
   min-height: 42px;
   padding: 7px 8px;
@@ -2407,8 +2446,7 @@ html {
   cursor: pointer;
 }
 
-.image-color-row i,
-.font-color-row i {
+.font-suggestion-row i {
   width: 20px;
   height: 20px;
   border: 2px solid #fff;
@@ -2419,8 +2457,7 @@ html {
     0 5px 12px rgba(40, 17, 37, 0.12);
 }
 
-.image-color-row span,
-.font-color-row span {
+.font-suggestion-row span {
   overflow: hidden;
   font-family: "SFMono-Regular", "SF Mono", ui-monospace, monospace;
   font-size: 11px;
@@ -2429,7 +2466,7 @@ html {
   white-space: nowrap;
 }
 
-.font-color-row em {
+.font-suggestion-row em {
   padding: 3px 5px;
   border-radius: 999px;
   background: #d8f2da;
@@ -2439,9 +2476,48 @@ html {
   font-weight: 900;
 }
 
-.font-color-row button.is-selected {
+.font-suggestion-row button.is-selected {
   border-color: #5e3d84;
   box-shadow: 0 0 0 2px rgba(94, 61, 132, 0.18);
+}
+
+.custom-color-picker {
+  min-height: 44px;
+  padding: 7px 8px;
+  display: grid;
+  grid-template-columns: auto 38px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--lipa-line);
+  border-radius: 9px;
+  background: #fff;
+  color: #281125;
+}
+
+.custom-color-picker span {
+  font-size: 12px;
+  font-weight: 860;
+}
+
+.custom-color-picker input {
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+}
+
+.custom-color-picker em {
+  overflow: hidden;
+  color: rgba(40, 17, 37, 0.62);
+  font-family: "SFMono-Regular", "SF Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 @media (max-width: 720px) {
@@ -2452,20 +2528,24 @@ html {
 
 @media (max-width: 520px) {
   .brand-logo-mark {
-    width: 76px;
-    height: 52px;
+    width: 60px;
+    height: 60px;
+    padding: 8px 7px;
   }
 
   .brand-logo-mark strong {
     font-size: 20px;
   }
 
+  .brand-logo-mark em {
+    font-size: 15px;
+  }
+
   .brand-copy strong {
     font-size: 20px;
   }
 
-  .image-color-row,
-  .font-color-row {
+  .font-suggestion-row {
     grid-template-columns: 1fr;
   }
 }
