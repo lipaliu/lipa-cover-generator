@@ -21,20 +21,21 @@ func rounded(_ rect: CGRect, _ radius: CGFloat) -> NSBezierPath {
   NSBezierPath(roundedRect: rect, xRadius: radius, yRadius: radius)
 }
 
-func drawText(_ text: String, in rect: CGRect, color textColor: NSColor) {
+func drawCenteredText(_ text: String, in rect: CGRect, fontSize: CGFloat, color textColor: NSColor, kern: CGFloat = 0) {
   let paragraph = NSMutableParagraphStyle()
   paragraph.alignment = .center
+  let font = NSFont(name: "Georgia-Bold", size: fontSize) ?? NSFont.systemFont(ofSize: fontSize, weight: .black)
   let attributes: [NSAttributedString.Key: Any] = [
-    .font: NSFont.systemFont(ofSize: 122, weight: .black),
+    .font: font,
     .foregroundColor: textColor,
     .paragraphStyle: paragraph,
-    .kern: -4,
+    .kern: kern,
   ]
   let attributed = NSAttributedString(string: text, attributes: attributes)
   let textSize = attributed.size()
   let target = CGRect(
     x: rect.midX - textSize.width / 2,
-    y: rect.midY - textSize.height / 2 - 7,
+    y: rect.midY - textSize.height / 2,
     width: textSize.width,
     height: textSize.height
   )
@@ -45,54 +46,34 @@ image.lockFocus()
 NSColor.clear.setFill()
 NSRect(x: 0, y: 0, width: size, height: size).fill()
 
-let outer = CGRect(x: 24, y: 24, width: 464, height: 464)
-let outerPath = rounded(outer, 112)
+let outer = CGRect(x: 22, y: 22, width: 468, height: 468)
+let outerPath = rounded(outer, 108)
 let shadow = NSShadow()
-shadow.shadowColor = color("#5C4A66", 0.26)
-shadow.shadowBlurRadius = 34
+shadow.shadowColor = color("#281125", 0.34)
+shadow.shadowBlurRadius = 38
 shadow.shadowOffset = NSSize(width: 0, height: -18)
 NSGraphicsContext.saveGraphicsState()
 shadow.set()
-NSGradient(colors: [color("#FFF9FD"), color("#ECF7FF"), color("#F8FFF3")])?.draw(in: outerPath, angle: 125)
+NSGradient(colors: [color("#281125"), color("#5E3D84"), color("#A68AC5")])?.draw(in: outerPath, angle: 135)
 NSGraphicsContext.restoreGraphicsState()
 
-let glowPath = rounded(outer.insetBy(dx: 18, dy: 18), 92)
-NSGradient(colors: [color("#FFFFFF", 0.92), color("#FFFFFF", 0.12)])?.draw(in: glowPath, angle: 90)
+let inset = outer.insetBy(dx: 26, dy: 26)
+let insetPath = rounded(inset, 86)
+color("#FFFFFF", 0.08).setFill()
+insetPath.fill()
+color("#FFFFFF", 0.22).setStroke()
+insetPath.lineWidth = 3
+insetPath.stroke()
 
-let panel = outer.insetBy(dx: 54, dy: 54)
-let panelPath = rounded(panel, 72)
-color("#FFFFFF", 0.68).setFill()
-panelPath.fill()
-color("#FFFFFF", 0.86).setStroke()
-panelPath.lineWidth = 4
-panelPath.stroke()
+let shine = rounded(CGRect(x: 56, y: 320, width: 400, height: 122), 54)
+NSGradient(colors: [color("#FFFFFF", 0.28), color("#FFFFFF", 0.02)])?.draw(in: shine, angle: 90)
 
-let tileSize: CGFloat = 160
-let gap: CGFloat = 24
-let startX = panel.minX + 24
-let startY = panel.minY + 24
-let tiles = [
-  ("L", CGRect(x: startX, y: startY + tileSize + gap, width: tileSize, height: tileSize), color("#16151A")),
-  ("I", CGRect(x: startX + tileSize + gap, y: startY + tileSize + gap, width: tileSize, height: tileSize), color("#FF4FA3")),
-  ("P", CGRect(x: startX, y: startY, width: tileSize, height: tileSize), color("#526AFF")),
-  ("A", CGRect(x: startX + tileSize + gap, y: startY, width: tileSize, height: tileSize), color("#23CFA7")),
-]
+drawCenteredText("LIPA", in: CGRect(x: 72, y: 238, width: 368, height: 116), fontSize: 108, color: color("#FFFFFF"), kern: 2)
+drawCenteredText("COVER", in: CGRect(x: 72, y: 150, width: 368, height: 82), fontSize: 48, color: color("#D8F2DA"), kern: 5)
 
-for (_, rect, textColor) in tiles {
-  let path = rounded(rect, 42)
-  color("#FFFFFF", 0.54).setFill()
-  path.fill()
-  textColor.withAlphaComponent(0.11).setStroke()
-  path.lineWidth = 3
-  path.stroke()
-}
-
-for (letter, rect, textColor) in tiles {
-  drawText(letter, in: rect, color: textColor)
-}
-
-let shine = rounded(CGRect(x: 58, y: 310, width: 396, height: 132), 58)
-NSGradient(colors: [color("#FFFFFF", 0.5), color("#FFFFFF", 0.02)])?.draw(in: shine, angle: 90)
+let footerPath = rounded(CGRect(x: 142, y: 98, width: 228, height: 26), 13)
+color("#D8F2DA", 0.18).setFill()
+footerPath.fill()
 
 image.unlockFocus()
 

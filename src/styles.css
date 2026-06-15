@@ -2233,3 +2233,239 @@ html {
     grid-template-columns: 1fr;
   }
 }
+
+/* Simplified color choice flow + purple LIPA COVER logo */
+.brand {
+  align-items: center;
+}
+
+.brand-logo-mark {
+  width: 88px;
+  height: 58px;
+  padding: 7px 10px 8px;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 0;
+  border: 1px solid rgba(255, 255, 255, 0.34);
+  border-radius: 16px;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.2), transparent 36%),
+    linear-gradient(135deg, #281125 0%, #5e3d84 56%, #a68ac5 100%);
+  color: #fff;
+  box-shadow:
+    0 16px 32px rgba(63, 35, 91, 0.3),
+    inset 0 1px 0 rgba(255, 255, 255, 0.34);
+}
+
+.brand-logo-mark strong,
+.brand-logo-mark em {
+  display: block;
+  font-family: Georgia, "Times New Roman", serif;
+  font-style: normal;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 0.9;
+  text-shadow: 0 2px 8px rgba(23, 8, 28, 0.38);
+}
+
+.brand-logo-mark strong {
+  font-size: 23px;
+}
+
+.brand-logo-mark em {
+  font-size: 13px;
+}
+
+.brand-copy {
+  display: grid;
+  gap: 3px;
+  text-align: left;
+}
+
+.brand-copy strong {
+  color: #281125;
+  font-size: 24px;
+  font-weight: 860;
+  line-height: 1;
+}
+
+.brand-copy small {
+  color: rgba(40, 17, 37, 0.48);
+  font-size: 11px;
+  font-weight: 760;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.simple-color-zone {
+  padding: 14px;
+}
+
+.simple-color-steps {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
+  gap: 12px;
+}
+
+.simple-color-card {
+  min-width: 0;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--lipa-line);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(40, 17, 37, 0.055);
+}
+
+.simple-step-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #281125;
+  font-weight: 860;
+}
+
+.simple-step-title b {
+  width: 28px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 7px;
+  background: #281125;
+  color: #d8f2da;
+  font-size: 11px;
+}
+
+.simple-step-title span {
+  font-size: 14px;
+}
+
+.dominant-color-block,
+.type-color-preview {
+  min-height: 82px;
+  padding: 14px;
+  display: grid;
+  align-content: center;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.dominant-color-block {
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.42);
+}
+
+.dominant-color-block span,
+.type-color-preview span {
+  font-size: 11px;
+  font-weight: 760;
+  opacity: 0.76;
+}
+
+.dominant-color-block strong {
+  font-family: "SFMono-Regular", "SF Mono", ui-monospace, monospace;
+  font-size: 18px;
+  letter-spacing: 0.02em;
+}
+
+.type-color-preview {
+  justify-items: center;
+  text-align: center;
+}
+
+.type-color-preview strong {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 34px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  line-height: 1;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.28);
+}
+
+.image-color-row,
+.font-color-row {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.image-color-row button,
+.font-color-row button {
+  min-width: 0;
+  min-height: 42px;
+  padding: 7px 8px;
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  border: 1px solid var(--lipa-line);
+  border-radius: 9px;
+  background: #fff;
+  color: #281125;
+  cursor: pointer;
+}
+
+.image-color-row i,
+.font-color-row i {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #fff;
+  border-radius: 7px;
+  background: var(--swatch-color);
+  box-shadow:
+    0 0 0 1px rgba(40, 17, 37, 0.12),
+    0 5px 12px rgba(40, 17, 37, 0.12);
+}
+
+.image-color-row span,
+.font-color-row span {
+  overflow: hidden;
+  font-family: "SFMono-Regular", "SF Mono", ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.font-color-row em {
+  padding: 3px 5px;
+  border-radius: 999px;
+  background: #d8f2da;
+  color: #281125;
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 900;
+}
+
+.font-color-row button.is-selected {
+  border-color: #5e3d84;
+  box-shadow: 0 0 0 2px rgba(94, 61, 132, 0.18);
+}
+
+@media (max-width: 720px) {
+  .simple-color-steps {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .brand-logo-mark {
+    width: 76px;
+    height: 52px;
+  }
+
+  .brand-logo-mark strong {
+    font-size: 20px;
+  }
+
+  .brand-copy strong {
+    font-size: 20px;
+  }
+
+  .image-color-row,
+  .font-color-row {
+    grid-template-columns: 1fr;
+  }
+}
