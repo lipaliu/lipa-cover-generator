@@ -166,7 +166,7 @@ async function analyzeImage(openai, image, { title, subtitle, keywords }) {
   return parseJsonObject(completion.choices?.[0]?.message?.content, fallbackAnalysis);
 }
 
-async function planCovers(openai, { analysis, title, subtitle, keywords, count }) {
+async function planCovers(openai, { analysis, title, subtitle, keywords, count, stylePreferences }) {
   const completion = await openai.chat.completions.create({
     model: "gpt-4o",
     response_format: { type: "json_object" },
@@ -178,7 +178,7 @@ async function planCovers(openai, { analysis, title, subtitle, keywords, count }
       },
       {
         role: "user",
-        content: buildPlanUserPrompt({ analysis, title, subtitle, keywords, count }),
+        content: buildPlanUserPrompt({ analysis, title, subtitle, keywords, count, stylePreferences }),
       },
     ],
   });
@@ -558,7 +558,15 @@ app.post("/api/generate", async (req, res) => {
   res.flushHeaders?.();
 
   const startedAt = Date.now();
-  const { image, title, subtitle = "", keywords = "", engine: requestedEngine = "auto", count: requestedCount } = req.body || {};
+  const {
+    image,
+    title,
+    subtitle = "",
+    keywords = "",
+    engine: requestedEngine = "auto",
+    count: requestedCount,
+    stylePreferences = null,
+  } = req.body || {};
   const count = normalizeCount(requestedCount);
   const engine = resolveEngine(normalizeEngine(requestedEngine));
 
@@ -581,7 +589,7 @@ app.post("/api/generate", async (req, res) => {
     writeSse(res, { status: "planning", progress: 0, total: count, engine, analysis, message: "正在生成方案..." });
 
     const plans = openai
-      ? await planCovers(openai, { analysis, title, subtitle, keywords, count })
+      ? await planCovers(openai, { analysis, title, subtitle, keywords, count, stylePreferences })
       : fallbackPlans({ analysis, title, subtitle, count });
     writeSse(res, { status: "planned", progress: 0, total: count, engine, plans, message: "方案已生成" });
 

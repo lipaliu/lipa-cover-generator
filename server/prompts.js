@@ -154,7 +154,7 @@ RULES:
 - Default output is Xiaohongshu 1024x1536.
 `;
 
-export function buildPlanUserPrompt({ analysis, title, subtitle, keywords, count }) {
+export function buildPlanUserPrompt({ analysis, title, subtitle, keywords, count, stylePreferences }) {
   return `
 Create exactly ${count} distinct cover design plans for this image and text.
 
@@ -164,6 +164,8 @@ ${JSON.stringify(analysis, null, 2)}
 Main title: ${title}
 Subtitle: ${subtitle || "(none)"}
 Keywords / content cues: ${keywords || "(none)"}
+Creator visual preferences:
+${stylePreferences ? JSON.stringify(stylePreferences, null, 2) : "(none)"}
 
 Return JSON only:
 {
@@ -184,6 +186,7 @@ Rules:
 - Make each label short and scannable: three terms separated by " / ".
 - Prompts must preserve the uploaded photo and only add typography/decorations.
 - If the topic is tongue coating, mouth, teeth, oral care, body care, or health education, prompts must explicitly state that the image is non-sexual clinical/wellness content.
+- If Creator visual preferences include tone colors or font direction, use them as hard guidance unless they conflict with readability.
 `;
 }
 
