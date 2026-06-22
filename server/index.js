@@ -184,16 +184,32 @@ async function planCovers(openai, { analysis, title, subtitle, keywords, count, 
   });
 
   const parsed = parseJsonObject(completion.choices?.[0]?.message?.content, { plans: [] });
-  if (!Array.isArray(parsed.plans) || parsed.plans.length === 0) {
-    return fallbackPlans({ analysis, title, subtitle, count });
+  const fallback = fallbackPlans({ analysis, title, subtitle, count });
+  const planned = Array.isArray(parsed.plans) ? parsed.plans.filter(Boolean) : [];
+  const filledPlans = [...planned];
+
+  for (const fallbackPlan of fallback) {
+    if (filledPlans.length >= count) break;
+    const duplicate = filledPlans.some(
+      (plan) => String(plan.combination || "") === String(fallbackPlan.combination || ""),
+    );
+    if (!duplicate) filledPlans.push(fallbackPlan);
   }
-  return parsed.plans.slice(0, count).map((plan, index) => ({
-    id: index + 1,
-    combination: String(plan.combination || `方案${index + 1}`),
-    label: String(plan.label || plan.description || `方案 ${index + 1}`),
-    description: String(plan.description || plan.label || ""),
-    prompt: String(plan.prompt || ""),
-  }));
+
+  while (filledPlans.length < count) {
+    filledPlans.push(fallback[filledPlans.length % fallback.length]);
+  }
+
+  return filledPlans.slice(0, count).map((plan, index) => {
+    const backup = fallback[index % fallback.length];
+    return {
+      id: index + 1,
+      combination: String(plan.combination || backup.combination || `方案${index + 1}`),
+      label: String(plan.label || plan.description || backup.label || `方案 ${index + 1}`),
+      description: String(plan.description || plan.label || backup.description || ""),
+      prompt: String(plan.prompt || backup.prompt || ""),
+    };
+  });
 }
 
 function buildOpenAIEditPrompt(plan) {

@@ -8,17 +8,13 @@ import {
   History,
   ImagePlus,
   LoaderCircle,
-  MoreHorizontal,
   Play,
-  RotateCcw,
   Settings,
-  SlidersHorizontal,
   Square,
   Trash2,
   Upload,
   UserRound,
   WandSparkles,
-  X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { deleteHistoryBatch, getHistory, saveHistoryBatch } from "./lib/history";
@@ -167,6 +163,19 @@ function createEmptySlots(total: number, results: CoverResult[], isGenerating: b
     }
   }
   return items.sort((a, b) => a.id - b.id);
+}
+
+function fillMissingResults(results: CoverResult[], total: number): CoverResult[] {
+  const byId = new Map(results.map((result) => [result.id, result]));
+  return Array.from({ length: total }, (_, index) => {
+    const id = index + 1;
+    return byId.get(id) || {
+      id,
+      combination: "missing",
+      label: "未返回",
+      error: "这一张没有返回结果，请重试。",
+    };
+  });
 }
 
 function readableHex(value: number) {
@@ -359,7 +368,7 @@ export function App() {
   const [activeTab, setActiveTab] = useState<"generate" | "history">("generate");
   const [title, setTitle] = useState("为什么越来越多人开始徒步旅行?");
   const [subtitle, setSubtitle] = useState("一场治愈身心的自由之旅");
-  const [keywords, setKeywords] = useState("徒步 | 旅行 | 治愈 | 自由 | 风景");
+  const [keywords, setKeywords] = useState("");
   const [engine, setEngine] = useState<ImageEngine>("openai");
   const [accountTier, setAccountTier] = useState<AccountTier>("internal");
   const [detectedColor, setDetectedColor] = useState("#6F7C79");
@@ -374,7 +383,6 @@ export function App() {
   const [runState, setRunState] = useState<RunState>("demo");
   const [errorMessage, setErrorMessage] = useState("");
   const [history, setHistory] = useState<HistoryBatch[]>([]);
-  const [selectedCover, setSelectedCover] = useState<CoverResult | null>(null);
   const [editLayer, setEditLayer] = useState<EditLayer>({
     title: "封面标题",
     subtitle: "点击编辑副标题",
@@ -384,7 +392,6 @@ export function App() {
     y: 22,
     size: 42,
   });
-  const [stylePanelOpen, setStylePanelOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -401,10 +408,6 @@ export function App() {
   const fontColorOptions = useMemo(() => buildFontColorOptions(detectedColor, imageColors), [detectedColor, imageColors]);
   const contrastBase = detectedColor;
   const currentContrast = contrastRatio(editLayer.color, contrastBase);
-  const editorSwatches = useMemo(
-    () => uniqueColors([...fontColorOptions, ...imageColors, "#FFFFFF", "#111111", "#FF4FA3"]),
-    [fontColorOptions, imageColors],
-  );
   const estimatedCost = selectedAccount.internal ? 0 : count;
 
   const refreshHistory = useCallback(async () => {
@@ -559,7 +562,7 @@ export function App() {
           });
         }
         if (event.status === "done") {
-          const finalResults = (event.results || collected).sort((a, b) => a.id - b.id);
+          const finalResults = fillMissingResults(event.results || collected, event.total || count);
           setResults(finalResults);
           setProgress(event.total || count);
           setRunState("done");
@@ -591,7 +594,7 @@ export function App() {
   const resetDemo = () => {
     setTitle("为什么越来越多人开始徒步旅行?");
     setSubtitle("一场治愈身心的自由之旅");
-    setKeywords("徒步 | 旅行 | 治愈 | 自由 | 风景");
+    setKeywords("");
     setEngine("openai");
     setImagePreview("/samples/base-hiker.png");
     setImageName("示例底图");
@@ -617,7 +620,7 @@ export function App() {
   const openBatch = (batch: HistoryBatch) => {
     setTitle(batch.title);
     setSubtitle(batch.subtitle);
-    setKeywords(batch.keywords || "");
+    setKeywords("");
     setEngine(batch.engine || "openai");
     setCount(batch.count);
     setTotal(batch.count);
@@ -644,55 +647,6 @@ export function App() {
     if (!cover.image_url) return;
     const dataUrl = cover.image_url.startsWith("data:") ? cover.image_url : await urlToDataUrl(cover.image_url);
     downloadDataUrl(dataUrl, `lipa-cover-${cover.id}.png`);
-  };
-
-  const openCoverEditor = (cover: CoverResult) => {
-    setSelectedCover(cover);
-    setEditLayer((previous) => ({
-      ...previous,
-      title,
-      subtitle: subtitle || previous.subtitle,
-      color: editLayer.color || fontColorOptions[0] || previous.color,
-      accent: editLayer.accent || imageColors[1] || previous.accent,
-    }));
-  };
-
-  const downloadEditedCover = async () => {
-    if (!selectedCover?.image_url) return;
-    const imageUrl = selectedCover.image_url.startsWith("data:")
-      ? selectedCover.image_url
-      : await urlToDataUrl(selectedCover.image_url);
-    const image = new Image();
-    await new Promise<void>((resolve, reject) => {
-      image.onload = () => resolve();
-      image.onerror = () => reject(new Error("图片载入失败"));
-      image.src = imageUrl;
-    });
-    const canvas = document.createElement("canvas");
-    canvas.width = image.naturalWidth || 1024;
-    canvas.height = image.naturalHeight || 1536;
-    const context = canvas.getContext("2d");
-    if (!context) return;
-    context.drawImage(image, 0, 0, canvas.width, canvas.height);
-    const x = (editLayer.x / 100) * canvas.width;
-    const y = (editLayer.y / 100) * canvas.height;
-    const titleSize = Math.round((editLayer.size / 100) * canvas.width);
-    context.textAlign = "center";
-    context.textBaseline = "top";
-    context.lineJoin = "round";
-    context.font = `900 ${titleSize}px "PingFang SC", "Microsoft YaHei", sans-serif`;
-    context.lineWidth = Math.max(8, titleSize * 0.12);
-    context.strokeStyle = "rgba(0,0,0,0.72)";
-    context.fillStyle = editLayer.color;
-    context.strokeText(editLayer.title, x, y);
-    context.fillText(editLayer.title, x, y);
-    context.font = `700 ${Math.round(titleSize * 0.34)}px "PingFang SC", "Microsoft YaHei", sans-serif`;
-    context.lineWidth = Math.max(4, titleSize * 0.045);
-    context.strokeStyle = "rgba(0,0,0,0.62)";
-    context.fillStyle = editLayer.accent;
-    context.strokeText(editLayer.subtitle, x, y + titleSize * 1.08);
-    context.fillText(editLayer.subtitle, x, y + titleSize * 1.08);
-    downloadDataUrl(canvas.toDataURL("image/png"), `lipa-cover-edited-${selectedCover.id}.png`);
   };
 
   const downloadFirst = async () => {
@@ -828,19 +782,6 @@ export function App() {
                   />
                   <em>{subtitle.length}/30</em>
                 </label>
-                <label className="field">
-                  <span>关键词 <small>选填</small></span>
-                  <input
-                    value={keywords}
-                    maxLength={40}
-                    onChange={(event) => {
-                      setKeywords(event.target.value);
-                      if (runState === "demo") setRunState("idle");
-                    }}
-                    placeholder="徒步 | 旅行 | 治愈"
-                  />
-                  <em>{keywords.length}/40</em>
-                </label>
               </div>
             </section>
 
@@ -959,7 +900,12 @@ export function App() {
                     onClick={() => {
                       setCount(option);
                       setTotal(option);
-                      if (runState === "demo") setRunState("idle");
+                      if (runState !== "idle") {
+                        setResults([]);
+                        setProgress(0);
+                        setRunState("idle");
+                      }
+                      setMessage(`准备生成 ${option} 张`);
                     }}
                   >
                     {option}张
@@ -1008,8 +954,11 @@ export function App() {
                   <button
                     type="button"
                     className="cover-preview"
-                    onClick={() => cover.image_url && openCoverEditor(cover)}
+                    onClick={() => {
+                      if (cover.image_url) void downloadCover(cover);
+                    }}
                     disabled={!cover.image_url}
+                    aria-label={cover.image_url ? `下载第 ${cover.id} 张封面` : undefined}
                   >
                     <span className="cover-index">{String(cover.id).padStart(2, "0")}</span>
                     {cover.image_url ? (
@@ -1025,9 +974,16 @@ export function App() {
                     )}
                   </button>
                   <footer>
-                    <span>{cover.error ? "生成失败" : cover.label}</span>
-                    <button type="button" aria-label="更多" onClick={() => cover.image_url && openCoverEditor(cover)}>
-                      <MoreHorizontal size={19} />
+                    <span>{cover.error ? "生成失败" : cover.image_url ? "点击图片下载" : cover.label}</span>
+                    <button
+                      type="button"
+                      aria-label={cover.image_url ? `下载第 ${cover.id} 张封面` : "等待生成"}
+                      onClick={() => {
+                        if (cover.image_url) void downloadCover(cover);
+                      }}
+                      disabled={!cover.image_url}
+                    >
+                      <Download size={18} />
                     </button>
                   </footer>
                 </article>
@@ -1035,29 +991,11 @@ export function App() {
             </section>
 
             <footer className="action-bar">
-              <button
-                className={classNames("secondary-action", stylePanelOpen && "is-active")}
-                type="button"
-                onClick={() => setStylePanelOpen((value) => !value)}
-              >
-                <SlidersHorizontal size={21} />
-                风格偏好
-              </button>
               <button className="primary-action" type="button" onClick={isGenerating ? stopGenerate : startGenerate}>
                 {isGenerating ? <Square size={18} /> : <WandSparkles size={19} />}
                 {isGenerating ? "停止生成" : "生成封面"}
               </button>
             </footer>
-
-            {stylePanelOpen && (
-              <section className="style-panel">
-                {["更像 Mac", "高级灰", "解构标签", "强对比标题"].map((item) => (
-                  <button type="button" key={item}>
-                    {item}
-                  </button>
-                ))}
-              </section>
-            )}
           </>
         ) : (
           <section className="history-view" aria-label="历史记录">
@@ -1125,112 +1063,6 @@ export function App() {
           </button>
         </nav>
       </section>
-
-      {selectedCover && (
-        <div className="modal-backdrop" role="dialog" aria-modal="true">
-          <section className="cover-modal">
-            <header>
-              <div>
-                <span className="micro-label">COVER {String(selectedCover.id).padStart(2, "0")}</span>
-                <strong>编辑封面图层</strong>
-              </div>
-              <button type="button" onClick={() => setSelectedCover(null)} aria-label="关闭">
-                <X size={22} />
-              </button>
-            </header>
-            {selectedCover.image_url && (
-              <div className="editor-stage">
-                <img src={selectedCover.image_url} alt={selectedCover.label} />
-                <div
-                  className="editable-text-layer"
-                  style={
-                    {
-                      "--layer-x": `${editLayer.x}%`,
-                      "--layer-y": `${editLayer.y}%`,
-                      "--layer-size": `${editLayer.size}px`,
-                      "--layer-color": editLayer.color,
-                      "--layer-accent": editLayer.accent,
-                    } as CSSProperties
-                  }
-                >
-                  <strong>{editLayer.title}</strong>
-                  <span>{editLayer.subtitle}</span>
-                </div>
-              </div>
-            )}
-            <section className="editor-controls" aria-label="封面编辑">
-              <label className="field">
-                <span>主标题</span>
-                <input
-                  value={editLayer.title}
-                  maxLength={24}
-                  onChange={(event) => setEditLayer((previous) => ({ ...previous, title: event.target.value }))}
-                />
-              </label>
-              <label className="field">
-                <span>副标题</span>
-                <input
-                  value={editLayer.subtitle}
-                  maxLength={30}
-                  onChange={(event) => setEditLayer((previous) => ({ ...previous, subtitle: event.target.value }))}
-                />
-              </label>
-              <div className="editor-swatches">
-                {editorSwatches.map((color) => (
-                  <button
-                    key={color}
-                    type="button"
-                    className={classNames(editLayer.color === color && "is-selected")}
-                    style={{ background: color }}
-                    aria-label={`文字颜色 ${color}`}
-                    onClick={() => setEditLayer((previous) => ({ ...previous, color }))}
-                  />
-                ))}
-              </div>
-              <label className="range-field">
-                <span>左右</span>
-                <input
-                  type="range"
-                  min="12"
-                  max="88"
-                  value={editLayer.x}
-                  onChange={(event) => setEditLayer((previous) => ({ ...previous, x: Number(event.target.value) }))}
-                />
-              </label>
-              <label className="range-field">
-                <span>上下</span>
-                <input
-                  type="range"
-                  min="8"
-                  max="78"
-                  value={editLayer.y}
-                  onChange={(event) => setEditLayer((previous) => ({ ...previous, y: Number(event.target.value) }))}
-                />
-              </label>
-              <label className="range-field">
-                <span>字号</span>
-                <input
-                  type="range"
-                  min="24"
-                  max="72"
-                  value={editLayer.size}
-                  onChange={(event) => setEditLayer((previous) => ({ ...previous, size: Number(event.target.value) }))}
-                />
-              </label>
-            </section>
-            <footer>
-              <button className="secondary-action" type="button" onClick={() => setSelectedCover(null)}>
-                <RotateCcw size={18} />
-                返回
-              </button>
-              <button className="primary-action" type="button" onClick={downloadEditedCover}>
-                <Download size={18} />
-                导出编辑版
-              </button>
-            </footer>
-          </section>
-        </div>
-      )}
     </main>
   );
 }
