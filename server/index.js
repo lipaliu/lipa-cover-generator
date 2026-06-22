@@ -85,6 +85,37 @@ function splitDataUrl(dataUrl) {
   };
 }
 
+function sanitizeExportFilename(filename) {
+  const safeName = String(filename || "lipa-cover.png")
+    .replace(/[^a-z0-9._-]/giu, "_")
+    .replace(/^_+|_+$/gu, "");
+  return safeName.endsWith(".png") ? safeName : `${safeName || "lipa-cover"}.png`;
+}
+
+async function imageUrlToBuffer(imageUrl) {
+  if (String(imageUrl).startsWith("data:")) {
+    const { base64 } = splitDataUrl(imageUrl);
+    return Buffer.from(base64, "base64");
+  }
+
+  if (String(imageUrl).startsWith("/")) {
+    const relativePath = String(imageUrl).replace(/^\/+/u, "");
+    const candidates = [
+      join(__dirname, "..", "dist", relativePath),
+      join(__dirname, "..", "public", relativePath),
+    ];
+    for (const candidate of candidates) {
+      if (existsSync(candidate)) return readFile(candidate);
+    }
+  }
+
+  const response = await fetch(imageUrl);
+  if (!response.ok) {
+    throw new Error(`Image export failed with HTTP ${response.status}.`);
+  }
+  return Buffer.from(await response.arrayBuffer());
+}
+
 function normalizeCount(value) {
   const count = Number(value);
   return [1, 2, 4, 10].includes(count) ? count : 4;
@@ -566,6 +597,26 @@ async function generateByEngine({ openai, engine, image, plan }) {
   }
   throw new Error(`${engineLabels[engine] || engine} is not implemented.`);
 }
+
+app.post("/api/export-cover", async (req, res) => {
+  try {
+    const { imageUrl, filename } = req.body || {};
+    if (!imageUrl) throw new Error("Image URL is required.");
+
+    const safeName = sanitizeExportFilename(filename);
+    const buffer = await imageUrlToBuffer(imageUrl);
+    const exportDir = join(__dirname, "..", "exports");
+    await mkdir(exportDir, { recursive: true });
+    const filePath = join(exportDir, safeName);
+    await writeFile(filePath, buffer);
+    res.json({ ok: true, filename: safeName, path: filePath });
+  } catch (error) {
+    res.status(500).json({
+      ok: false,
+      message: error instanceof Error ? error.message : "Export failed.",
+    });
+  }
+});
 
 app.post("/api/generate", async (req, res) => {
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");

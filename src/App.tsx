@@ -18,7 +18,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { deleteHistoryBatch, getHistory, saveHistoryBatch } from "./lib/history";
-import { downloadDataUrl, fileToDataUrl, formatTime, urlToDataUrl } from "./lib/image";
+import { downloadImageUrl, fileToDataUrl, formatTime, urlToDataUrl } from "./lib/image";
 import type { CoverResult, GenerateCount, GenerateEvent, HistoryBatch, ImageEngine } from "./lib/types";
 
 const countOptions: GenerateCount[] = [1, 2, 4, 10];
@@ -176,6 +176,10 @@ function fillMissingResults(results: CoverResult[], total: number): CoverResult[
       error: "这一张没有返回结果，请重试。",
     };
   });
+}
+
+function coverDownloadName(cover: CoverResult) {
+  return `lipa-cover-${String(cover.id).padStart(2, "0")}.png`;
 }
 
 function readableHex(value: number) {
@@ -409,6 +413,7 @@ export function App() {
   const contrastBase = detectedColor;
   const currentContrast = contrastRatio(editLayer.color, contrastBase);
   const estimatedCost = selectedAccount.internal ? 0 : count;
+  const firstDownload = results.find((result) => result.image_url);
 
   const refreshHistory = useCallback(async () => {
     try {
@@ -643,15 +648,40 @@ export function App() {
     await refreshHistory();
   };
 
-  const downloadCover = async (cover: CoverResult) => {
+  const downloadCover = (cover: CoverResult) => {
     if (!cover.image_url) return;
-    const dataUrl = cover.image_url.startsWith("data:") ? cover.image_url : await urlToDataUrl(cover.image_url);
-    downloadDataUrl(dataUrl, `lipa-cover-${cover.id}.png`);
+    downloadImageUrl(cover.image_url, coverDownloadName(cover));
   };
 
-  const downloadFirst = async () => {
-    const first = results.find((result) => result.image_url);
-    if (first) await downloadCover(first);
+  const saveCoverLocally = async (cover: CoverResult) => {
+    if (!cover.image_url) return;
+    try {
+      const response = await fetch("/api/export-cover", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          imageUrl: cover.image_url,
+          filename: coverDownloadName(cover),
+        }),
+      });
+      const payload = (await response.json()) as { ok?: boolean; path?: string; message?: string };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.message || "本地保存失败。");
+      }
+      setErrorMessage("");
+      setMessage(`已保存到本地：${payload.path}`);
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "本地保存失败。");
+    }
+  };
+
+  const handleCoverDownload = (cover: CoverResult) => {
+    downloadCover(cover);
+    void saveCoverLocally(cover);
+  };
+
+  const downloadFirst = () => {
+    if (firstDownload) handleCoverDownload(firstDownload);
   };
 
   return (
@@ -737,265 +767,269 @@ export function App() {
 
         {activeTab === "generate" ? (
           <>
-            <section className="input-zone">
-              <label className="photo-picker">
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) handleFile(file);
-                  }}
-                />
-                <img src={imagePreview} alt="底图预览" />
-                <span className="photo-action">
-                  <ImagePlus size={20} />
-                  更换图片
-                </span>
-                <span className="photo-name">{imageName}</span>
-              </label>
-
-              <div className="copy-fields">
-                <label className="field">
-                  <span>标题 <small>必填</small></span>
-                  <input
-                    value={title}
-                    maxLength={30}
-                    onChange={(event) => {
-                      setTitle(event.target.value);
-                      if (runState === "demo") setRunState("idle");
-                    }}
-                    placeholder="输入主标题"
-                  />
-                  <em>{title.length}/30</em>
-                </label>
-                <label className="field">
-                  <span>副标题 <small>选填</small></span>
-                  <input
-                    value={subtitle}
-                    maxLength={30}
-                    onChange={(event) => {
-                      setSubtitle(event.target.value);
-                      if (runState === "demo") setRunState("idle");
-                    }}
-                    placeholder="输入副标题"
-                  />
-                  <em>{subtitle.length}/30</em>
-                </label>
-              </div>
-            </section>
-
-            <section className="design-zone simple-color-zone" aria-label="颜色分析与字体颜色">
-              <div className="section-heading">
-                <h2>颜色设置</h2>
-                <span>{currentContrast.toFixed(2)} contrast · {contrastGrade(currentContrast)}</span>
-              </div>
-
-              <div className="simple-color-steps">
-                <article className="simple-color-card">
-                  <div className="simple-step-title">
-                    <b>01</b>
-                    <span>分析底图颜色</span>
-                  </div>
-                  <div className="pantone-card" aria-label="底图颜色组成">
-                    <div className="pantone-strip">
-                      {imageColors.map((color) => (
-                        <span key={color} style={{ background: color }} />
-                      ))}
-                    </div>
-                    <div className="pantone-meta">
-                      <strong>IMAGE PALETTE</strong>
-                      <small>主色 {detectedColor}</small>
-                    </div>
-                    <div className="pantone-hex-list">
-                      {imageColors.map((color) => (
-                        <span key={color}>{color}</span>
-                      ))}
-                    </div>
-                  </div>
-                </article>
-
-                <article className="simple-color-card">
-                  <div className="simple-step-title">
-                    <b>02</b>
-                    <span>字体颜色建议</span>
-                  </div>
-                  <div className="type-color-preview" style={{ background: detectedColor, color: editLayer.color }}>
-                    <strong>HELLO</strong>
-                    <span>{editLayer.color} · {contrastGrade(currentContrast)}</span>
-                  </div>
-                  <div className="font-suggestion-row" aria-label="字体颜色建议">
-                    {fontColorOptions.slice(0, 4).map((color) => {
-                      const ratio = contrastRatio(color, detectedColor);
-                      return (
-                        <button
-                          key={color}
-                          type="button"
-                          className={classNames(editLayer.color === color && "is-selected")}
-                          style={{ "--swatch-color": color } as CSSProperties}
-                          onClick={() => {
-                            setEditLayer((previous) => ({ ...previous, color }));
-                            if (runState === "demo") setRunState("idle");
-                          }}
-                        >
-                          <i />
-                          <span>{color}</span>
-                          <em>{contrastGrade(ratio)}</em>
-                        </button>
-                      );
-                    })}
-                  </div>
-                  <label className="custom-color-picker">
-                    <span>自定义</span>
+            <section className="workspace-grid" aria-label="封面生成工作台">
+              <div className="workspace-panel setup-panel">
+                <section className="input-zone">
+                  <label className="photo-picker">
                     <input
-                      type="color"
-                      value={editLayer.color}
+                      type="file"
+                      accept="image/*"
                       onChange={(event) => {
-                        setEditLayer((previous) => ({ ...previous, color: event.target.value.toUpperCase() }));
-                        if (runState === "demo") setRunState("idle");
+                        const file = event.target.files?.[0];
+                        if (file) handleFile(file);
                       }}
                     />
-                    <em>{editLayer.color}</em>
-                  </label>
-                </article>
-              </div>
-            </section>
-
-            <section className="engine-zone" aria-label="生成引擎">
-              <div className="section-heading">
-                <h2>生成引擎</h2>
-                <span>{selectedEngine.vendor}</span>
-              </div>
-              <label className="engine-select-wrap">
-                <select
-                  value={engine}
-                  onChange={(event) => {
-                    setEngine(event.target.value as ImageEngine);
-                    if (runState === "demo") setRunState("idle");
-                  }}
-                >
-                  {engineOptions.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.title}（{option.vendor}） - {option.description}
-                    </option>
-                  ))}
-                </select>
-                <ChevronDown size={20} aria-hidden="true" />
-              </label>
-              <div className="engine-current">
-                <strong>{selectedEngine.title}</strong>
-                <span>{selectedEngine.description}</span>
-                <em>{selectedEngine.badge}</em>
-              </div>
-            </section>
-
-            <section className="count-zone" aria-label="生成数量">
-              <h2>生成数量</h2>
-              <div className="segmented">
-                {countOptions.map((option) => (
-                  <button
-                    key={option}
-                    type="button"
-                    className={classNames(option === count && "is-selected")}
-                    onClick={() => {
-                      setCount(option);
-                      setTotal(option);
-                      if (runState !== "idle") {
-                        setResults([]);
-                        setProgress(0);
-                        setRunState("idle");
-                      }
-                      setMessage(`准备生成 ${option} 张`);
-                    }}
-                  >
-                    {option}张
-                  </button>
-                ))}
-              </div>
-            </section>
-
-            <section className="progress-card" aria-label="生成进度">
-              <div className="steps">
-                {[
-                  ["分析底图", runState !== "idle" && runState !== "error"],
-                  [
-                    "生成方案",
-                    runState === "planning" || runState === "generating" || runState === "done" || runState === "demo",
-                  ],
-                  ["并行出图", runState === "generating" || runState === "done" || runState === "demo"],
-                ].map(([label, complete], index) => (
-                  <div className="step" key={String(label)}>
-                    <span className={classNames("step-dot", complete && "is-complete")}>
-                      {complete ? <Check size={18} /> : index + 1}
+                    <img src={imagePreview} alt="底图预览" />
+                    <span className="photo-action">
+                      <ImagePlus size={20} />
+                      更换图片
                     </span>
-                    <strong>{label}</strong>
-                    <small>{complete ? (index < 2 || runState === "done" ? "已完成" : "进行中") : "待开始"}</small>
+                    <span className="photo-name">{imageName}</span>
+                  </label>
+
+                  <div className="copy-fields">
+                    <label className="field">
+                      <span>标题 <small>必填</small></span>
+                      <input
+                        value={title}
+                        maxLength={30}
+                        onChange={(event) => {
+                          setTitle(event.target.value);
+                          if (runState === "demo") setRunState("idle");
+                        }}
+                        placeholder="输入主标题"
+                      />
+                      <em>{title.length}/30</em>
+                    </label>
+                    <label className="field">
+                      <span>副标题 <small>选填</small></span>
+                      <input
+                        value={subtitle}
+                        maxLength={30}
+                        onChange={(event) => {
+                          setSubtitle(event.target.value);
+                          if (runState === "demo") setRunState("idle");
+                        }}
+                        placeholder="输入副标题"
+                      />
+                      <em>{subtitle.length}/30</em>
+                    </label>
                   </div>
-                ))}
-              </div>
-              <div className="bar-track">
-                <span style={{ width: `${runState === "demo" ? 75 : progressPercent}%` }} />
-              </div>
-              <div className="status-row">
-                <span className="status-main">
-                  {isGenerating || runState === "demo" ? <LoaderCircle className="spin" size={18} /> : <Archive size={18} />}
-                  {errorMessage || message}
-                </span>
-                <span>{isGenerating || runState === "demo" ? "预计剩余 00:18" : `${completedCount}/${total}`}</span>
-              </div>
-            </section>
+                </section>
 
-            <section className="result-grid" aria-label="封面结果">
-              {displayResults.map((cover) => (
-                <article
-                  key={cover.id}
-                  className={classNames("cover-card", !cover.image_url && !cover.error && "is-loading")}
-                >
-                  <button
-                    type="button"
-                    className="cover-preview"
-                    onClick={() => {
-                      if (cover.image_url) void downloadCover(cover);
-                    }}
-                    disabled={!cover.image_url}
-                    aria-label={cover.image_url ? `下载第 ${cover.id} 张封面` : undefined}
-                  >
-                    <span className="cover-index">{String(cover.id).padStart(2, "0")}</span>
-                    {cover.image_url ? (
-                      <img src={cover.image_url} alt={cover.label} />
-                    ) : cover.error ? (
-                      <span className="cover-error">{cover.error}</span>
-                    ) : (
-                      <span className="cover-loading">
-                        <LoaderCircle className="spin" size={34} />
-                        AI 生成中...
-                        <small>请稍候，精彩即将呈现</small>
-                      </span>
-                    )}
+                <section className="design-zone simple-color-zone" aria-label="颜色分析与字体颜色">
+                  <div className="section-heading">
+                    <h2>颜色设置</h2>
+                    <span>{currentContrast.toFixed(2)} contrast · {contrastGrade(currentContrast)}</span>
+                  </div>
+
+                  <div className="simple-color-steps">
+                    <article className="simple-color-card">
+                      <div className="simple-step-title">
+                        <b>01</b>
+                        <span>分析底图颜色</span>
+                      </div>
+                      <div className="pantone-card" aria-label="底图颜色组成">
+                        <div className="pantone-strip">
+                          {imageColors.map((color) => (
+                            <span key={color} style={{ background: color }} />
+                          ))}
+                        </div>
+                        <div className="pantone-meta">
+                          <strong>IMAGE PALETTE</strong>
+                          <small>主色 {detectedColor}</small>
+                        </div>
+                        <div className="pantone-hex-list">
+                          {imageColors.map((color) => (
+                            <span key={color}>{color}</span>
+                          ))}
+                        </div>
+                      </div>
+                    </article>
+
+                    <article className="simple-color-card">
+                      <div className="simple-step-title">
+                        <b>02</b>
+                        <span>字体颜色建议</span>
+                      </div>
+                      <div className="type-color-preview" style={{ background: detectedColor, color: editLayer.color }}>
+                        <strong>HELLO</strong>
+                        <span>{editLayer.color} · {contrastGrade(currentContrast)}</span>
+                      </div>
+                      <div className="font-suggestion-row" aria-label="字体颜色建议">
+                        {fontColorOptions.slice(0, 4).map((color) => {
+                          const ratio = contrastRatio(color, detectedColor);
+                          return (
+                            <button
+                              key={color}
+                              type="button"
+                              className={classNames(editLayer.color === color && "is-selected")}
+                              style={{ "--swatch-color": color } as CSSProperties}
+                              onClick={() => {
+                                setEditLayer((previous) => ({ ...previous, color }));
+                                if (runState === "demo") setRunState("idle");
+                              }}
+                            >
+                              <i />
+                              <span>{color}</span>
+                              <em>{contrastGrade(ratio)}</em>
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <label className="custom-color-picker">
+                        <span>自定义</span>
+                        <input
+                          type="color"
+                          value={editLayer.color}
+                          onChange={(event) => {
+                            setEditLayer((previous) => ({ ...previous, color: event.target.value.toUpperCase() }));
+                            if (runState === "demo") setRunState("idle");
+                          }}
+                        />
+                        <em>{editLayer.color}</em>
+                      </label>
+                    </article>
+                  </div>
+                </section>
+
+                <div className="controls-row">
+                  <section className="engine-zone" aria-label="生成引擎">
+                    <div className="section-heading">
+                      <h2>生成引擎</h2>
+                      <span>{selectedEngine.vendor}</span>
+                    </div>
+                    <label className="engine-select-wrap">
+                      <select
+                        value={engine}
+                        onChange={(event) => {
+                          setEngine(event.target.value as ImageEngine);
+                          if (runState === "demo") setRunState("idle");
+                        }}
+                      >
+                        {engineOptions.map((option) => (
+                          <option key={option.id} value={option.id}>
+                            {option.title}（{option.vendor}） - {option.description}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown size={20} aria-hidden="true" />
+                    </label>
+                    <div className="engine-current">
+                      <strong>{selectedEngine.title}</strong>
+                      <span>{selectedEngine.description}</span>
+                      <em>{selectedEngine.badge}</em>
+                    </div>
+                  </section>
+
+                  <section className="count-zone" aria-label="生成数量">
+                    <h2>生成数量</h2>
+                    <div className="segmented">
+                      {countOptions.map((option) => (
+                        <button
+                          key={option}
+                          type="button"
+                          className={classNames(option === count && "is-selected")}
+                          onClick={() => {
+                            setCount(option);
+                            setTotal(option);
+                            if (runState !== "idle") {
+                              setResults([]);
+                              setProgress(0);
+                              setRunState("idle");
+                            }
+                            setMessage(`准备生成 ${option} 张`);
+                          }}
+                        >
+                          {option}张
+                        </button>
+                      ))}
+                    </div>
+                  </section>
+                </div>
+
+                <footer className="action-bar">
+                  <button className="primary-action" type="button" onClick={isGenerating ? stopGenerate : startGenerate}>
+                    {isGenerating ? <Square size={18} /> : <WandSparkles size={19} />}
+                    {isGenerating ? "停止生成" : "生成封面"}
                   </button>
-                  <footer>
-                    <span>{cover.error ? "生成失败" : cover.image_url ? "点击图片下载" : cover.label}</span>
-                    <button
-                      type="button"
-                      aria-label={cover.image_url ? `下载第 ${cover.id} 张封面` : "等待生成"}
-                      onClick={() => {
-                        if (cover.image_url) void downloadCover(cover);
-                      }}
-                      disabled={!cover.image_url}
-                    >
-                      <Download size={18} />
-                    </button>
-                  </footer>
-                </article>
-              ))}
-            </section>
+                </footer>
+              </div>
 
-            <footer className="action-bar">
-              <button className="primary-action" type="button" onClick={isGenerating ? stopGenerate : startGenerate}>
-                {isGenerating ? <Square size={18} /> : <WandSparkles size={19} />}
-                {isGenerating ? "停止生成" : "生成封面"}
-              </button>
-            </footer>
+              <div className="workspace-panel output-panel">
+                <section className="progress-card" aria-label="生成进度">
+                  <div className="steps">
+                    {[
+                      ["分析底图", runState !== "idle" && runState !== "error"],
+                      [
+                        "生成方案",
+                        runState === "planning" || runState === "generating" || runState === "done" || runState === "demo",
+                      ],
+                      ["并行出图", runState === "generating" || runState === "done" || runState === "demo"],
+                    ].map(([label, complete], index) => (
+                      <div className="step" key={String(label)}>
+                        <span className={classNames("step-dot", complete && "is-complete")}>
+                          {complete ? <Check size={18} /> : index + 1}
+                        </span>
+                        <strong>{label}</strong>
+                        <small>{complete ? (index < 2 || runState === "done" ? "已完成" : "进行中") : "待开始"}</small>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="bar-track">
+                    <span style={{ width: `${runState === "demo" ? 75 : progressPercent}%` }} />
+                  </div>
+                  <div className="status-row">
+                    <span className="status-main">
+                      {isGenerating || runState === "demo" ? <LoaderCircle className="spin" size={18} /> : <Archive size={18} />}
+                      {errorMessage || message}
+                    </span>
+                    <span>{isGenerating || runState === "demo" ? "预计剩余 00:18" : `${completedCount}/${total}`}</span>
+                  </div>
+                </section>
+
+                <section className="result-grid" aria-label="封面结果">
+                  {displayResults.map((cover) => (
+                    <article
+                      key={cover.id}
+                      className={classNames("cover-card", !cover.image_url && !cover.error && "is-loading")}
+                    >
+                      <button
+                        type="button"
+                        className="cover-preview"
+                        onClick={() => handleCoverDownload(cover)}
+                        disabled={!cover.image_url}
+                        aria-label={cover.image_url ? `下载第 ${cover.id} 张封面` : undefined}
+                      >
+                        <span className="cover-index">{String(cover.id).padStart(2, "0")}</span>
+                        {cover.image_url ? (
+                          <img src={cover.image_url} alt={cover.label} />
+                        ) : cover.error ? (
+                          <span className="cover-error">{cover.error}</span>
+                        ) : (
+                          <span className="cover-loading">
+                            <LoaderCircle className="spin" size={34} />
+                            AI 生成中...
+                            <small>请稍候，精彩即将呈现</small>
+                          </span>
+                        )}
+                      </button>
+                      <footer>
+                        <span>{cover.error ? "生成失败" : cover.image_url ? "点击图片下载" : cover.label}</span>
+                        <button
+                          type="button"
+                          aria-label={cover.image_url ? `下载第 ${cover.id} 张封面` : "等待生成"}
+                          onClick={() => handleCoverDownload(cover)}
+                          disabled={!cover.image_url}
+                        >
+                          <Download size={18} />
+                        </button>
+                      </footer>
+                    </article>
+                  ))}
+                </section>
+              </div>
+            </section>
           </>
         ) : (
           <section className="history-view" aria-label="历史记录">

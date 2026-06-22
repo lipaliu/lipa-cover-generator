@@ -5,6 +5,7 @@
 node_modules/
 .npm-cache/
 dist/
+exports/
 coverage/
 *.log
 npm-debug.log*

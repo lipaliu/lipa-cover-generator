@@ -150,6 +150,7 @@ button:disabled {
   background: transparent;
   color: rgba(242, 240, 234, 0.72);
   cursor: pointer;
+  text-decoration: none;
 }
 
 .tool-button svg {
@@ -594,6 +595,7 @@ button:disabled {
 
 .cover-preview {
   position: relative;
+  display: block;
   width: 100%;
   aspect-ratio: 3 / 4;
   overflow: hidden;
@@ -602,6 +604,7 @@ button:disabled {
     linear-gradient(145deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
     #11121a;
   cursor: pointer;
+  text-decoration: none;
 }
 
 .cover-preview img {
@@ -655,6 +658,7 @@ button:disabled {
   background: transparent;
   color: rgba(242, 240, 234, 0.56);
   cursor: pointer;
+  text-decoration: none;
 }
 
 .cover-preview:disabled,
@@ -2553,5 +2557,355 @@ html {
 
   .font-suggestion-row {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Responsive website shell */
+body {
+  background:
+    radial-gradient(circle at 10% 8%, rgba(185, 166, 221, 0.42), transparent 26rem),
+    radial-gradient(circle at 84% 12%, rgba(19, 183, 217, 0.22), transparent 28rem),
+    linear-gradient(135deg, #d8f2da 0%, #f7fff8 42%, #fff7fb 100%);
+}
+
+.app-shell {
+  align-items: flex-start;
+  justify-content: center;
+  padding: clamp(18px, 3vw, 44px);
+  background:
+    linear-gradient(90deg, rgba(40, 17, 37, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(40, 17, 37, 0.028) 1px, transparent 1px);
+  background-size: 72px 72px;
+}
+
+.device-frame {
+  width: min(100%, 1440px);
+  min-height: auto;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.device-frame::before {
+  display: none;
+}
+
+.topbar {
+  margin-bottom: 18px;
+  padding: 14px;
+  align-items: center;
+  border: 1px solid rgba(40, 17, 37, 0.1);
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.92), rgba(255, 250, 253, 0.78)),
+    rgba(255, 255, 255, 0.72);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 24px 60px rgba(40, 17, 37, 0.1);
+}
+
+.brand-logo-mark {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+}
+
+.brand-copy strong {
+  font-size: clamp(22px, 2vw, 32px);
+}
+
+.brand-copy small {
+  font-size: 11px;
+}
+
+.toolbar {
+  align-items: center;
+  gap: 8px;
+}
+
+.tool-button {
+  width: auto;
+  min-height: 44px;
+  padding: 7px 11px;
+  grid-auto-flow: column;
+  align-items: center;
+  justify-items: center;
+  border: 1px solid rgba(40, 17, 37, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.62);
+  box-shadow: none;
+}
+
+.tool-button svg {
+  width: 30px;
+  height: 30px;
+  padding: 6px;
+  border-radius: 10px;
+}
+
+.tool-button span {
+  font-size: 13px;
+  font-weight: 760;
+}
+
+.settings-panel {
+  width: auto;
+  margin: 0 0 16px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.72);
+}
+
+.account-card {
+  margin-bottom: 18px;
+  padding: 14px;
+  border-radius: 20px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(216, 242, 218, 0.58)),
+    rgba(255, 255, 255, 0.76);
+}
+
+.workspace-grid {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(390px, 480px) minmax(0, 1fr);
+  gap: 22px;
+  align-items: start;
+}
+
+.workspace-panel {
+  min-width: 0;
+  border: 1px solid rgba(40, 17, 37, 0.1);
+  border-radius: 26px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(251, 255, 251, 0.82)),
+    rgba(255, 255, 255, 0.82);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.94),
+    0 24px 64px rgba(40, 17, 37, 0.1);
+}
+
+.setup-panel {
+  padding: 18px;
+}
+
+.output-panel {
+  padding: 18px;
+  min-height: 680px;
+}
+
+.input-zone,
+.design-zone,
+.engine-zone,
+.count-zone,
+.progress-card {
+  border-radius: 18px;
+  box-shadow: none;
+}
+
+.input-zone {
+  grid-template-columns: 176px minmax(0, 1fr);
+  gap: 14px;
+}
+
+.photo-picker,
+.photo-picker img {
+  min-height: 218px;
+}
+
+.simple-color-steps {
+  grid-template-columns: 1fr;
+}
+
+.pantone-strip {
+  height: 92px;
+}
+
+.controls-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.engine-zone,
+.count-zone {
+  margin-top: 0;
+  padding: 14px;
+}
+
+.action-bar {
+  margin-top: 14px;
+}
+
+.primary-action {
+  height: 58px;
+  border-radius: 16px;
+  font-size: 16px;
+}
+
+.progress-card {
+  margin-top: 0;
+}
+
+.result-grid {
+  margin-top: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 16px;
+}
+
+.cover-card {
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 14px 32px rgba(40, 17, 37, 0.08);
+}
+
+.cover-preview {
+  border-radius: 18px 18px 0 0;
+}
+
+.cover-card footer {
+  height: 42px;
+}
+
+.tabbar {
+  display: none;
+}
+
+.history-view {
+  position: relative;
+  z-index: 1;
+  min-height: 520px;
+  padding: 22px;
+  border: 1px solid rgba(40, 17, 37, 0.1);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 24px 64px rgba(40, 17, 37, 0.1);
+}
+
+@media (min-width: 1180px) {
+  .result-grid {
+    grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  }
+
+  .output-panel {
+    min-height: 760px;
+  }
+}
+
+@media (max-width: 980px) {
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .output-panel {
+    min-height: 0;
+  }
+
+  .result-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .app-shell {
+    padding: 12px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .brand {
+    gap: 10px;
+  }
+
+  .brand-logo-mark {
+    width: 58px;
+    height: 58px;
+  }
+
+  .toolbar {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    max-width: 170px;
+  }
+
+  .tool-button {
+    min-height: 38px;
+    padding: 5px 8px;
+  }
+
+  .tool-button svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  .tool-button span {
+    display: none;
+  }
+
+  .account-card {
+    grid-template-columns: 1fr;
+  }
+
+  .workspace-panel,
+  .history-view {
+    border-radius: 22px;
+    padding: 14px;
+  }
+
+  .input-zone {
+    grid-template-columns: 1fr;
+  }
+
+  .photo-picker,
+  .photo-picker img {
+    min-height: 240px;
+  }
+
+  .result-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .steps {
+    padding-inline: 4px;
+  }
+}
+
+@media (max-width: 440px) {
+  .app-shell {
+    padding: 0;
+  }
+
+  .topbar,
+  .account-card,
+  .workspace-panel,
+  .history-view {
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .topbar {
+    margin-bottom: 10px;
+  }
+
+  .account-card {
+    margin-bottom: 10px;
+  }
+
+  .workspace-grid {
+    gap: 10px;
+  }
+
+  .photo-picker,
+  .photo-picker img {
+    min-height: 220px;
   }
 }

@@ -13,9 +13,9 @@ export async function urlToDataUrl(url: string): Promise<string> {
   return fileToDataUrl(new File([blob], "sample.png", { type: blob.type || "image/png" }));
 }
 
-export function downloadDataUrl(dataUrl: string, filename: string): void {
+export function downloadImageUrl(imageUrl: string, filename: string): void {
   const anchor = document.createElement("a");
-  anchor.href = dataUrl;
+  anchor.href = imageUrl;
   anchor.download = filename;
   document.body.appendChild(anchor);
   anchor.click();
