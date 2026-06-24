@@ -4,8 +4,8 @@
   "description": "上传底图并生成小红书/抖音封面。",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#281125",
-  "theme_color": "#281125",
+  "background_color": "#f5f5f7",
+  "theme_color": "#f5f5f7",
   "orientation": "portrait",
   "icons": [
     {
