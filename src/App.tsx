@@ -1,136 +1,57 @@
 import {
-  Archive,
+  ArrowRight,
+  ArrowLeft,
   Check,
-  Download,
   ChevronDown,
-  Coins,
-  Crown,
-  History,
+  Download,
   ImagePlus,
   LoaderCircle,
-  Play,
-  Settings,
+  Sparkles,
   Square,
-  Trash2,
+  Type,
   Upload,
-  UserRound,
-  WandSparkles,
+  Palette,
+  Settings2,
+  History,
+  Trash2,
+  Archive,
+  Play,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { deleteHistoryBatch, getHistory, saveHistoryBatch } from "./lib/history";
 import { downloadImageUrl, fileToDataUrl, formatTime, urlToDataUrl } from "./lib/image";
 import type { CoverResult, GenerateCount, GenerateEvent, HistoryBatch, ImageEngine } from "./lib/types";
 
+/* ─── Constants ─── */
 const countOptions: GenerateCount[] = [1, 2, 4, 10];
-type AccountTier = "guest" | "creator" | "internal";
-
-const accountOptions: Array<{
-  id: AccountTier;
-  name: string;
-  label: string;
-  credits: number;
-  internal: boolean;
-}> = [
-  { id: "internal", name: "LIPA 内部账号", label: "内部免扣", credits: 9999, internal: true },
-  { id: "creator", name: "创作者账号", label: "套餐用户", credits: 86, internal: false },
-  { id: "guest", name: "游客预览", label: "需登录", credits: 0, internal: false },
-];
 
 const engineOptions: Array<{
   id: ImageEngine;
   title: string;
   vendor: string;
   description: string;
-  badge: string;
 }> = [
-  {
-    id: "openai",
-    title: "GPT-Image-2",
-    vendor: "OpenAI",
-    description: "风格更多变，创意更强",
-    badge: "默认",
-  },
-  {
-    id: "auto",
-    title: "自动选择",
-    vendor: "智能分配",
-    description: "根据内容与已配置密钥分配",
-    badge: "AUTO",
-  },
-  {
-    id: "wanxiang",
-    title: "通义万相",
-    vendor: "阿里",
-    description: "中文渲染质量高，强烈推荐",
-    badge: "推荐",
-  },
-  {
-    id: "jimeng",
-    title: "即梦",
-    vendor: "字节",
-    description: "中文更准，速度更快",
-    badge: "CLI",
-  },
-  {
-    id: "cogview",
-    title: "CogView-4",
-    vendor: "智谱",
-    description: "中文理解好，新用户赠送 tokens",
-    badge: "预留",
-  },
-  {
-    id: "wenxin",
-    title: "文心一格",
-    vendor: "百度",
-    description: "中文渲染稳定",
-    badge: "预留",
-  },
+  { id: "openai", title: "GPT-Image-2", vendor: "OpenAI", description: "风格多变，创意强" },
+  { id: "auto", title: "自动选择", vendor: "智能分配", description: "根据内容自动分配" },
+  { id: "wanxiang", title: "通义万相", vendor: "阿里", description: "中文渲染质量高" },
+  { id: "jimeng", title: "即梦", vendor: "字节", description: "中文更准，速度快" },
+  { id: "cogview", title: "CogView-4", vendor: "智谱", description: "中文理解好" },
+  { id: "wenxin", title: "文心一格", vendor: "百度", description: "中文渲染稳定" },
 ];
 
-const demoResults: CoverResult[] = [
-  {
-    id: 1,
-    combination: "A1+B1+C3+D7+E4",
-    label: "书法 / 明黄 / 霸屏",
-    image_url: "/samples/cover-calligraphy.png",
-  },
-  {
-    id: 2,
-    combination: "A3+B2+C11+D3+E9",
-    label: "手写 / 白字 / 自然风",
-    image_url: "/samples/cover-handwriting.png",
-  },
-  {
-    id: 3,
-    combination: "A7+B8+C10+D1+E1",
-    label: "标题体 / 绿色 / 清新",
-    image_url: "/samples/cover-editorial.png",
-  },
-];
+type Step = 1 | 2 | 3 | 4;
+type RunState = "idle" | "analyzing" | "planning" | "generating" | "done" | "error";
 
-type RunState = "demo" | "idle" | "analyzing" | "planning" | "generating" | "done" | "error";
-type EditLayer = {
-  title: string;
-  subtitle: string;
-  color: string;
-  accent: string;
-  x: number;
-  y: number;
-  size: number;
-};
-
-function classNames(...values: Array<string | false | null | undefined>) {
+/* ─── Utilities ─── */
+function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
 }
 
 async function readSseStream(response: Response, onEvent: (event: GenerateEvent) => void) {
-  if (!response.body) {
-    throw new Error("浏览器没有返回可读取的数据流。");
-  }
+  if (!response.body) throw new Error("浏览器没有返回可读取的数据流。");
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
   let buffer = "";
-
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -138,9 +59,7 @@ async function readSseStream(response: Response, onEvent: (event: GenerateEvent)
     const chunks = buffer.split("\n\n");
     buffer = chunks.pop() || "";
     for (const chunk of chunks) {
-      const dataLine = chunk
-        .split("\n")
-        .find((line) => line.startsWith("data:"));
+      const dataLine = chunk.split("\n").find((line) => line.startsWith("data:"));
       if (!dataLine) continue;
       const json = dataLine.replace(/^data:\s?/u, "");
       onEvent(JSON.parse(json) as GenerateEvent);
@@ -148,170 +67,20 @@ async function readSseStream(response: Response, onEvent: (event: GenerateEvent)
   }
 }
 
-function createEmptySlots(total: number, results: CoverResult[], isGenerating: boolean): CoverResult[] {
-  const sorted = [...results].sort((a, b) => a.id - b.id);
-  if (!isGenerating) return sorted;
-  const ids = new Set(sorted.map((item) => item.id));
-  const items = [...sorted];
-  for (let index = 1; index <= total; index += 1) {
-    if (!ids.has(index)) {
-      items.push({
-        id: index,
-        combination: "pending",
-        label: index === sorted.length + 1 ? "生成中" : "排队中",
-      });
-    }
-  }
-  return items.sort((a, b) => a.id - b.id);
-}
-
 function fillMissingResults(results: CoverResult[], total: number): CoverResult[] {
-  const byId = new Map(results.map((result) => [result.id, result]));
-  return Array.from({ length: total }, (_, index) => {
-    const id = index + 1;
-    return byId.get(id) || {
-      id,
-      combination: "missing",
-      label: "未返回",
-      error: "这一张没有返回结果，请重试。",
-    };
+  const byId = new Map(results.map((r) => [r.id, r]));
+  return Array.from({ length: total }, (_, i) => {
+    const id = i + 1;
+    return byId.get(id) || { id, combination: "missing", label: "未返回", error: "未返回结果" };
   });
 }
 
-function coverDownloadName(cover: CoverResult) {
-  return `lipa-cover-${String(cover.id).padStart(2, "0")}.png`;
+/* ─── Color Analysis ─── */
+function readableHex(v: number) {
+  return Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, "0").toUpperCase();
 }
 
-function readableHex(value: number) {
-  return Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, "0").toUpperCase();
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function normalizeHue(value: number) {
-  return ((value % 360) + 360) % 360;
-}
-
-function hexToRgb(hex: string) {
-  const raw = hex.replace("#", "").trim();
-  const value = raw.length === 3
-    ? raw.split("").map((item) => `${item}${item}`).join("")
-    : raw.padEnd(6, "0").slice(0, 6);
-  return {
-    red: parseInt(value.slice(0, 2), 16) || 30,
-    green: parseInt(value.slice(2, 4), 16) || 30,
-    blue: parseInt(value.slice(4, 6), 16) || 30,
-  };
-}
-
-function rgbToHsl(red: number, green: number, blue: number) {
-  const r = red / 255;
-  const g = green / 255;
-  const b = blue / 255;
-  const max = Math.max(r, g, b);
-  const min = Math.min(r, g, b);
-  let hue = 0;
-  let saturation = 0;
-  const lightness = (max + min) / 2;
-  const delta = max - min;
-
-  if (delta !== 0) {
-    saturation = lightness > 0.5 ? delta / (2 - max - min) : delta / (max + min);
-    if (max === r) hue = (g - b) / delta + (g < b ? 6 : 0);
-    if (max === g) hue = (b - r) / delta + 2;
-    if (max === b) hue = (r - g) / delta + 4;
-    hue *= 60;
-  }
-
-  return { hue: normalizeHue(hue), saturation: saturation * 100, lightness: lightness * 100 };
-}
-
-function hslToHex(hue: number, saturation: number, lightness: number) {
-  const h = normalizeHue(hue) / 360;
-  const s = clamp(saturation, 0, 100) / 100;
-  const l = clamp(lightness, 0, 100) / 100;
-
-  if (s === 0) {
-    const gray = readableHex(l * 255);
-    return `#${gray}${gray}${gray}`;
-  }
-
-  const hueToRgb = (p: number, q: number, tValue: number) => {
-    let t = tValue;
-    if (t < 0) t += 1;
-    if (t > 1) t -= 1;
-    if (t < 1 / 6) return p + (q - p) * 6 * t;
-    if (t < 1 / 2) return q;
-    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-    return p;
-  };
-
-  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-  const p = 2 * l - q;
-  const red = hueToRgb(p, q, h + 1 / 3);
-  const green = hueToRgb(p, q, h);
-  const blue = hueToRgb(p, q, h - 1 / 3);
-  return `#${readableHex(red * 255)}${readableHex(green * 255)}${readableHex(blue * 255)}`;
-}
-
-function uniqueColors(colors: string[]) {
-  return [...new Set(colors.map((color) => color.toUpperCase()))];
-}
-
-function relativeLuminance(hex: string) {
-  const { red, green, blue } = hexToRgb(hex);
-  const channel = (value: number) => {
-    const normalized = value / 255;
-    return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
-  };
-  return 0.2126 * channel(red) + 0.7152 * channel(green) + 0.0722 * channel(blue);
-}
-
-function contrastRatio(foreground: string, background: string) {
-  const first = relativeLuminance(foreground);
-  const second = relativeLuminance(background);
-  const lighter = Math.max(first, second);
-  const darker = Math.min(first, second);
-  return (lighter + 0.05) / (darker + 0.05);
-}
-
-function contrastGrade(ratio: number) {
-  if (ratio >= 7) return "AAA";
-  if (ratio >= 4.5) return "AA";
-  if (ratio >= 3) return "AA Large";
-  return "LOW";
-}
-
-function colorDistance(first: string, second: string) {
-  const a = hexToRgb(first);
-  const b = hexToRgb(second);
-  return Math.sqrt((a.red - b.red) ** 2 + (a.green - b.green) ** 2 + (a.blue - b.blue) ** 2);
-}
-
-function buildFontColorOptions(dominant: string, imageColors: string[]) {
-  const { red, green, blue } = hexToRgb(dominant);
-  const { hue, saturation } = rgbToHsl(red, green, blue);
-  const candidates = uniqueColors([
-    contrastRatio("#281125", dominant) >= contrastRatio("#FFFFFF", dominant) ? "#281125" : "#FFFFFF",
-    "#281125",
-    "#FFFFFF",
-    "#D8F2DA",
-    "#F0CA50",
-    "#C1395E",
-    "#13B7D9",
-    hslToHex(hue + 180, clamp(saturation + 18, 52, 86), 52),
-    hslToHex(hue + 36, clamp(saturation + 12, 48, 82), 58),
-    ...imageColors.slice(0, 3),
-  ]);
-
-  return candidates
-    .sort((first, second) => contrastRatio(second, dominant) - contrastRatio(first, dominant))
-    .slice(0, 6);
-}
-
-async function analyzePaletteFromDataUrl(dataUrl: string): Promise<{ dominant: string; imageColors: string[]; suggestions: string[] }> {
+async function analyzePaletteFromDataUrl(dataUrl: string): Promise<{ dominant: string; imageColors: string[] }> {
   const image = new Image();
   image.crossOrigin = "anonymous";
   await new Promise<void>((resolve, reject) => {
@@ -319,201 +88,99 @@ async function analyzePaletteFromDataUrl(dataUrl: string): Promise<{ dominant: s
     image.onerror = () => reject(new Error("image load failed"));
     image.src = dataUrl;
   });
-
   const canvas = document.createElement("canvas");
   const size = 64;
   canvas.width = size;
   canvas.height = size;
-  const context = canvas.getContext("2d", { willReadFrequently: true });
-  if (!context) throw new Error("canvas unavailable");
-  context.drawImage(image, 0, 0, size, size);
-  const pixels = context.getImageData(0, 0, size, size).data;
-  let red = 0;
-  let green = 0;
-  let blue = 0;
-  let count = 0;
-  const buckets = new Map<string, { count: number; red: number; green: number; blue: number }>();
-  for (let index = 0; index < pixels.length; index += 16) {
-    const alpha = pixels[index + 3];
-    if (alpha < 180) continue;
-    const pixelRed = pixels[index];
-    const pixelGreen = pixels[index + 1];
-    const pixelBlue = pixels[index + 2];
-    red += pixelRed;
-    green += pixelGreen;
-    blue += pixelBlue;
-    count += 1;
-    const key = `${Math.round(pixelRed / 32) * 32}-${Math.round(pixelGreen / 32) * 32}-${Math.round(pixelBlue / 32) * 32}`;
-    const bucket = buckets.get(key) || { count: 0, red: 0, green: 0, blue: 0 };
-    bucket.count += 1;
-    bucket.red += pixelRed;
-    bucket.green += pixelGreen;
-    bucket.blue += pixelBlue;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) throw new Error("canvas unavailable");
+  ctx.drawImage(image, 0, 0, size, size);
+  const pixels = ctx.getImageData(0, 0, size, size).data;
+  let r = 0, g = 0, b = 0, count = 0;
+  const buckets = new Map<string, { count: number; r: number; g: number; b: number }>();
+  for (let i = 0; i < pixels.length; i += 16) {
+    if (pixels[i + 3] < 180) continue;
+    const pr = pixels[i], pg = pixels[i + 1], pb = pixels[i + 2];
+    r += pr; g += pg; b += pb; count++;
+    const key = `${Math.round(pr / 32) * 32}-${Math.round(pg / 32) * 32}-${Math.round(pb / 32) * 32}`;
+    const bucket = buckets.get(key) || { count: 0, r: 0, g: 0, b: 0 };
+    bucket.count++; bucket.r += pr; bucket.g += pg; bucket.b += pb;
     buckets.set(key, bucket);
   }
-  if (count === 0) {
-    const fallback = ["#6F7C79", "#FFFFFF", "#FFE15A", "#FF4FA3"];
-    return { dominant: fallback[0], imageColors: fallback, suggestions: buildFontColorOptions(fallback[0], fallback) };
-  }
-  const dominant = `#${readableHex(red / count)}${readableHex(green / count)}${readableHex(blue / count)}`;
+  if (count === 0) return { dominant: "#6F7C79", imageColors: ["#6F7C79", "#FFFFFF", "#FFE15A", "#FF4FA3"] };
+  const dominant = `#${readableHex(r / count)}${readableHex(g / count)}${readableHex(b / count)}`;
   const imageColors = Array.from(buckets.values())
-    .sort((first, second) => second.count - first.count)
-    .map((bucket) => `#${readableHex(bucket.red / bucket.count)}${readableHex(bucket.green / bucket.count)}${readableHex(bucket.blue / bucket.count)}`)
-    .reduce<string[]>((colors, color) => {
-      if (colors.length >= 5) return colors;
-      if (colors.every((existing) => colorDistance(existing, color) > 34)) colors.push(color);
-      return colors;
-    }, []);
-  const extractedColors = uniqueColors([dominant, ...imageColors]).slice(0, 5);
-  return { dominant, imageColors: extractedColors, suggestions: buildFontColorOptions(dominant, extractedColors) };
+    .sort((a, b) => b.count - a.count)
+    .map((bk) => `#${readableHex(bk.r / bk.count)}${readableHex(bk.g / bk.count)}${readableHex(bk.b / bk.count)}`)
+    .slice(0, 5);
+  return { dominant, imageColors: [...new Set([dominant, ...imageColors])].slice(0, 5) };
 }
 
+/* ─── Main App ─── */
 export function App() {
-  const [activeTab, setActiveTab] = useState<"generate" | "history">("generate");
-  const [title, setTitle] = useState("为什么越来越多人开始徒步旅行?");
-  const [subtitle, setSubtitle] = useState("一场治愈身心的自由之旅");
-  const [keywords, setKeywords] = useState("");
-  const [engine, setEngine] = useState<ImageEngine>("openai");
-  const [accountTier, setAccountTier] = useState<AccountTier>("internal");
+  const [step, setStep] = useState<Step>(1);
+  const [showHistory, setShowHistory] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Step 1: Image
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [imageName, setImageName] = useState("");
   const [detectedColor, setDetectedColor] = useState("#6F7C79");
-  const [imageColors, setImageColors] = useState(["#6F7C79", "#FFFFFF", "#FFE15A", "#FF4FA3"]);
-  const [imagePreview, setImagePreview] = useState("/samples/base-hiker.png");
-  const [imageName, setImageName] = useState("示例底图");
+  const [imageColors, setImageColors] = useState<string[]>([]);
+
+  // Step 2: Copy
+  const [title, setTitle] = useState("");
+  const [subtitle, setSubtitle] = useState("");
+  const [keywords, setKeywords] = useState("");
+
+  // Step 3: Style
+  const [engine, setEngine] = useState<ImageEngine>("openai");
   const [count, setCount] = useState<GenerateCount>(4);
-  const [results, setResults] = useState<CoverResult[]>(demoResults);
-  const [progress, setProgress] = useState(3);
+
+  // Step 4: Generate
+  const [runState, setRunState] = useState<RunState>("idle");
+  const [results, setResults] = useState<CoverResult[]>([]);
+  const [progress, setProgress] = useState(0);
   const [total, setTotal] = useState<GenerateCount>(4);
-  const [message, setMessage] = useState("正在生成 3/4");
-  const [runState, setRunState] = useState<RunState>("demo");
+  const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
-  const [history, setHistory] = useState<HistoryBatch[]>([]);
-  const [editLayer, setEditLayer] = useState<EditLayer>({
-    title: "封面标题",
-    subtitle: "点击编辑副标题",
-    color: "#FFFFFF",
-    accent: "#FF4FA3",
-    x: 50,
-    y: 22,
-    size: 42,
-  });
-  const [settingsOpen, setSettingsOpen] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
+  // History
+  const [history, setHistory] = useState<HistoryBatch[]>([]);
+
   const isGenerating = runState === "analyzing" || runState === "planning" || runState === "generating";
-  const displayResults = useMemo(
-    () => createEmptySlots(total, results, isGenerating || runState === "demo"),
-    [isGenerating, results, runState, total],
-  );
-  const completedCount = results.filter((result) => result.image_url || result.error).length;
-  const progressPercent = Math.min(100, Math.round((Math.max(progress, completedCount) / total) * 100));
-  const canDownload = results.some((result) => result.image_url);
-  const selectedEngine = engineOptions.find((option) => option.id === engine) || engineOptions[0];
-  const selectedAccount = accountOptions.find((option) => option.id === accountTier) || accountOptions[0];
-  const fontColorOptions = useMemo(() => buildFontColorOptions(detectedColor, imageColors), [detectedColor, imageColors]);
-  const contrastBase = detectedColor;
-  const currentContrast = contrastRatio(editLayer.color, contrastBase);
-  const estimatedCost = selectedAccount.internal ? 0 : count;
-  const firstDownload = results.find((result) => result.image_url);
+  const completedCount = results.filter((r) => r.image_url || r.error).length;
+  const progressPercent = total > 0 ? Math.min(100, Math.round((Math.max(progress, completedCount) / total) * 100)) : 0;
 
   const refreshHistory = useCallback(async () => {
-    try {
-      setHistory(await getHistory());
-    } catch {
-      setHistory([]);
-    }
+    try { setHistory(await getHistory()); } catch { setHistory([]); }
   }, []);
 
-  useEffect(() => {
-    refreshHistory();
-  }, [refreshHistory]);
+  useEffect(() => { refreshHistory(); }, [refreshHistory]);
 
-  useEffect(() => {
-    const storedTier = window.localStorage.getItem("lipa-account-tier") as AccountTier | null;
-    if (storedTier && accountOptions.some((option) => option.id === storedTier)) {
-      setAccountTier(storedTier);
-    }
-  }, []);
-
-  useEffect(() => {
-    window.localStorage.setItem("lipa-account-tier", accountTier);
-  }, [accountTier]);
-
-  useEffect(() => {
-    let cancelled = false;
-    getImageDataUrl()
-      .then((dataUrl) => analyzePaletteFromDataUrl(dataUrl))
-      .then((palette) => {
-        if (cancelled) return;
-        setDetectedColor(palette.dominant);
-        setImageColors(palette.imageColors);
-        setEditLayer((previous) => ({
-          ...previous,
-          color: palette.suggestions[0] || previous.color,
-          accent: palette.imageColors[1] || previous.accent,
-        }));
-      })
-      .catch(() => {
-        if (!cancelled) {
-          const fallback = ["#6F7C79", "#FFFFFF", "#FFE15A", "#FF4FA3"];
-          setDetectedColor("#6F7C79");
-          setImageColors(fallback);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [imagePreview]);
-
+  /* ─── File Handling ─── */
   const handleFile = async (file: File) => {
     const dataUrl = await fileToDataUrl(file);
     setImagePreview(dataUrl);
     setImageName(file.name);
-    setRunState("idle");
-    setResults([]);
-    setProgress(0);
-    setMessage("准备就绪");
-    setErrorMessage("");
+    try {
+      const palette = await analyzePaletteFromDataUrl(dataUrl);
+      setDetectedColor(palette.dominant);
+      setImageColors(palette.imageColors);
+    } catch { /* ignore */ }
   };
 
-  const getImageDataUrl = async () => {
+  const getImageDataUrl = async (): Promise<string> => {
+    if (!imagePreview) throw new Error("请先上传底图");
     if (imagePreview.startsWith("data:")) return imagePreview;
     return urlToDataUrl(imagePreview);
   };
 
-  const persistResults = async (finalResults: CoverResult[]) => {
-    const successful = finalResults.filter((result) => result.image_url && !result.error);
-    if (successful.length === 0) return;
-    const batch: HistoryBatch = {
-      id: crypto.randomUUID(),
-      createdAt: new Date().toISOString(),
-      title,
-      subtitle,
-      keywords,
-      engine,
-      count,
-      baseImage: await getImageDataUrl(),
-      results: successful,
-    };
-    await saveHistoryBatch(batch);
-    await refreshHistory();
-  };
-
+  /* ─── Generation ─── */
   const startGenerate = async () => {
-    if (!title.trim()) {
-      setErrorMessage("请先填写主标题。");
-      setRunState("error");
-      return;
-    }
-    if (accountTier === "guest") {
-      setErrorMessage("游客模式不能生成，请先切换为内部账号或创作者账号。");
-      setRunState("error");
-      return;
-    }
-    if (!selectedAccount.internal && selectedAccount.credits < count) {
-      setErrorMessage("账户点数不足，请充值后再生成。");
-      setRunState("error");
-      return;
-    }
+    if (!imagePreview) { setErrorMessage("请先上传底图"); setRunState("error"); return; }
+    if (!title.trim()) { setErrorMessage("请先填写标题"); setRunState("error"); return; }
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -524,7 +191,6 @@ export function App() {
     setProgress(0);
     setTotal(count);
     setMessage("正在分析底图...");
-    setActiveTab("generate");
 
     try {
       const image = await getImageDataUrl();
@@ -541,11 +207,6 @@ export function App() {
           stylePreferences: {
             imageDominantColor: detectedColor,
             imagePalette: imageColors,
-            preferredTextColor: editLayer.color,
-            preferredAccentColor: editLayer.accent,
-            fontColorOptions,
-            contrastRatio: Number(currentContrast.toFixed(2)),
-            contrastGrade: contrastGrade(currentContrast),
           },
         }),
         signal: controller.signal,
@@ -561,30 +222,37 @@ export function App() {
         if (event.status === "generating") setRunState("generating");
         if (event.result) {
           collected.push(event.result);
-          setResults((previous) => {
-            const withoutDuplicate = previous.filter((item) => item.id !== event.result?.id);
-            return [...withoutDuplicate, event.result as CoverResult].sort((a, b) => a.id - b.id);
+          setResults((prev) => {
+            const filtered = prev.filter((item) => item.id !== event.result?.id);
+            return [...filtered, event.result as CoverResult].sort((a, b) => a.id - b.id);
           });
         }
         if (event.status === "done") {
-          const finalResults = fillMissingResults(event.results || collected, event.total || count);
-          setResults(finalResults);
+          const final = fillMissingResults(event.results || collected, event.total || count);
+          setResults(final);
           setProgress(event.total || count);
           setRunState("done");
-          persistResults(finalResults);
+          // Save to history
+          saveHistoryBatch({
+            id: `batch-${Date.now()}`,
+            createdAt: new Date().toISOString(),
+            title: title.trim(),
+            subtitle: subtitle.trim(),
+            keywords: keywords.trim(),
+            engine,
+            count,
+            baseImage: imagePreview || "",
+            results: final,
+          }).then(() => refreshHistory());
         }
         if (event.status === "error") {
           setRunState("error");
-          setErrorMessage(event.message || "生成失败。");
+          setErrorMessage(event.message || "生成失败");
         }
       });
     } catch (error) {
-      if ((error as Error).name === "AbortError") {
-        setMessage("已停止生成");
-        setRunState("idle");
-        return;
-      }
-      setErrorMessage(error instanceof Error ? error.message : "生成失败。");
+      if ((error as Error).name === "AbortError") { setRunState("idle"); return; }
+      setErrorMessage(error instanceof Error ? error.message : "生成失败");
       setRunState("error");
     }
   };
@@ -593,39 +261,17 @@ export function App() {
     abortRef.current?.abort();
     abortRef.current = null;
     setRunState("idle");
-    setMessage("已停止生成");
   };
 
-  const resetDemo = () => {
-    setTitle("为什么越来越多人开始徒步旅行?");
-    setSubtitle("一场治愈身心的自由之旅");
-    setKeywords("");
-    setEngine("openai");
-    setImagePreview("/samples/base-hiker.png");
-    setImageName("示例底图");
-    setCount(4);
-    setTotal(4);
-    setProgress(3);
-    setResults(demoResults);
-    setRunState("demo");
-    setMessage("正在生成 3/4");
-    setErrorMessage("");
-    setEditLayer({
-      title: "为什么开始徒步?",
-      subtitle: "一场治愈身心的自由之旅",
-      color: "#FFFFFF",
-      accent: "#FFE15A",
-      x: 50,
-      y: 22,
-      size: 42,
-    });
-    setActiveTab("generate");
+  const downloadCover = (cover: CoverResult) => {
+    if (!cover.image_url) return;
+    downloadImageUrl(cover.image_url, `lipa-cover-${String(cover.id).padStart(2, "0")}.png`);
   };
 
   const openBatch = (batch: HistoryBatch) => {
     setTitle(batch.title);
     setSubtitle(batch.subtitle);
-    setKeywords("");
+    setKeywords(batch.keywords || "");
     setEngine(batch.engine || "openai");
     setCount(batch.count);
     setTotal(batch.count);
@@ -634,469 +280,467 @@ export function App() {
     setResults(batch.results);
     setProgress(batch.results.length);
     setRunState("done");
-    setMessage("已从历史打开");
-    setEditLayer((previous) => ({
-      ...previous,
-      title: batch.title,
-      subtitle: batch.subtitle || previous.subtitle,
-    }));
-    setActiveTab("generate");
+    setStep(4);
+    setShowHistory(false);
   };
 
-  const deleteBatch = async (id: string) => {
-    await deleteHistoryBatch(id);
-    await refreshHistory();
+  /* ─── Step Navigation ─── */
+  const canProceed = (s: Step): boolean => {
+    if (s === 1) return !!imagePreview;
+    if (s === 2) return !!title.trim();
+    if (s === 3) return true;
+    return false;
   };
 
-  const downloadCover = (cover: CoverResult) => {
-    if (!cover.image_url) return;
-    downloadImageUrl(cover.image_url, coverDownloadName(cover));
+  const nextStep = () => {
+    if (step < 4 && canProceed(step)) setStep((step + 1) as Step);
+  };
+  const prevStep = () => {
+    if (step > 1) setStep((step - 1) as Step);
   };
 
-  const saveCoverLocally = async (cover: CoverResult) => {
-    if (!cover.image_url) return;
-    try {
-      const response = await fetch("/api/export-cover", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          imageUrl: cover.image_url,
-          filename: coverDownloadName(cover),
-        }),
-      });
-      const payload = (await response.json()) as { ok?: boolean; path?: string; message?: string };
-      if (!response.ok || !payload.ok) {
-        throw new Error(payload.message || "本地保存失败。");
-      }
-      setErrorMessage("");
-      setMessage(`已保存到本地：${payload.path}`);
-    } catch (error) {
-      setErrorMessage(error instanceof Error ? error.message : "本地保存失败。");
-    }
-  };
+  const stepLabels = [
+    { num: 1, label: "底图", icon: <ImagePlus size={18} /> },
+    { num: 2, label: "文案", icon: <Type size={18} /> },
+    { num: 3, label: "风格", icon: <Palette size={18} /> },
+    { num: 4, label: "生成", icon: <Sparkles size={18} /> },
+  ];
 
-  const handleCoverDownload = (cover: CoverResult) => {
-    downloadCover(cover);
-    void saveCoverLocally(cover);
-  };
-
-  const downloadFirst = () => {
-    if (firstDownload) handleCoverDownload(firstDownload);
-  };
-
+  /* ─── Render ─── */
   return (
     <main className="app-shell">
-      <section className="device-frame" aria-label="封面生成器工作台">
-        <header className="topbar">
-          <button className="brand" type="button" onClick={resetDemo} aria-label="重置示例">
-            <span className="brand-logo-mark" aria-hidden="true">
-              <strong>Lipa</strong>
-              <em>Cover</em>
-            </span>
-            <span className="brand-copy">
-              <strong>封面生成器</strong>
-              <small>AI cover studio</small>
-            </span>
+      {/* Background gradient */}
+      <div className="bg-gradient" aria-hidden="true" />
+
+      {/* Header */}
+      <header className="site-header">
+        <div className="header-brand">
+          <span className="brand-mark">L</span>
+          <span className="brand-text">
+            <strong>Lipa</strong> Cover
+          </span>
+        </div>
+        <nav className="header-nav">
+          <button
+            type="button"
+            className={cn("nav-btn", showHistory && "is-active")}
+            onClick={() => setShowHistory(!showHistory)}
+          >
+            <History size={18} />
+            <span>历史</span>
           </button>
+          <button
+            type="button"
+            className={cn("nav-btn", showSettings && "is-active")}
+            onClick={() => setShowSettings(!showSettings)}
+          >
+            <Settings2 size={18} />
+            <span>设置</span>
+          </button>
+        </nav>
+      </header>
 
-          <nav className="toolbar" aria-label="工具栏">
-            <button
-              className={classNames("tool-button", activeTab === "history" && "is-active")}
-              type="button"
-              onClick={() => setActiveTab(activeTab === "history" ? "generate" : "history")}
-            >
-              <History size={22} />
-              <span>历史</span>
-            </button>
-            <button className="tool-button" type="button" onClick={downloadFirst} disabled={!canDownload}>
-              <Download size={22} />
-              <span>下载</span>
-            </button>
-            <button
-              className={classNames("tool-button", settingsOpen && "is-active")}
-              type="button"
-              onClick={() => setSettingsOpen((value) => !value)}
-            >
-              <Settings size={23} />
-              <span>设置</span>
-            </button>
-          </nav>
-        </header>
-
-        {settingsOpen && (
-          <aside className="settings-panel">
-            <div>
-              <span className="micro-label">OUTPUT</span>
-              <strong>小红书 3:4</strong>
-            </div>
-            <div>
-              <span className="micro-label">SIZE</span>
-              <strong>1024 x 1536</strong>
-            </div>
-            <div>
-              <span className="micro-label">ENGINE</span>
-              <strong>{selectedEngine.title}</strong>
-            </div>
-          </aside>
-        )}
-
-        <section className="account-card" aria-label="账户与点数">
-          <div className="account-main">
-            <span className="account-avatar">{selectedAccount.internal ? <Crown size={18} /> : <UserRound size={18} />}</span>
-            <span>
-              <strong>{selectedAccount.name}</strong>
-              <small>{selectedAccount.label}</small>
-            </span>
+      {/* History Overlay */}
+      {showHistory && (
+        <div className="overlay-panel">
+          <div className="overlay-header">
+            <h2>创作历史</h2>
+            <button type="button" onClick={() => setShowHistory(false)} className="close-btn">&times;</button>
           </div>
-          <label className="account-select">
-            <select value={accountTier} onChange={(event) => setAccountTier(event.target.value as AccountTier)}>
-              {accountOptions.map((option) => (
-                <option key={option.id} value={option.id}>
-                  {option.name}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={16} />
-          </label>
-          <div className="credit-pill">
-            <Coins size={16} />
-            <span>{selectedAccount.internal ? "不扣点" : `${selectedAccount.credits} 点`}</span>
-            <em>本次 {estimatedCost}</em>
-          </div>
-        </section>
-
-        {activeTab === "generate" ? (
-          <>
-            <section className="workspace-grid" aria-label="封面生成工作台">
-              <div className="workspace-panel setup-panel">
-                <section className="input-zone">
-                  <label className="photo-picker">
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        if (file) handleFile(file);
-                      }}
-                    />
-                    <img src={imagePreview} alt="底图预览" />
-                    <span className="photo-action">
-                      <ImagePlus size={20} />
-                      更换图片
+          {history.length === 0 ? (
+            <div className="empty-state">
+              <Archive size={32} />
+              <p>还没有生成记录</p>
+              <small>完成一次创作后会自动保存</small>
+            </div>
+          ) : (
+            <div className="history-list">
+              {history.map((batch) => (
+                <article className="history-item" key={batch.id}>
+                  <button type="button" className="history-main" onClick={() => openBatch(batch)}>
+                    <span className="history-thumbs">
+                      {batch.results.slice(0, 3).map((c) => (
+                        c.image_url && <img src={c.image_url} alt={c.label} key={c.id} />
+                      ))}
                     </span>
-                    <span className="photo-name">{imageName}</span>
-                  </label>
+                    <span className="history-info">
+                      <strong>{batch.title}</strong>
+                      <small>{batch.count}张 · {formatTime(batch.createdAt)}</small>
+                    </span>
+                  </button>
+                  <button className="icon-btn danger" type="button" onClick={() => { deleteHistoryBatch(batch.id); refreshHistory(); }}>
+                    <Trash2 size={16} />
+                  </button>
+                </article>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
-                  <div className="copy-fields">
-                    <label className="field">
-                      <span>标题 <small>必填</small></span>
-                      <input
-                        value={title}
-                        maxLength={30}
-                        onChange={(event) => {
-                          setTitle(event.target.value);
-                          if (runState === "demo") setRunState("idle");
-                        }}
-                        placeholder="输入主标题"
-                      />
-                      <em>{title.length}/30</em>
-                    </label>
-                    <label className="field">
-                      <span>副标题 <small>选填</small></span>
-                      <input
-                        value={subtitle}
-                        maxLength={30}
-                        onChange={(event) => {
-                          setSubtitle(event.target.value);
-                          if (runState === "demo") setRunState("idle");
-                        }}
-                        placeholder="输入副标题"
-                      />
-                      <em>{subtitle.length}/30</em>
-                    </label>
+      {/* Settings Overlay */}
+      {showSettings && (
+        <div className="overlay-panel settings-overlay">
+          <div className="overlay-header">
+            <h2>高级设置</h2>
+            <button type="button" onClick={() => setShowSettings(false)} className="close-btn">&times;</button>
+          </div>
+          <div className="settings-content">
+            <label className="setting-item">
+              <span>生成引擎</span>
+              <select value={engine} onChange={(e) => setEngine(e.target.value as ImageEngine)}>
+                {engineOptions.map((opt) => (
+                  <option key={opt.id} value={opt.id}>{opt.title} — {opt.description}</option>
+                ))}
+              </select>
+            </label>
+            <label className="setting-item">
+              <span>生成数量</span>
+              <div className="count-selector">
+                {countOptions.map((opt) => (
+                  <button
+                    key={opt}
+                    type="button"
+                    className={cn(opt === count && "is-selected")}
+                    onClick={() => { setCount(opt); setTotal(opt); }}
+                  >
+                    {opt}
+                  </button>
+                ))}
+              </div>
+            </label>
+            <div className="setting-item">
+              <span>输出尺寸</span>
+              <strong>1024 × 1536（小红书 3:4）</strong>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Hero Section */}
+      <section className="hero">
+        <h1 className="hero-title">Create Your Cover</h1>
+        <p className="hero-subtitle">AI 驱动的封面创作工坊，从底图到成品，一步步引导你完成设计</p>
+      </section>
+
+      {/* Step Indicator */}
+      <nav className="step-indicator" aria-label="创作步骤">
+        {stepLabels.map((s) => (
+          <button
+            key={s.num}
+            type="button"
+            className={cn(
+              "step-dot",
+              step === s.num && "is-current",
+              step > s.num && "is-done",
+            )}
+            onClick={() => {
+              if (s.num <= step || (s.num === step + 1 && canProceed(step))) {
+                setStep(s.num as Step);
+              }
+            }}
+          >
+            <span className="step-icon">
+              {step > s.num ? <Check size={16} /> : s.icon}
+            </span>
+            <span className="step-label">{s.label}</span>
+          </button>
+        ))}
+        <div className="step-line" style={{ "--progress": `${((step - 1) / 3) * 100}%` } as CSSProperties} />
+      </nav>
+
+      {/* Step Content */}
+      <section className="step-content">
+        {/* Step 1: Upload Image */}
+        {step === 1 && (
+          <div className="step-panel fade-in">
+            <div className="step-header">
+              <span className="step-number">01</span>
+              <div>
+                <h2>选择底图</h2>
+                <p>上传一张图片作为封面底图，AI 将在此基础上进行创作</p>
+              </div>
+            </div>
+            <label className="upload-zone">
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) handleFile(file);
+                }}
+              />
+              {imagePreview ? (
+                <div className="upload-preview">
+                  <img src={imagePreview} alt="底图预览" />
+                  <div className="upload-overlay">
+                    <Upload size={24} />
+                    <span>更换图片</span>
                   </div>
-                </section>
-
-                <section className="design-zone simple-color-zone" aria-label="颜色分析与字体颜色">
-                  <div className="section-heading">
-                    <h2>颜色设置</h2>
-                    <span>{currentContrast.toFixed(2)} contrast · {contrastGrade(currentContrast)}</span>
-                  </div>
-
-                  <div className="simple-color-steps">
-                    <article className="simple-color-card">
-                      <div className="simple-step-title">
-                        <b>01</b>
-                        <span>分析底图颜色</span>
-                      </div>
-                      <div className="pantone-card" aria-label="底图颜色组成">
-                        <div className="pantone-strip">
-                          {imageColors.map((color) => (
-                            <span key={color} style={{ background: color }} />
-                          ))}
-                        </div>
-                        <div className="pantone-meta">
-                          <strong>IMAGE PALETTE</strong>
-                          <small>主色 {detectedColor}</small>
-                        </div>
-                        <div className="pantone-hex-list">
-                          {imageColors.map((color) => (
-                            <span key={color}>{color}</span>
-                          ))}
-                        </div>
-                      </div>
-                    </article>
-
-                    <article className="simple-color-card">
-                      <div className="simple-step-title">
-                        <b>02</b>
-                        <span>字体颜色建议</span>
-                      </div>
-                      <div className="type-color-preview" style={{ background: detectedColor, color: editLayer.color }}>
-                        <strong>HELLO</strong>
-                        <span>{editLayer.color} · {contrastGrade(currentContrast)}</span>
-                      </div>
-                      <div className="font-suggestion-row" aria-label="字体颜色建议">
-                        {fontColorOptions.slice(0, 4).map((color) => {
-                          const ratio = contrastRatio(color, detectedColor);
-                          return (
-                            <button
-                              key={color}
-                              type="button"
-                              className={classNames(editLayer.color === color && "is-selected")}
-                              style={{ "--swatch-color": color } as CSSProperties}
-                              onClick={() => {
-                                setEditLayer((previous) => ({ ...previous, color }));
-                                if (runState === "demo") setRunState("idle");
-                              }}
-                            >
-                              <i />
-                              <span>{color}</span>
-                              <em>{contrastGrade(ratio)}</em>
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <label className="custom-color-picker">
-                        <span>自定义</span>
-                        <input
-                          type="color"
-                          value={editLayer.color}
-                          onChange={(event) => {
-                            setEditLayer((previous) => ({ ...previous, color: event.target.value.toUpperCase() }));
-                            if (runState === "demo") setRunState("idle");
-                          }}
-                        />
-                        <em>{editLayer.color}</em>
-                      </label>
-                    </article>
-                  </div>
-                </section>
-
-                <div className="controls-row">
-                  <section className="engine-zone" aria-label="生成引擎">
-                    <div className="section-heading">
-                      <h2>生成引擎</h2>
-                      <span>{selectedEngine.vendor}</span>
-                    </div>
-                    <label className="engine-select-wrap">
-                      <select
-                        value={engine}
-                        onChange={(event) => {
-                          setEngine(event.target.value as ImageEngine);
-                          if (runState === "demo") setRunState("idle");
-                        }}
-                      >
-                        {engineOptions.map((option) => (
-                          <option key={option.id} value={option.id}>
-                            {option.title}（{option.vendor}） - {option.description}
-                          </option>
-                        ))}
-                      </select>
-                      <ChevronDown size={20} aria-hidden="true" />
-                    </label>
-                    <div className="engine-current">
-                      <strong>{selectedEngine.title}</strong>
-                      <span>{selectedEngine.description}</span>
-                      <em>{selectedEngine.badge}</em>
-                    </div>
-                  </section>
-
-                  <section className="count-zone" aria-label="生成数量">
-                    <h2>生成数量</h2>
-                    <div className="segmented">
-                      {countOptions.map((option) => (
-                        <button
-                          key={option}
-                          type="button"
-                          className={classNames(option === count && "is-selected")}
-                          onClick={() => {
-                            setCount(option);
-                            setTotal(option);
-                            if (runState !== "idle") {
-                              setResults([]);
-                              setProgress(0);
-                              setRunState("idle");
-                            }
-                            setMessage(`准备生成 ${option} 张`);
-                          }}
-                        >
-                          {option}张
-                        </button>
+                  {imageColors.length > 0 && (
+                    <div className="palette-strip">
+                      {imageColors.map((c) => (
+                        <span key={c} style={{ background: c }} />
                       ))}
                     </div>
-                  </section>
+                  )}
                 </div>
+              ) : (
+                <div className="upload-placeholder">
+                  <div className="upload-icon-wrap">
+                    <ImagePlus size={40} strokeWidth={1.5} />
+                  </div>
+                  <strong>点击或拖拽上传底图</strong>
+                  <small>支持 JPG、PNG、WebP，建议竖版 3:4 比例</small>
+                </div>
+              )}
+            </label>
+            {imageName && <p className="file-name">{imageName}</p>}
+          </div>
+        )}
 
-                <footer className="action-bar">
-                  <button className="primary-action" type="button" onClick={isGenerating ? stopGenerate : startGenerate}>
-                    {isGenerating ? <Square size={18} /> : <WandSparkles size={19} />}
-                    {isGenerating ? "停止生成" : "生成封面"}
-                  </button>
-                </footer>
+        {/* Step 2: Title & Copy */}
+        {step === 2 && (
+          <div className="step-panel fade-in">
+            <div className="step-header">
+              <span className="step-number">02</span>
+              <div>
+                <h2>填写文案</h2>
+                <p>输入封面上要展示的标题和副标题</p>
+              </div>
+            </div>
+            <div className="form-fields">
+              <label className="form-field">
+                <span className="field-label">主标题 <em>必填</em></span>
+                <input
+                  type="text"
+                  value={title}
+                  maxLength={30}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder="例如：为什么越来越多人开始徒步旅行?"
+                />
+                <span className="field-count">{title.length}/30</span>
+              </label>
+              <label className="form-field">
+                <span className="field-label">副标题 <em>选填</em></span>
+                <input
+                  type="text"
+                  value={subtitle}
+                  maxLength={30}
+                  onChange={(e) => setSubtitle(e.target.value)}
+                  placeholder="例如：一场治愈身心的自由之旅"
+                />
+                <span className="field-count">{subtitle.length}/30</span>
+              </label>
+              <label className="form-field">
+                <span className="field-label">关键词 <em>选填</em></span>
+                <input
+                  type="text"
+                  value={keywords}
+                  maxLength={60}
+                  onChange={(e) => setKeywords(e.target.value)}
+                  placeholder="风格关键词，如：清新、自然、治愈系"
+                />
+                <span className="field-count">{keywords.length}/60</span>
+              </label>
+            </div>
+          </div>
+        )}
+
+        {/* Step 3: Style & Settings */}
+        {step === 3 && (
+          <div className="step-panel fade-in">
+            <div className="step-header">
+              <span className="step-number">03</span>
+              <div>
+                <h2>确认风格</h2>
+                <p>选择生成引擎和数量，准备开始创作</p>
+              </div>
+            </div>
+            <div className="style-summary">
+              <div className="summary-card">
+                <div className="summary-item">
+                  <span className="summary-label">底图</span>
+                  <span className="summary-value">
+                    {imagePreview && <img src={imagePreview} alt="" className="summary-thumb" />}
+                    {imageName || "已上传"}
+                  </span>
+                </div>
+                <div className="summary-item">
+                  <span className="summary-label">标题</span>
+                  <span className="summary-value">{title}</span>
+                </div>
+                {subtitle && (
+                  <div className="summary-item">
+                    <span className="summary-label">副标题</span>
+                    <span className="summary-value">{subtitle}</span>
+                  </div>
+                )}
+                {keywords && (
+                  <div className="summary-item">
+                    <span className="summary-label">关键词</span>
+                    <span className="summary-value">{keywords}</span>
+                  </div>
+                )}
+                <div className="summary-item">
+                  <span className="summary-label">引擎</span>
+                  <span className="summary-value">
+                    {engineOptions.find((e) => e.id === engine)?.title || engine}
+                  </span>
+                </div>
+                <div className="summary-item">
+                  <span className="summary-label">数量</span>
+                  <span className="summary-value">{count} 张</span>
+                </div>
               </div>
 
-              <div className="workspace-panel output-panel">
-                <section className="progress-card" aria-label="生成进度">
-                  <div className="steps">
-                    {[
-                      ["分析底图", runState !== "idle" && runState !== "error"],
-                      [
-                        "生成方案",
-                        runState === "planning" || runState === "generating" || runState === "done" || runState === "demo",
-                      ],
-                      ["并行出图", runState === "generating" || runState === "done" || runState === "demo"],
-                    ].map(([label, complete], index) => (
-                      <div className="step" key={String(label)}>
-                        <span className={classNames("step-dot", complete && "is-complete")}>
-                          {complete ? <Check size={18} /> : index + 1}
-                        </span>
-                        <strong>{label}</strong>
-                        <small>{complete ? (index < 2 || runState === "done" ? "已完成" : "进行中") : "待开始"}</small>
-                      </div>
+              <div className="style-controls">
+                <label className="style-select">
+                  <span>生成引擎</span>
+                  <div className="select-wrap">
+                    <select value={engine} onChange={(e) => setEngine(e.target.value as ImageEngine)}>
+                      {engineOptions.map((opt) => (
+                        <option key={opt.id} value={opt.id}>{opt.title} — {opt.description}</option>
+                      ))}
+                    </select>
+                    <ChevronDown size={16} />
+                  </div>
+                </label>
+                <div className="style-count">
+                  <span>生成数量</span>
+                  <div className="count-selector">
+                    {countOptions.map((opt) => (
+                      <button
+                        key={opt}
+                        type="button"
+                        className={cn(opt === count && "is-selected")}
+                        onClick={() => { setCount(opt); setTotal(opt); }}
+                      >
+                        {opt}张
+                      </button>
                     ))}
                   </div>
-                  <div className="bar-track">
-                    <span style={{ width: `${runState === "demo" ? 75 : progressPercent}%` }} />
-                  </div>
-                  <div className="status-row">
-                    <span className="status-main">
-                      {isGenerating || runState === "demo" ? <LoaderCircle className="spin" size={18} /> : <Archive size={18} />}
-                      {errorMessage || message}
-                    </span>
-                    <span>{isGenerating || runState === "demo" ? "预计剩余 00:18" : `${completedCount}/${total}`}</span>
-                  </div>
-                </section>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
-                <section className="result-grid" aria-label="封面结果">
-                  {displayResults.map((cover) => (
-                    <article
-                      key={cover.id}
-                      className={classNames("cover-card", !cover.image_url && !cover.error && "is-loading")}
-                    >
-                      <button
-                        type="button"
-                        className="cover-preview"
-                        onClick={() => handleCoverDownload(cover)}
-                        disabled={!cover.image_url}
-                        aria-label={cover.image_url ? `下载第 ${cover.id} 张封面` : undefined}
-                      >
-                        <span className="cover-index">{String(cover.id).padStart(2, "0")}</span>
-                        {cover.image_url ? (
-                          <img src={cover.image_url} alt={cover.label} />
-                        ) : cover.error ? (
-                          <span className="cover-error">{cover.error}</span>
-                        ) : (
-                          <span className="cover-loading">
-                            <LoaderCircle className="spin" size={34} />
-                            AI 生成中...
-                            <small>请稍候，精彩即将呈现</small>
-                          </span>
-                        )}
-                      </button>
-                      <footer>
-                        <span>{cover.error ? "生成失败" : cover.image_url ? "点击图片下载" : cover.label}</span>
-                        <button
-                          type="button"
-                          aria-label={cover.image_url ? `下载第 ${cover.id} 张封面` : "等待生成"}
-                          onClick={() => handleCoverDownload(cover)}
-                          disabled={!cover.image_url}
-                        >
-                          <Download size={18} />
-                        </button>
-                      </footer>
-                    </article>
-                  ))}
-                </section>
-              </div>
-            </section>
-          </>
-        ) : (
-          <section className="history-view" aria-label="历史记录">
-            <div className="history-heading">
+        {/* Step 4: Generate & Results */}
+        {step === 4 && (
+          <div className="step-panel fade-in">
+            <div className="step-header">
+              <span className="step-number">04</span>
               <div>
-                <span className="micro-label">LOCAL HISTORY</span>
-                <h2>历史记录</h2>
+                <h2>{runState === "done" ? "创作完成" : isGenerating ? "正在创作..." : "开始生成"}</h2>
+                <p>{runState === "done" ? "点击封面即可下载" : isGenerating ? message : "一切就绪，点击下方按钮开始 AI 创作"}</p>
               </div>
-              <button className="secondary-action compact" type="button" onClick={resetDemo}>
-                <Play size={16} />
-                新建
-              </button>
             </div>
 
-            {history.length === 0 ? (
-              <div className="empty-history">
-                <Archive size={28} />
-                <strong>还没有真实生成记录</strong>
-                <span>完成一次生成后会自动保存到本机。</span>
+            {/* Progress */}
+            {isGenerating && (
+              <div className="gen-progress">
+                <div className="gen-bar">
+                  <span style={{ width: `${progressPercent}%` }} />
+                </div>
+                <div className="gen-status">
+                  <LoaderCircle className="spin" size={16} />
+                  <span>{message}</span>
+                  <span>{completedCount}/{total}</span>
+                </div>
               </div>
-            ) : (
-              <div className="history-list">
-                {history.map((batch) => (
-                  <article className="history-row" key={batch.id}>
-                    <button type="button" className="history-main" onClick={() => openBatch(batch)}>
-                      <span className="history-thumbs">
-                        {batch.results.slice(0, 4).map((cover) => (
-                          <img src={cover.image_url} alt={cover.label} key={cover.id} />
-                        ))}
-                      </span>
-                      <span className="history-copy">
-                        <strong>{batch.title}</strong>
-                        <small>{batch.subtitle || "无副标题"}</small>
-                        <em>
-                          {batch.count}张 / {formatTime(batch.createdAt)}
-                        </em>
-                      </span>
-                    </button>
-                    <button className="icon-danger" type="button" onClick={() => deleteBatch(batch.id)} aria-label="删除">
-                      <Trash2 size={18} />
-                    </button>
+            )}
+
+            {/* Error */}
+            {runState === "error" && errorMessage && (
+              <div className="gen-error">
+                <p>{errorMessage}</p>
+              </div>
+            )}
+
+            {/* Results Grid */}
+            {results.length > 0 && (
+              <div className="results-grid">
+                {results.map((cover) => (
+                  <article key={cover.id} className={cn("result-card", !cover.image_url && !cover.error && "is-loading")}>
+                    {cover.image_url ? (
+                      <button type="button" className="result-image" onClick={() => downloadCover(cover)}>
+                        <img src={cover.image_url} alt={cover.label} />
+                        <span className="result-download">
+                          <Download size={20} />
+                        </span>
+                      </button>
+                    ) : cover.error ? (
+                      <div className="result-error">
+                        <p>{cover.error}</p>
+                      </div>
+                    ) : (
+                      <div className="result-loading">
+                        <LoaderCircle className="spin" size={28} />
+                        <small>生成中...</small>
+                      </div>
+                    )}
+                    <footer className="result-meta">
+                      <span>{cover.label}</span>
+                    </footer>
                   </article>
                 ))}
               </div>
             )}
-          </section>
-        )}
 
-        <nav className="tabbar" aria-label="底部导航">
-          <button
-            type="button"
-            className={classNames(activeTab === "generate" && "is-active")}
-            onClick={() => setActiveTab("generate")}
-          >
-            <Upload size={20} />
-            生成
-          </button>
-          <button
-            type="button"
-            className={classNames(activeTab === "history" && "is-active")}
-            onClick={() => setActiveTab("history")}
-          >
-            <History size={20} />
-            历史
-          </button>
-        </nav>
+            {/* Action */}
+            {!isGenerating && runState !== "done" && (
+              <button type="button" className="generate-btn" onClick={startGenerate}>
+                <Sparkles size={20} />
+                开始生成封面
+              </button>
+            )}
+            {isGenerating && (
+              <button type="button" className="stop-btn" onClick={stopGenerate}>
+                <Square size={16} />
+                停止生成
+              </button>
+            )}
+            {runState === "done" && (
+              <button type="button" className="generate-btn" onClick={() => { setResults([]); setRunState("idle"); startGenerate(); }}>
+                <Sparkles size={20} />
+                重新生成
+              </button>
+            )}
+          </div>
+        )}
       </section>
+
+      {/* Step Navigation */}
+      <footer className="step-nav">
+        <button
+          type="button"
+          className="nav-prev"
+          onClick={prevStep}
+          disabled={step === 1}
+        >
+          <ArrowLeft size={18} />
+          上一步
+        </button>
+        {step < 4 ? (
+          <button
+            type="button"
+            className="nav-next"
+            onClick={nextStep}
+            disabled={!canProceed(step)}
+          >
+            下一步
+            <ArrowRight size={18} />
+          </button>
+        ) : (
+          !isGenerating && runState !== "done" && (
+            <button type="button" className="nav-next generate" onClick={startGenerate}>
+              <Sparkles size={18} />
+              生成封面
+            </button>
+          )
+        )}
+      </footer>
     </main>
   );
 }
