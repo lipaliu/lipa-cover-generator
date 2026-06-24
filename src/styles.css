@@ -92,7 +92,7 @@ input, select, textarea { color: inherit; }
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24px 0;
+  padding: 16px 0;
 }
 
 .header-brand {
@@ -148,16 +148,16 @@ input, select, textarea { color: inherit; }
   width: 100%;
   max-width: 800px;
   text-align: center;
-  padding: 48px 0 24px;
+  padding: 8px 0 8px;
 }
 
 .hero-title {
   font-family: var(--font-display);
-  font-size: clamp(36px, 6vw, 64px);
+  font-size: clamp(28px, 5vw, 48px);
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.1;
-  margin: 0 0 16px;
+  margin: 0 0 8px;
   background: linear-gradient(135deg, #f5f5f7 0%, rgba(255,255,255,0.7) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -178,7 +178,7 @@ input, select, textarea { color: inherit; }
   align-items: center;
   justify-content: center;
   gap: 48px;
-  padding: 32px 0;
+  padding: 16px 0;
   width: 100%;
   max-width: 600px;
 }
@@ -299,7 +299,7 @@ input, select, textarea { color: inherit; }
   display: flex;
   align-items: center;
   justify-content: center;
-  min-height: 280px;
+  min-height: 220px;
   border: 2px dashed var(--border-strong);
   border-radius: var(--radius-lg);
   cursor: pointer;
@@ -322,7 +322,7 @@ input, select, textarea { color: inherit; }
   flex-direction: column;
   align-items: center;
   gap: 12px;
-  padding: 48px 24px;
+  padding: 32px 24px;
   text-align: center;
 }
 

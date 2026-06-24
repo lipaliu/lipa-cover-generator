@@ -7,6 +7,7 @@ export default defineConfig({
     include: ["react", "react-dom/client"],
   },
   server: {
+    allowedHosts: true,
     proxy: {
       "/api": "http://127.0.0.1:8787",
     },
