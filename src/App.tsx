@@ -6,6 +6,8 @@ import {
   Download,
   ImagePlus,
   LoaderCircle,
+  Minus,
+  Plus,
   Sparkles,
   Square,
   Type,
@@ -15,16 +17,16 @@ import {
   History,
   Trash2,
   Archive,
-  Play,
+  RectangleHorizontal,
+  RectangleVertical,
+  SquareIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { deleteHistoryBatch, getHistory, saveHistoryBatch } from "./lib/history";
 import { downloadImageUrl, fileToDataUrl, formatTime, urlToDataUrl } from "./lib/image";
 import type { CoverResult, GenerateCount, GenerateEvent, HistoryBatch, ImageEngine } from "./lib/types";
 
 /* ─── Constants ─── */
-const countOptions: GenerateCount[] = [1, 2, 4, 10];
-
 const engineOptions: Array<{
   id: ImageEngine;
   title: string;
@@ -38,6 +40,25 @@ const engineOptions: Array<{
   { id: "cogview", title: "CogView-4", vendor: "智谱", description: "中文理解好" },
   { id: "wenxin", title: "文心一格", vendor: "百度", description: "中文渲染稳定" },
 ];
+
+type AspectRatio = "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
+
+const ratioOptions: Array<{
+  id: AspectRatio;
+  label: string;
+  desc: string;
+  w: number;
+  h: number;
+  icon: "landscape" | "portrait" | "square";
+}> = [
+  { id: "16:9", label: "16:9", desc: "横版宽屏", w: 16, h: 9, icon: "landscape" },
+  { id: "4:3", label: "4:3", desc: "横版经典", w: 4, h: 3, icon: "landscape" },
+  { id: "1:1", label: "1:1", desc: "方形", w: 1, h: 1, icon: "square" },
+  { id: "3:4", label: "3:4", desc: "竖版经典", w: 3, h: 4, icon: "portrait" },
+  { id: "9:16", label: "9:16", desc: "竖版全屏", w: 9, h: 16, icon: "portrait" },
+];
+
+type RatioSelection = Record<AspectRatio, number>; // 0 = not selected, 1-10 = count
 
 type Step = 1 | 2 | 3 | 4;
 type RunState = "idle" | "analyzing" | "planning" | "generating" | "done" | "error";
@@ -122,11 +143,18 @@ export function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
-  // Step 1: Image
+  // Step 1: Image + Ratio
+  type SourceMode = "base" | "elements" | "describe";
+  const [sourceMode, setSourceMode] = useState<SourceMode>("base");
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [imageName, setImageName] = useState("");
+  const [elementImages, setElementImages] = useState<Array<{ name: string; dataUrl: string }>>([]);
+  const [imageDescription, setImageDescription] = useState("");
   const [detectedColor, setDetectedColor] = useState("#6F7C79");
   const [imageColors, setImageColors] = useState<string[]>([]);
+  const [ratioSelection, setRatioSelection] = useState<RatioSelection>({
+    "16:9": 0, "4:3": 0, "1:1": 0, "3:4": 4, "9:16": 0,
+  });
 
   // Step 2: Copy
   const [title, setTitle] = useState("");
@@ -135,13 +163,12 @@ export function App() {
 
   // Step 3: Style
   const [engine, setEngine] = useState<ImageEngine>("openai");
-  const [count, setCount] = useState<GenerateCount>(4);
 
   // Step 4: Generate
   const [runState, setRunState] = useState<RunState>("idle");
   const [results, setResults] = useState<CoverResult[]>([]);
   const [progress, setProgress] = useState(0);
-  const [total, setTotal] = useState<GenerateCount>(4);
+  const [total, setTotal] = useState(4);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const abortRef = useRef<AbortController | null>(null);
@@ -149,6 +176,8 @@ export function App() {
   // History
   const [history, setHistory] = useState<HistoryBatch[]>([]);
 
+  const totalCount = Object.values(ratioSelection).reduce((sum, v) => sum + v, 0);
+  const selectedRatios = Object.entries(ratioSelection).filter(([, v]) => v > 0) as [AspectRatio, number][];
   const isGenerating = runState === "analyzing" || runState === "planning" || runState === "generating";
   const completedCount = results.filter((r) => r.image_url || r.error).length;
   const progressPercent = total > 0 ? Math.min(100, Math.round((Math.max(progress, completedCount) / total) * 100)) : 0;
@@ -158,6 +187,21 @@ export function App() {
   }, []);
 
   useEffect(() => { refreshHistory(); }, [refreshHistory]);
+
+  /* ─── Ratio Helpers ─── */
+  const toggleRatio = (id: AspectRatio) => {
+    setRatioSelection((prev) => ({
+      ...prev,
+      [id]: prev[id] > 0 ? 0 : 1,
+    }));
+  };
+
+  const adjustRatioCount = (id: AspectRatio, delta: number) => {
+    setRatioSelection((prev) => ({
+      ...prev,
+      [id]: Math.max(0, Math.min(10, prev[id] + delta)),
+    }));
+  };
 
   /* ─── File Handling ─── */
   const handleFile = async (file: File) => {
@@ -171,7 +215,36 @@ export function App() {
     } catch { /* ignore */ }
   };
 
+  const handleMultiFiles = async (files: FileList) => {
+    const newElements: Array<{ name: string; dataUrl: string }> = [];
+    for (let i = 0; i < Math.min(files.length, 6); i++) {
+      const dataUrl = await fileToDataUrl(files[i]);
+      newElements.push({ name: files[i].name, dataUrl });
+    }
+    setElementImages((prev) => [...prev, ...newElements].slice(0, 6));
+    // Use first image for color analysis
+    if (newElements.length > 0 && !imagePreview) {
+      setImagePreview(newElements[0].dataUrl);
+      try {
+        const palette = await analyzePaletteFromDataUrl(newElements[0].dataUrl);
+        setDetectedColor(palette.dominant);
+        setImageColors(palette.imageColors);
+      } catch { /* ignore */ }
+    }
+  };
+
+  const removeElement = (index: number) => {
+    setElementImages((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const getImageDataUrl = async (): Promise<string> => {
+    if (sourceMode === "describe") {
+      // For describe mode, we'll pass a placeholder and let the backend know
+      return "";
+    }
+    if (sourceMode === "elements" && elementImages.length > 0) {
+      return elementImages[0].dataUrl;
+    }
     if (!imagePreview) throw new Error("请先上传底图");
     if (imagePreview.startsWith("data:")) return imagePreview;
     return urlToDataUrl(imagePreview);
@@ -179,8 +252,15 @@ export function App() {
 
   /* ─── Generation ─── */
   const startGenerate = async () => {
-    if (!imagePreview) { setErrorMessage("请先上传底图"); setRunState("error"); return; }
+    if (sourceMode === "base" && !imagePreview) { setErrorMessage("请先上传底图"); setRunState("error"); return; }
+    if (sourceMode === "elements" && elementImages.length === 0) { setErrorMessage("请至少上传一张素材"); setRunState("error"); return; }
+    if (sourceMode === "describe" && !imageDescription.trim()) { setErrorMessage("请填写画面描述"); setRunState("error"); return; }
     if (!title.trim()) { setErrorMessage("请先填写标题"); setRunState("error"); return; }
+    if (totalCount === 0) { setErrorMessage("请至少选择一种比例和数量"); setRunState("error"); return; }
+
+    // For now, use the first selected ratio's count as the generation count
+    // Backend currently only supports single count, so we sum all
+    const count = Math.min(10, totalCount) as GenerateCount;
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -198,12 +278,16 @@ export function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          image,
+          image: image || undefined,
           title: title.trim(),
           subtitle: subtitle.trim(),
           keywords: keywords.trim(),
           engine,
           count,
+          sourceMode,
+          imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
+          elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
+          ratios: selectedRatios.map(([ratio, cnt]) => ({ ratio, count: cnt })),
           stylePreferences: {
             imageDominantColor: detectedColor,
             imagePalette: imageColors,
@@ -216,7 +300,7 @@ export function App() {
       await readSseStream(response, (event) => {
         setMessage(event.message || "");
         setProgress(event.progress || 0);
-        setTotal((event.total || count) as GenerateCount);
+        setTotal(event.total || count);
         if (event.status === "analyzing") setRunState("analyzing");
         if (event.status === "planning" || event.status === "planned") setRunState("planning");
         if (event.status === "generating") setRunState("generating");
@@ -232,7 +316,6 @@ export function App() {
           setResults(final);
           setProgress(event.total || count);
           setRunState("done");
-          // Save to history
           saveHistoryBatch({
             id: `batch-${Date.now()}`,
             createdAt: new Date().toISOString(),
@@ -240,7 +323,7 @@ export function App() {
             subtitle: subtitle.trim(),
             keywords: keywords.trim(),
             engine,
-            count,
+            count: count as GenerateCount,
             baseImage: imagePreview || "",
             results: final,
           }).then(() => refreshHistory());
@@ -273,7 +356,7 @@ export function App() {
     setSubtitle(batch.subtitle);
     setKeywords(batch.keywords || "");
     setEngine(batch.engine || "openai");
-    setCount(batch.count);
+    setRatioSelection((prev) => ({ ...prev, "3:4": batch.count }));
     setTotal(batch.count);
     setImagePreview(batch.baseImage);
     setImageName("历史底图");
@@ -286,7 +369,12 @@ export function App() {
 
   /* ─── Step Navigation ─── */
   const canProceed = (s: Step): boolean => {
-    if (s === 1) return !!imagePreview;
+    if (s === 1) {
+      const hasSource = sourceMode === "base" ? !!imagePreview
+        : sourceMode === "elements" ? elementImages.length > 0
+        : imageDescription.trim().length > 0;
+      return hasSource && totalCount > 0;
+    }
     if (s === 2) return !!title.trim();
     if (s === 3) return true;
     return false;
@@ -309,7 +397,6 @@ export function App() {
   /* ─── Render ─── */
   return (
     <main className="app-shell">
-      {/* Background gradient */}
       <div className="bg-gradient" aria-hidden="true" />
 
       {/* Header */}
@@ -321,19 +408,11 @@ export function App() {
           </span>
         </div>
         <nav className="header-nav">
-          <button
-            type="button"
-            className={cn("nav-btn", showHistory && "is-active")}
-            onClick={() => setShowHistory(!showHistory)}
-          >
+          <button type="button" className={cn("nav-btn", showHistory && "is-active")} onClick={() => setShowHistory(!showHistory)}>
             <History size={18} />
             <span>历史</span>
           </button>
-          <button
-            type="button"
-            className={cn("nav-btn", showSettings && "is-active")}
-            onClick={() => setShowSettings(!showSettings)}
-          >
+          <button type="button" className={cn("nav-btn", showSettings && "is-active")} onClick={() => setShowSettings(!showSettings)}>
             <Settings2 size={18} />
             <span>设置</span>
           </button>
@@ -394,24 +473,9 @@ export function App() {
                 ))}
               </select>
             </label>
-            <label className="setting-item">
-              <span>生成数量</span>
-              <div className="count-selector">
-                {countOptions.map((opt) => (
-                  <button
-                    key={opt}
-                    type="button"
-                    className={cn(opt === count && "is-selected")}
-                    onClick={() => { setCount(opt); setTotal(opt); }}
-                  >
-                    {opt}
-                  </button>
-                ))}
-              </div>
-            </label>
             <div className="setting-item">
               <span>输出尺寸</span>
-              <strong>1024 × 1536（小红书 3:4）</strong>
+              <strong>根据所选比例自动适配</strong>
             </div>
           </div>
         </div>
@@ -429,15 +493,9 @@ export function App() {
           <button
             key={s.num}
             type="button"
-            className={cn(
-              "step-dot",
-              step === s.num && "is-current",
-              step > s.num && "is-done",
-            )}
+            className={cn("step-dot", step === s.num && "is-current", step > s.num && "is-done")}
             onClick={() => {
-              if (s.num <= step || (s.num === step + 1 && canProceed(step))) {
-                setStep(s.num as Step);
-              }
+              if (s.num <= step || (s.num === step + 1 && canProceed(step))) setStep(s.num as Step);
             }}
           >
             <span className="step-icon">
@@ -451,51 +509,184 @@ export function App() {
 
       {/* Step Content */}
       <section className="step-content">
-        {/* Step 1: Upload Image */}
+        {/* Step 1: Upload Image + Ratio Selection */}
         {step === 1 && (
           <div className="step-panel fade-in">
             <div className="step-header">
               <span className="step-number">01</span>
               <div>
-                <h2>选择底图</h2>
-                <p>上传一张图片作为封面底图，AI 将在此基础上进行创作</p>
+                <h2>选择素材与比例</h2>
+                <p>选择素材来源方式，设定封面比例和数量</p>
               </div>
             </div>
-            <label className="upload-zone">
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) handleFile(file);
-                }}
-              />
-              {imagePreview ? (
-                <div className="upload-preview">
-                  <img src={imagePreview} alt="底图预览" />
-                  <div className="upload-overlay">
-                    <Upload size={24} />
-                    <span>更换图片</span>
-                  </div>
-                  {imageColors.length > 0 && (
-                    <div className="palette-strip">
-                      {imageColors.map((c) => (
-                        <span key={c} style={{ background: c }} />
-                      ))}
+
+            {/* Source Mode Selector */}
+            <div className="source-modes">
+              <button
+                type="button"
+                className={cn("mode-card", sourceMode === "base" && "is-active")}
+                onClick={() => setSourceMode("base")}
+              >
+                <div className="mode-icon"><ImagePlus size={22} /></div>
+                <strong>上传底图</strong>
+                <small>一张完整底图，AI 在上面排版</small>
+              </button>
+              <button
+                type="button"
+                className={cn("mode-card", sourceMode === "elements" && "is-active")}
+                onClick={() => setSourceMode("elements")}
+              >
+                <div className="mode-icon"><Palette size={22} /></div>
+                <strong>素材元素</strong>
+                <small>多张素材图，AI 融合拼贴</small>
+              </button>
+              <button
+                type="button"
+                className={cn("mode-card", sourceMode === "describe" && "is-active")}
+                onClick={() => setSourceMode("describe")}
+              >
+                <div className="mode-icon"><Type size={22} /></div>
+                <strong>文字描述</strong>
+                <small>无素材，AI 从描述生成</small>
+              </button>
+            </div>
+
+            {/* Mode: Base Image */}
+            {sourceMode === "base" && (
+              <label className="upload-zone magazine-style">
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFile(file);
+                  }}
+                />
+                {imagePreview ? (
+                  <div className="upload-preview">
+                    <img src={imagePreview} alt="底图预览" />
+                    <div className="upload-overlay">
+                      <Upload size={24} />
+                      <span>更换图片</span>
                     </div>
+                    {imageColors.length > 0 && (
+                      <div className="palette-strip">
+                        {imageColors.map((c) => (
+                          <span key={c} style={{ background: c }} />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="upload-placeholder">
+                    <div className="magazine-mockup">
+                      <div className="mock-cover mock-a">
+                        <span className="mock-title">VOGUE</span>
+                        <span className="mock-line" />
+                        <span className="mock-line short" />
+                      </div>
+                      <div className="mock-cover mock-b">
+                        <span className="mock-title">COVER</span>
+                        <span className="mock-line" />
+                        <span className="mock-line short" />
+                        <span className="mock-line" />
+                      </div>
+                      <div className="mock-cover mock-c">
+                        <span className="mock-title">ELLE</span>
+                        <span className="mock-line short" />
+                        <span className="mock-line" />
+                      </div>
+                    </div>
+                    <div className="upload-text">
+                      <strong>上传一张完整底图</strong>
+                      <small>AI 将在底图上进行杂志级排版设计</small>
+                    </div>
+                  </div>
+                )}
+              </label>
+            )}
+
+            {/* Mode: Element Images */}
+            {sourceMode === "elements" && (
+              <div className="elements-zone">
+                <div className="elements-grid">
+                  {elementImages.map((el, i) => (
+                    <div key={i} className="element-thumb">
+                      <img src={el.dataUrl} alt={el.name} />
+                      <button type="button" className="element-remove" onClick={() => removeElement(i)}>&times;</button>
+                    </div>
+                  ))}
+                  {elementImages.length < 6 && (
+                    <label className="element-add">
+                      <input
+                        type="file"
+                        accept="image/*"
+                        multiple
+                        onChange={(e) => {
+                          if (e.target.files) handleMultiFiles(e.target.files);
+                        }}
+                      />
+                      <Plus size={24} />
+                      <small>添加素材</small>
+                    </label>
                   )}
                 </div>
-              ) : (
-                <div className="upload-placeholder">
-                  <div className="upload-icon-wrap">
-                    <ImagePlus size={40} strokeWidth={1.5} />
-                  </div>
-                  <strong>点击或拖拽上传底图</strong>
-                  <small>支持 JPG、PNG、WebP，建议竖版 3:4 比例</small>
-                </div>
-              )}
-            </label>
-            {imageName && <p className="file-name">{imageName}</p>}
+                <p className="elements-hint">最多 6 张素材元素，AI 将融合拼贴为封面</p>
+              </div>
+            )}
+
+            {/* Mode: Text Description */}
+            {sourceMode === "describe" && (
+              <div className="describe-zone">
+                <textarea
+                  value={imageDescription}
+                  onChange={(e) => setImageDescription(e.target.value)}
+                  placeholder="描述你想要的封面画面，例如：\n\n一个穿白色连衣裙的女生站在薰衣草花田中，逆光，暖色调，胶片质感"
+                  rows={5}
+                  maxLength={300}
+                />
+                <span className="describe-count">{imageDescription.length}/300</span>
+              </div>
+            )}
+
+            {imageName && sourceMode === "base" && <p className="file-name">{imageName}</p>}
+
+            {/* Ratio Selection */}
+            <div className="ratio-section">
+              <div className="ratio-header">
+                <h3>选择封面比例</h3>
+                <span className="ratio-total">共 {totalCount} 张</span>
+              </div>
+              <div className="ratio-grid">
+                {ratioOptions.map((opt) => {
+                  const selected = ratioSelection[opt.id] > 0;
+                  return (
+                    <div key={opt.id} className={cn("ratio-card", selected && "is-selected")}>
+                      <button type="button" className="ratio-toggle" onClick={() => toggleRatio(opt.id)}>
+                        <div className="ratio-preview" style={{ "--rw": opt.w, "--rh": opt.h } as CSSProperties}>
+                          {opt.icon === "landscape" && <RectangleHorizontal size={20} />}
+                          {opt.icon === "portrait" && <RectangleVertical size={20} />}
+                          {opt.icon === "square" && <SquareIcon size={18} />}
+                        </div>
+                        <span className="ratio-label">{opt.label}</span>
+                        <span className="ratio-desc">{opt.desc}</span>
+                      </button>
+                      {selected && (
+                        <div className="ratio-counter">
+                          <button type="button" onClick={() => adjustRatioCount(opt.id, -1)} disabled={ratioSelection[opt.id] <= 1}>
+                            <Minus size={14} />
+                          </button>
+                          <span>{ratioSelection[opt.id]}</span>
+                          <button type="button" onClick={() => adjustRatioCount(opt.id, 1)} disabled={ratioSelection[opt.id] >= 10}>
+                            <Plus size={14} />
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
 
@@ -554,7 +745,7 @@ export function App() {
               <span className="step-number">03</span>
               <div>
                 <h2>确认风格</h2>
-                <p>选择生成引擎和数量，准备开始创作</p>
+                <p>检查设置，准备开始创作</p>
               </div>
             </div>
             <div className="style-summary">
@@ -583,14 +774,20 @@ export function App() {
                   </div>
                 )}
                 <div className="summary-item">
+                  <span className="summary-label">比例 × 数量</span>
+                  <span className="summary-value">
+                    {selectedRatios.map(([r, c]) => `${r}(${c}张)`).join("、") || "未选择"}
+                  </span>
+                </div>
+                <div className="summary-item">
                   <span className="summary-label">引擎</span>
                   <span className="summary-value">
                     {engineOptions.find((e) => e.id === engine)?.title || engine}
                   </span>
                 </div>
                 <div className="summary-item">
-                  <span className="summary-label">数量</span>
-                  <span className="summary-value">{count} 张</span>
+                  <span className="summary-label">总计</span>
+                  <span className="summary-value">{totalCount} 张</span>
                 </div>
               </div>
 
@@ -606,21 +803,6 @@ export function App() {
                     <ChevronDown size={16} />
                   </div>
                 </label>
-                <div className="style-count">
-                  <span>生成数量</span>
-                  <div className="count-selector">
-                    {countOptions.map((opt) => (
-                      <button
-                        key={opt}
-                        type="button"
-                        className={cn(opt === count && "is-selected")}
-                        onClick={() => { setCount(opt); setTotal(opt); }}
-                      >
-                        {opt}张
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </div>
             </div>
           </div>
@@ -637,7 +819,6 @@ export function App() {
               </div>
             </div>
 
-            {/* Progress */}
             {isGenerating && (
               <div className="gen-progress">
                 <div className="gen-bar">
@@ -651,14 +832,10 @@ export function App() {
               </div>
             )}
 
-            {/* Error */}
             {runState === "error" && errorMessage && (
-              <div className="gen-error">
-                <p>{errorMessage}</p>
-              </div>
+              <div className="gen-error"><p>{errorMessage}</p></div>
             )}
 
-            {/* Results Grid */}
             {results.length > 0 && (
               <div className="results-grid">
                 {results.map((cover) => (
@@ -666,33 +843,26 @@ export function App() {
                     {cover.image_url ? (
                       <button type="button" className="result-image" onClick={() => downloadCover(cover)}>
                         <img src={cover.image_url} alt={cover.label} />
-                        <span className="result-download">
-                          <Download size={20} />
-                        </span>
+                        <span className="result-download"><Download size={20} /></span>
                       </button>
                     ) : cover.error ? (
-                      <div className="result-error">
-                        <p>{cover.error}</p>
-                      </div>
+                      <div className="result-error"><p>{cover.error}</p></div>
                     ) : (
                       <div className="result-loading">
                         <LoaderCircle className="spin" size={28} />
                         <small>生成中...</small>
                       </div>
                     )}
-                    <footer className="result-meta">
-                      <span>{cover.label}</span>
-                    </footer>
+                    <footer className="result-meta"><span>{cover.label}</span></footer>
                   </article>
                 ))}
               </div>
             )}
 
-            {/* Action */}
             {!isGenerating && runState !== "done" && (
               <button type="button" className="generate-btn" onClick={startGenerate}>
                 <Sparkles size={20} />
-                开始生成封面
+                开始生成封面（{totalCount}张）
               </button>
             )}
             {isGenerating && (
@@ -713,22 +883,12 @@ export function App() {
 
       {/* Step Navigation */}
       <footer className="step-nav">
-        <button
-          type="button"
-          className="nav-prev"
-          onClick={prevStep}
-          disabled={step === 1}
-        >
+        <button type="button" className="nav-prev" onClick={prevStep} disabled={step === 1}>
           <ArrowLeft size={18} />
           上一步
         </button>
         {step < 4 ? (
-          <button
-            type="button"
-            className="nav-next"
-            onClick={nextStep}
-            disabled={!canProceed(step)}
-          >
+          <button type="button" className="nav-next" onClick={nextStep} disabled={!canProceed(step)}>
             下一步
             <ArrowRight size={18} />
           </button>
