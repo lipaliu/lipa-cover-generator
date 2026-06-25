@@ -9,6 +9,7 @@ import { promisify } from "node:util";
 import OpenAI, { toFile } from "openai";
 import { ProxyAgent, setGlobalDispatcher } from "undici";
 import { buildPlanUserPrompt, fallbackPlans, skillPrompt } from "./prompts.js";
+import { generateCombinations, combinationToLabel } from "./design-matrix.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -264,6 +265,9 @@ async function analyzeImage(openai, image, { title, subtitle, keywords }) {
 }
 
 async function planCovers(openai, { analysis, title, subtitle, keywords, count, stylePreferences }) {
+  // 从设计矩阵生成不重复的组合
+  const matrixCombinations = generateCombinations(count, keywords);
+
   const completion = await openai.chat.completions.create({
     model: "gpt-4o",
     response_format: { type: "json_object" },
@@ -275,13 +279,13 @@ async function planCovers(openai, { analysis, title, subtitle, keywords, count, 
       },
       {
         role: "user",
-        content: buildPlanUserPrompt({ analysis, title, subtitle, keywords, count, stylePreferences }),
+        content: buildPlanUserPrompt({ analysis, title, subtitle, keywords, count, stylePreferences, matrixCombinations }),
       },
     ],
   });
 
   const parsed = parseJsonObject(completion.choices?.[0]?.message?.content, { plans: [] });
-  const fallback = fallbackPlans({ analysis, title, subtitle, count });
+  const fallback = fallbackPlans({ analysis, title, subtitle, count, keywords });
   const planned = Array.isArray(parsed.plans) ? parsed.plans.filter(Boolean) : [];
   const filledPlans = [...planned];
 
@@ -710,7 +714,7 @@ app.post("/api/generate", async (req, res) => {
 
     const plans = openai
       ? await planCovers(openai, { analysis, title, subtitle, keywords: planKeywords, count: totalCount, stylePreferences })
-      : fallbackPlans({ analysis, title, subtitle, count: totalCount });
+      : fallbackPlans({ analysis, title, subtitle, count: totalCount, keywords: planKeywords });
     const jobs = expandRatioJobs(ratioGroups, plans);
     writeSse(res, { status: "planned", progress: 0, total: totalCount, engine, plans, message: "方案已生成" });
 

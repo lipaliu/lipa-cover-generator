@@ -1,9 +1,11 @@
+import { generateCombinations, combinationToLabel, combinationToDesignDirective } from "./design-matrix.js";
+
 export const skillPrompt = String.raw`
 # Xiaohongshu / Douyin Cover Skill
 
-Cover design = Font Style x Color Strategy x Layout x Decoration x Text Treatment.
-Each generation must choose one or more items from the five dimensions. Do not repeat
-font and layout too often. Every cover must differ clearly in typography, color, and layout.
+Cover design = Font Style x Text Layout x Text Effect x Color Scheme x Decoration x Composition x Mood.
+Each generation MUST use a completely different combination from the 7-dimension design matrix.
+Every cover must differ clearly and dramatically in typography, color, layout, and overall feel.
 
 Absolute rules:
 - Never generate artificial people or fake faces.
@@ -11,105 +13,131 @@ Absolute rules:
 - Preserve the user photo as the base image.
 - Do not ignore the base image colors. Color strategy must follow photo analysis.
 - The main title must be huge, integrated into the photo, and readable.
+- Each cover in a batch MUST look completely different from every other cover.
 
-Dimension A: Font Style
+Dimension A: Font Style (20 options)
 A1 Wild calligraphy: wild explosive Chinese calligraphy, splashing ink strokes, extremely heavy brush weight, raw aggressive energy.
-A2 Ultra-heavy gothic sans: ultra-heavy industrial gothic Chinese sans-serif, maximum font weight, geometric, solid block-like characters.
-A3 Casual handwriting: casual handwritten Chinese characters, natural imperfect pen/pencil strokes, warm human touch.
-A4 Pixel retro: pixel art / 8-bit retro game style Chinese font, blocky square pixels, nostalgic digital aesthetic.
-A5 Rounded cartoon: rounded bubbly Chinese cartoon font, soft puffy edges, playful and approachable.
-A6 Cinematic serif: cinematic Chinese serif with dramatic thick-thin stroke contrast, elegant movie title card.
-A7 Magazine headline: bold condensed Chinese magazine headline font, strong vertical stress, editorial and fashionable.
-A8 Marker graffiti: thick marker/highlighter handwritten Chinese text, uneven ink bleeding edges, street attitude.
-A9 Variety 3D: 3D extruded Chinese text, colorful multi-layer outline, bright shadow, top highlight.
-A10 Thin literary: thin elegant Chinese serif or ultra-light sans, refined minimal strokes, quiet with whitespace.
-A11 Hollow outline: hollow outlined Chinese characters with thick colored stroke border, transparent or contrasting fill.
-A12 Mixed typography: combine two or three font styles for hierarchy, e.g. bold title plus handwritten accent.
+A2 Xingkai semi-cursive: flowing semi-cursive Chinese Xingkai calligraphy, elegant brush rhythm, balanced between formal and expressive.
+A3 Song serif: traditional Chinese Song/Ming serif typeface, horizontal thin and vertical thick strokes, classical printing elegance.
+A4 Heavy gothic sans: ultra-heavy industrial Chinese gothic sans-serif (Heiti), maximum font weight, geometric solid block-like characters.
+A5 Rounded cartoon: rounded bubbly Chinese Yuanti font, soft puffy edges, playful and approachable.
+A6 Casual handwriting: casual handwritten Chinese characters, natural imperfect pen/pencil strokes, warm human touch.
+A7 Cinematic serif: cinematic English serif with dramatic thick-thin contrast, elegant movie title card feel.
+A8 Bold condensed sans: bold condensed English sans-serif, strong geometric presence, Futura or Helvetica Black style.
+A9 Pixel retro: pixel art / 8-bit retro game style font, blocky square pixels, nostalgic digital aesthetic.
+A10 Gothic blackletter: gothic blackletter typeface, ornate medieval strokes, dark dramatic presence.
+A11 Art Deco: Art Deco display typeface, geometric glamour, 1920s luxury with gold accents.
+A12 Ultra-thin hairline: ultra-thin elegant hairline font, refined minimal strokes, quiet with generous whitespace.
+A13 Ultra-black compressed: ultra-black compressed Chinese font, maximum weight fills frame, powerful and impactful.
+A14 Neon tube: neon tube glow font style, luminous colored outlines with soft glow halo, nightlife energy.
+A15 Dry brush feibai: dry brush Chinese calligraphy with flying white (feibai) texture, broken ink strokes.
+A16 Fountain pen: fountain pen handwritten style, elegant ink flow with slight pressure variation.
+A17 Crayon texture: crayon/pastel texture font, rough waxy strokes, childlike creative energy.
+A18 Seal script: Chinese seal script (Zhuanshu) style, red stamp aesthetic, ancient authority.
+A19 Typewriter: typewriter monospace font, uneven ink density, vintage mechanical nostalgia.
+A20 Comic manga: comic/manga speech bubble font, dynamic varied weight, energetic pop culture feel.
 
-Dimension B: Color Strategy
-Mandatory color logic:
-IF base image is dark -> use bright high-saturation title colors: yellow, white, neon green, electric blue, orange, neon pink.
-IF base image is bright -> use heavy dark title colors: black, navy, dark red, forest green, deep purple.
-IF base image is high saturation -> use complementary colors from the opposite hue.
-IF base image is low saturation -> use vivid high-saturation colors.
+Dimension B: Text Layout (15 options)
+B1 Center dominant: center-dominant huge layout, title fills central frame occupying 60%+ of width.
+B2 Top-left aligned: top-left aligned layout, title starts from upper-left corner.
+B3 Bottom-right corner: bottom-right corner layout, title anchored to lower-right.
+B4 Diagonal 45°: diagonal 45-degree tilt layout, text runs corner to corner.
+B5 Vertical right-to-left: vertical typography arranged right to left, traditional Chinese reading direction.
+B6 Wrap around subject: text wraps around the main subject silhouette.
+B7 Scattered four corners: text elements placed in each corner.
+B8 Bottom band: bottom horizontal band layout with gradient overlay.
+B9 Top banner: top horizontal banner layout, newspaper headline style.
+B10 Center obi band: center horizontal band (obi) layout, book cover obi style.
+B11 Left-right columns: left-right column split, magazine spread feel.
+B12 Top-bottom split: top-bottom split layout with dividing line.
+B13 Diagonal split: diagonal split layout, text on triangular sections.
+B14 Circular arrangement: circular text arrangement, badge or stamp composition.
+B15 Grid distribution: grid-based layout, text placed in grid cells.
 
-Available color combinations:
-B1 Bright yellow + white: #FFDE00 / #FFFFFF, good for dark images.
-B2 Pure white + light gray: #FFFFFF / #E0E0E0, good for dark or neutral images.
-B3 Ice blue + white: #00D4FF / #FFFFFF, good for warm images.
-B4 Neon green + white: #39FF14 or #00E676 / #FFFFFF, good for dark or purple images.
-B5 Coral pink + white: #FF6B6B / #FFFFFF, good for cool or green images.
-B6 Deep black + gray: #1A1A1A / #4A4A4A, good for bright images.
-B7 Warm orange + white: #FF6B35 / #FFFFFF, good for cool or blue images.
-B8 Mint + deep green: #4ECDC4 / #1B4332, good for warm bright images.
-B9 Gradient duotone: blue-to-purple or orange-to-pink / white, good for neutral images.
-B10 Clashing outline: one fill color and a contrasting stroke color, good for complex backgrounds.
-B11 Deep blue + gold: #0A2463 / #D4AF37, good for bright images.
-B12 Brick red + ivory: #C0392B / #FFF8E7, good for neutral/cool images.
-Subtitle must be visually lower priority than the title.
+Dimension C: Text Effect (15 options)
+C1 Solid fill: solid color fill, clean flat text, maximum readability.
+C2 Hollow outline: hollow outlined text with thick colored stroke border.
+C3 Gradient fill: gradient color fill within text.
+C4 3D shadow: 3D drop shadow effect, text appears elevated.
+C5 Neon glow: neon glow effect, luminous text with soft colored halo.
+C6 Frosted blur: frosted glass blur block behind text.
+C7 Color block mask: solid color block mask behind text.
+C8 Semi-transparent: semi-transparent text overlay.
+C9 Metallic: metallic texture fill, chrome/gold/silver reflective surface.
+C10 Glass refraction: glass refraction effect, modern tech aesthetic.
+C11 Hand-drawn doodle: hand-drawn doodle style text.
+C12 Sticker label: sticker/label effect with white border.
+C13 Stamp: rubber stamp effect, uneven ink distribution.
+C14 Torn paper: torn paper edge effect, collage feel.
+C15 Tape strips: masking tape effect, DIY scrapbook aesthetic.
 
-Dimension C: Layout
-C1 Top horizontal: main title occupies top third, subtitle below. For subjects in middle/lower area.
-C2 Bottom press text: title at bottom with dark gradient overlay. For subjects near the top.
-C3 Center dominance: title fills central frame, can overlap subject.
-C4 Left aligned stair: left-aligned lines with increasing indents. For subject on right.
-C5 Right aligned stair: right-aligned lines with decreasing indents. For subject on left.
-C6 Diagonal split: main title on top-left and bottom-right or reverse. For centered subject.
-C7 Vertical typography: title arranged top to bottom. For strong vertical space.
-C8 Around subject: text wraps around clear subject silhouette.
-C9 Section color blocks: split image into areas, text in color block region.
-C10 Magazine multi-layer: big title, small title, labels, English accents.
-C11 Scattered: varied size and angle words placed around frame.
-C12 Framed: text inside square/circle/bracket frame.
-C13 Waterfall: title descends top to bottom, size gradually smaller.
-C14 Full-bleed: enormous text fills frame, subject emerges through gaps.
+Dimension D: Color Scheme (20 options)
+D1 Black-white minimal: #000000 / #FFFFFF pure contrast.
+D2 Black-gold luxury: #1A1A1A + #D4AF37 gold, premium opulence.
+D3 White-platinum: #FFFFFF + #C0C0C0 silver, clean sophistication.
+D4 Morandi muted: desaturated dusty tones, quiet elegance.
+D5 Cyberpunk neon: #FF00FF + #00FFFF + #39FF14 on dark.
+D6 Earth tones: ochre + brown + olive, natural organic warmth.
+D7 Ocean blue: navy + azure + light blue, calm depth.
+D8 Sunset orange: coral + amber + red accent, golden hour energy.
+D9 Forest green: deep green + mid green + mint, natural vitality.
+D10 Lavender purple: deep purple + lavender + light purple, dreamy.
+D11 Complementary clash: bold opposite hues, maximum energy.
+D12 Monochromatic gradient: single hue from dark to light.
+D13 Triadic: three evenly spaced hues, vibrant and balanced.
+D14 Mono + accent: mostly neutral with one pop color.
+D15 Vintage film: faded warm tones, nostalgic analog.
+D16 Bright yellow: #FFDE00 primary, optimistic and bold.
+D17 Coral pink: #FF6B6B coral + blush + white, feminine.
+D18 Ice blue tech: #00D4FF cyan + ice + deep blue, digital.
+D19 Caramel coffee: espresso + caramel + cream, warm and cozy.
+D20 Sakura pink: cherry blossom + snow + branch brown, gentle spring.
 
-Layout selection logic:
-Subject right -> C4 or C7 left side.
-Subject left -> C5 or C7 right side.
-Subject center -> C1, C2, C6, or C14.
-Subject lower -> C1 or C14.
-Subject upper -> C2.
-Full body subject -> C8 or C11.
-Small / distant subject -> C3 or C14.
-Information-heavy content -> C9 or C10.
+Dimension E: Decoration (20 options)
+E1 None: no decoration, clean text only.
+E2 Geometric frame: thin rectangular or angular border.
+E3 Color strip: color block strip behind text.
+E4 Bokeh circles: soft blurred circles, dreamy atmosphere.
+E5 Triangle cuts: sharp angular shapes, modern and edgy.
+E6 Magazine collage: torn paper pieces and layered clippings.
+E7 Washi tape: colorful tape strips and stickers, playful DIY.
+E8 Stamp border: postage stamp perforated border.
+E9 Torn paper: ripped edges showing layer beneath.
+E10 Grid texture: subtle graph paper or dot grid.
+E11 Gradient halo: soft radial gradient behind text.
+E12 Sparkles: scattered stars and sparkles, magical.
+E13 Wavy lines: organic curved lines, fluid and dynamic.
+E14 Arrows: arrow pointers guiding visual flow.
+E15 Numbered badges: 01 02 03 sequential markers.
+E16 Hand-drawn doodles: arrows circles underlines stars.
+E17 Floral botanical: leaves vines flowers as accent.
+E18 Noise grain: film grain or paper texture overlay.
+E19 Light rays: radiating lines, dramatic emphasis.
+E20 Speech bubbles: comic-style text containers.
 
-Dimension D: Decoration
-D1 Rounded color block behind text.
-D2 Gradient dark overlay on top/bottom/side.
-D3 Small English decorative accent line.
-D4 Hand-drawn arrows, circles, underlines.
-D5 Quotation marks or book-title marks.
-D6 Numbered badges such as 01, 02, 03.
-D7 Thick outline plus drop shadow.
-D8 Tape or sticker effect on text blocks.
-D9 Checkmark or cross marks for comparison/review.
-D10 REC dot / camera frame / vlog badge.
-D11 Frosted glass blur block behind text.
-D12 Geometric color blocks.
-D13 No decoration, clean text only.
+Dimension F: Composition (10 options)
+F1 Full-bleed: fills entire frame edge to edge.
+F2 Text-top image-bottom: upper typography, lower visual.
+F3 Image-top text-bottom: visual dominates upper, text below.
+F4 Image-left text-right: magazine spread feel.
+F5 Image-right text-left: balanced layout.
+F6 Center focus: all key elements converge to center.
+F7 Whitespace breathing: minimal elements, elegant restraint.
+F8 Rule of thirds: elements at grid intersections.
+F9 Golden ratio: phi spiral placement, harmonious.
+F10 Symmetrical mirror: balanced symmetry, formal and stable.
 
-Dimension E: Text Treatment
-E1 Enlarge keywords 2-3x.
-E2 Change keyword color.
-E3 Add color block highlight to keywords.
-E4 Tilt text 3-8 degrees.
-E5 Overlap characters or lines.
-E6 Partial occlusion by subject/object.
-E7 Text bleeds beyond frame edges.
-E8 Mixed sizes in one line.
-E9 Chinese-English mix.
-E10 Vertical-horizontal mix.
-E11 Semantic two-line split.
-E12 Oversized question/exclamation punctuation.
-
-Tone matching:
-Emotion / pain / comeback -> A1/A8/A9, C3/C14/C6, D7/D13.
-Knowledge / tutorial -> A2/A7/A12, C1/C4/C9, D1/D6.
-Vlog / daily / travel -> A3/A5/A10, C11/C8/C13, D4/D10/D3.
-Beauty / product review -> A5/A2/A11, C1/C10/C12, D1/D9/D8.
-Career / business / interview -> A6/A7/A2, C2/C10/C4, D2/D5/D3.
-Female growth / self -> A3/A6/A10, C5/C7/C13, D5/D3/D13.
+Dimension G: Mood (10 options)
+G1 Premium cool: minimal and aloof, high-fashion editorial.
+G2 Warm healing: soft golden light, comforting atmosphere.
+G3 Energetic dynamic: bold colors and angles, youthful excitement.
+G4 Mysterious dark: deep shadows, intriguing and dramatic.
+G5 Fresh literary: light airy, artistic and poetic.
+G6 Retro nostalgic: vintage color grading, warm memory.
+G7 Futuristic tech: sleek digital, cutting-edge.
+G8 Natural organic: earthy textures, grounded and authentic.
+G9 Luxurious refined: rich materials gold accents, premium.
+G10 Humorous playful: unexpected elements, lighthearted.
 
 Prompt template each generated plan must use:
 Edit the provided image to create a finished Xiaohongshu/Douyin video cover.
@@ -120,28 +148,31 @@ PHOTO ANALYSIS:
 - Subject position: [left/right/center/top/bottom]
 - Available space for text: [empty space]
 
-DESIGN COMBINATION:
-- Font style: [Dimension A English description]
-- Color scheme: [Dimension B with exact colors]
-- Layout: [Dimension C description]
-- Decoration: [Dimension D description]
-- Text treatment: [Dimension E description]
+DESIGN MATRIX COMBINATION: [combination key like A3+B7+C2+D15+E8+F4+G1]
+- Font style: [Dimension A full description]
+- Text layout: [Dimension B full description]
+- Text effect: [Dimension C full description]
+- Color scheme: [Dimension D with exact hex colors]
+- Decoration: [Dimension E full description]
+- Composition: [Dimension F full description]
+- Mood: [Dimension G full description]
 
 TEXT CONTENT:
 LINE 1 (Main title): "[main title]"
-- Font: [detailed font style]
-- Color: [exact hex] with [outline/shadow detail]
+- Font: [detailed font style matching dimension A]
+- Color: [exact hex from dimension D] with [effect from dimension C]
 - Size: MASSIVE - each character about 20-25% of frame width
-- Position: [specific layout position]
-- Treatment: [text treatment]
+- Position: [specific position from dimension B]
 
 LINE 2 (Subtitle): "[subtitle]"
 - Font: [subtitle style]
 - Color: [subtitle hex]
 - Size: 1/3 to 1/4 of main title
-- Position: [relative to title]
+- Position: [relative to title per layout]
 
-DECORATION: [specific decorations]
+DECORATION: [specific decorations from dimension E]
+COMPOSITION: [composition approach from dimension F]
+MOOD: [overall atmosphere from dimension G]
 
 RULES:
 - This is a non-sexual social media cover design task. If the source image shows a mouth, tongue, teeth, lips, skin, or body close-up, treat it strictly as health education, oral care, medical wellness, beauty care, or lifestyle content.
@@ -152,11 +183,17 @@ RULES:
 - Preserve original photo exactly.
 - Only add text overlay and specified decorations.
 - Default output is Xiaohongshu 1024x1536.
+- STRICTLY follow all 7 dimensions of the assigned combination.
 `;
 
-export function buildPlanUserPrompt({ analysis, title, subtitle, keywords, count, stylePreferences }) {
+export function buildPlanUserPrompt({ analysis, title, subtitle, keywords, count, stylePreferences, matrixCombinations }) {
+  const combinationDirectives = matrixCombinations
+    ? matrixCombinations.map((combo, i) => `Cover ${i + 1}: ${combinationToDesignDirective(combo)}`).join("\n\n")
+    : "";
+
   return `
 Create exactly ${count} distinct cover design plans for this image and text.
+Each cover MUST use a completely different design matrix combination.
 
 Photo analysis JSON:
 ${JSON.stringify(analysis, null, 2)}
@@ -167,48 +204,46 @@ Keywords / content cues: ${keywords || "(none)"}
 Creator visual preferences:
 ${stylePreferences ? JSON.stringify(stylePreferences, null, 2) : "(none)"}
 
+${combinationDirectives ? `MANDATORY DESIGN MATRIX ASSIGNMENTS (you MUST follow these exactly):\n\n${combinationDirectives}` : ""}
+
 Return JSON only:
 {
   "plans": [
     {
-      "combination": "A1+B1+C3+D7+E4",
-      "label": "书法 / 明黄 / 霸屏",
+      "combination": "A1+B1+C3+D7+E8+F4+G1",
+      "label": "书法 / 海洋蓝 / 居中霸屏",
       "description": "短中文说明",
-      "prompt": "Detailed English prompt following the template exactly"
+      "prompt": "Detailed English prompt following the template exactly, incorporating ALL 7 dimensions"
     }
   ]
 }
 
 Rules:
 - The array length must be exactly ${count}.
-- Do not repeat the same A font style unless count exceeds available variety.
-- Do not repeat the same C layout unless count exceeds available variety.
-- Make each label short and scannable: three terms separated by " / ".
+- Each plan MUST use the assigned combination from the design matrix above.
+- The combination field must be the exact key (e.g. "A3+B7+C2+D15+E8+F4+G1").
+- Make each label short and scannable: three terms from the combination (font / color / layout).
 - Prompts must preserve the uploaded photo and only add typography/decorations.
+- Prompts must explicitly describe ALL 7 dimensions in detail.
 - If the topic is tongue coating, mouth, teeth, oral care, body care, or health education, prompts must explicitly state that the image is non-sexual clinical/wellness content.
 - If Creator visual preferences include imagePalette, preferredTextColor, or preferredAccentColor, use those colors as hard guidance unless they conflict with readability.
 `;
 }
 
-export function fallbackPlans({ analysis, title, subtitle, count }) {
-  const combos = [
-    ["A1+B1+C3+D7+E4", "书法 / 明黄 / 霸屏", "wild explosive Chinese calligraphy, bright yellow #FFDE00 title with black outline, center-dominant huge layout, thick shadow, slight tilt"],
-    ["A3+B2+C11+D3+E9", "手写 / 白字 / 自然风", "casual handwritten Chinese text, pure white title, scattered natural layout, small English accent line, Chinese-English mix"],
-    ["A7+B6+C10+D5+E2", "杂志 / 深色 / 多层", "bold condensed magazine headline typography, deep black title with muted gray subtitle, magazine multi-layer layout, quotation marks, keyword color change"],
-    ["A11+B10+C6+D12+E1", "空心 / 撞色 / 对角", "hollow outlined Chinese characters, clashing outline colors, diagonal split layout, geometric color blocks, enlarged keywords"],
-    ["A6+B11+C2+D2+E11", "电影 / 蓝金 / 底部", "cinematic Chinese serif, deep blue and gold, bottom title with gradient dark overlay, two-line semantic split"],
-    ["A9+B9+C14+D7+E7", "综艺 / 渐变 / 满铺", "3D extruded Chinese text, gradient duotone, full-bleed enormous text, thick outline and shadow, text bleeding beyond frame"],
-    ["A2+B3+C1+D1+E1", "黑体 / 冰蓝 / 顶部", "ultra-heavy gothic Chinese sans, ice blue title, top horizontal title, rounded color block, enlarged keywords"],
-    ["A8+B7+C4+D4+E8", "马克笔 / 暖橙 / 阶梯", "thick marker handwritten Chinese text, warm orange title, left-aligned stair layout, hand-drawn annotations, mixed sizes"],
-    ["A10+B12+C7+D13+E10", "纤细 / 砖红 / 竖排", "thin elegant Chinese serif, brick red and ivory palette, vertical typography, clean no decoration, vertical-horizontal mix"],
-    ["A5+B4+C12+D8+E3", "卡通 / 荧光 / 框架", "rounded bubbly Chinese cartoon font, neon green title, framed text, sticker effect, keyword color block"],
-  ];
+export function fallbackPlans({ analysis, title, subtitle, count, keywords }) {
+  // 使用设计矩阵生成多样化的 fallback 方案
+  const combinations = generateCombinations(count, keywords);
 
-  return combos.slice(0, count).map(([combination, label, style], index) => ({
-    combination,
-    label,
-    description: label,
-    prompt: `Edit the provided image to create a finished Xiaohongshu/Douyin video cover.
+  return combinations.map((combo, index) => {
+    const label = combinationToLabel(combo);
+    const directive = combinationToDesignDirective(combo);
+
+    return {
+      id: index + 1,
+      combination: combo.key,
+      label,
+      description: label,
+      prompt: `Edit the provided image to create a finished Xiaohongshu/Douyin video cover.
 
 PHOTO ANALYSIS:
 - Dominant color: ${analysis.dominant_color || "unknown"}
@@ -216,12 +251,24 @@ PHOTO ANALYSIS:
 - Subject position: ${analysis.subject_position || "center"}
 - Available space for text: ${analysis.empty_space || "use the clearest negative space"}
 
-DESIGN COMBINATION:
-- ${style}
+${directive}
 
 TEXT CONTENT:
 LINE 1 (Main title): "${title}"
+- Font: ${combo.a.desc}
+- Color: use colors from ${combo.d.name} scheme with ${combo.c.name} effect
+- Size: MASSIVE - each character about 20-25% of frame width
+- Position: ${combo.b.desc}
+
 LINE 2 (Subtitle): "${subtitle || ""}"
+- Font: complementary to main title
+- Color: secondary color from ${combo.d.name} scheme
+- Size: 1/3 to 1/4 of main title
+- Position: relative to title per ${combo.b.name} layout
+
+DECORATION: ${combo.e.desc}
+COMPOSITION: ${combo.f.desc}
+MOOD: ${combo.g.desc}
 
 RULES:
 - This is non-sexual health, wellness, beauty, or lifestyle cover design. If the uploaded photo contains a mouth, tongue, lips, teeth, skin, or body close-up, treat it as clinical/educational content only.
@@ -230,7 +277,8 @@ RULES:
 - Main title huge and readable.
 - Preserve original photo exactly.
 - Only add typography and decorations.
-- Use vertical 1024x1536 Xiaohongshu composition.`,
-    id: index + 1,
-  }));
+- Use vertical 1024x1536 Xiaohongshu composition.
+- STRICTLY follow all 7 dimensions of the assigned design matrix combination.`,
+    };
+  });
 }
