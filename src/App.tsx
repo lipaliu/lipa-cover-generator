@@ -24,7 +24,7 @@ import {
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { deleteHistoryBatch, getHistory, saveHistoryBatch } from "./lib/history";
 import { downloadImageUrl, fileToDataUrl, formatTime, urlToDataUrl } from "./lib/image";
-import type { CoverResult, GenerateCount, GenerateEvent, HistoryBatch, ImageEngine } from "./lib/types";
+import type { CoverResult, GenerateEvent, HistoryBatch, ImageEngine } from "./lib/types";
 
 /* ─── Constants ─── */
 const engineOptions: Array<{
@@ -33,12 +33,8 @@ const engineOptions: Array<{
   vendor: string;
   description: string;
 }> = [
-  { id: "openai", title: "GPT-Image-2", vendor: "OpenAI", description: "风格多变，创意强" },
-  { id: "auto", title: "自动选择", vendor: "智能分配", description: "根据内容自动分配" },
-  { id: "wanxiang", title: "通义万相", vendor: "阿里", description: "中文渲染质量高" },
-  { id: "jimeng", title: "即梦", vendor: "字节", description: "中文更准，速度快" },
-  { id: "cogview", title: "CogView-4", vendor: "智谱", description: "中文理解好" },
-  { id: "wenxin", title: "文心一格", vendor: "百度", description: "中文渲染稳定" },
+  { id: "image2", title: "Image2", vendor: "OpenAI", description: "GPT-Image-2，风格更灵活" },
+  { id: "seedance", title: "SeeDance", vendor: "即梦", description: "复用本机即梦账号积分" },
 ];
 
 type AspectRatio = "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
@@ -66,6 +62,12 @@ type RunState = "idle" | "analyzing" | "planning" | "generating" | "done" | "err
 /* ─── Utilities ─── */
 function cn(...values: Array<string | false | null | undefined>) {
   return values.filter(Boolean).join(" ");
+}
+
+function normalizeStoredEngine(value?: string | null): ImageEngine {
+  const normalized = String(value || "").toLowerCase();
+  if (normalized === "seedance" || normalized === "jimeng" || normalized === "dreamina") return "seedance";
+  return "image2";
 }
 
 async function readSseStream(response: Response, onEvent: (event: GenerateEvent) => void) {
@@ -162,7 +164,7 @@ export function App() {
   const [keywords, setKeywords] = useState("");
 
   // Step 3: Style
-  const [engine, setEngine] = useState<ImageEngine>("openai");
+  const [engine, setEngine] = useState<ImageEngine>("image2");
 
   // Step 4: Generate
   const [runState, setRunState] = useState<RunState>("idle");
@@ -177,6 +179,7 @@ export function App() {
   const [history, setHistory] = useState<HistoryBatch[]>([]);
 
   const totalCount = Object.values(ratioSelection).reduce((sum, v) => sum + v, 0);
+  const requestedCount = Math.min(10, totalCount);
   const selectedRatios = Object.entries(ratioSelection).filter(([, v]) => v > 0) as [AspectRatio, number][];
   const isGenerating = runState === "analyzing" || runState === "planning" || runState === "generating";
   const completedCount = results.filter((r) => r.image_url || r.error).length;
@@ -192,15 +195,19 @@ export function App() {
   const toggleRatio = (id: AspectRatio) => {
     setRatioSelection((prev) => ({
       ...prev,
-      [id]: prev[id] > 0 ? 0 : 1,
+      [id]: prev[id] > 0 ? 0 : Object.values(prev).reduce((sum, v) => sum + v, 0) >= 10 ? 0 : 1,
     }));
   };
 
   const adjustRatioCount = (id: AspectRatio, delta: number) => {
-    setRatioSelection((prev) => ({
-      ...prev,
-      [id]: Math.max(0, Math.min(10, prev[id] + delta)),
-    }));
+    setRatioSelection((prev) => {
+      const currentTotal = Object.values(prev).reduce((sum, v) => sum + v, 0);
+      if (delta > 0 && currentTotal >= 10) return prev;
+      return {
+        ...prev,
+        [id]: Math.max(0, Math.min(10, prev[id] + delta)),
+      };
+    });
   };
 
   /* ─── File Handling ─── */
@@ -258,9 +265,7 @@ export function App() {
     if (!title.trim()) { setErrorMessage("请先填写标题"); setRunState("error"); return; }
     if (totalCount === 0) { setErrorMessage("请至少选择一种比例和数量"); setRunState("error"); return; }
 
-    // For now, use the first selected ratio's count as the generation count
-    // Backend currently only supports single count, so we sum all
-    const count = Math.min(10, totalCount) as GenerateCount;
+    const count = requestedCount;
 
     abortRef.current?.abort();
     const controller = new AbortController();
@@ -323,7 +328,7 @@ export function App() {
             subtitle: subtitle.trim(),
             keywords: keywords.trim(),
             engine,
-            count: count as GenerateCount,
+            count,
             baseImage: imagePreview || "",
             results: final,
           }).then(() => refreshHistory());
@@ -355,8 +360,8 @@ export function App() {
     setTitle(batch.title);
     setSubtitle(batch.subtitle);
     setKeywords(batch.keywords || "");
-    setEngine(batch.engine || "openai");
-    setRatioSelection((prev) => ({ ...prev, "3:4": batch.count }));
+    setEngine(normalizeStoredEngine(batch.engine));
+    setRatioSelection({ "16:9": 0, "4:3": 0, "1:1": 0, "3:4": Math.min(10, batch.count), "9:16": 0 });
     setTotal(batch.count);
     setImagePreview(batch.baseImage);
     setImageName("历史底图");
@@ -853,7 +858,9 @@ export function App() {
                         <small>生成中...</small>
                       </div>
                     )}
-                    <footer className="result-meta"><span>{cover.label}</span></footer>
+                    <footer className="result-meta">
+                      <span>{cover.ratio ? `${cover.ratio} · ${cover.label}` : cover.label}</span>
+                    </footer>
                   </article>
                 ))}
               </div>

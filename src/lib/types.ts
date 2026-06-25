@@ -1,5 +1,5 @@
-export type GenerateCount = 1 | 2 | 4 | 10;
-export type ImageEngine = "auto" | "wanxiang" | "jimeng" | "openai" | "cogview" | "wenxin";
+export type GenerateCount = number;
+export type ImageEngine = "image2" | "seedance";
 
 export type CoverResult = {
   id: number;
@@ -9,6 +9,7 @@ export type CoverResult = {
   image_url?: string;
   error?: string;
   engine?: ImageEngine;
+  ratio?: string;
 };
 
 export type CoverPlan = {

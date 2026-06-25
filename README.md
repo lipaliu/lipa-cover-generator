@@ -1,17 +1,16 @@
 # LIPA Cover Generator
 
-LIPA is a Xiaohongshu / Douyin cover generator PWA. It turns one base image plus Chinese cover copy into 3:4 social covers with batch generation, local history, and selectable image engines.
+LIPA is a Xiaohongshu / Douyin cover generator PWA. It turns uploaded images, material references, or text descriptions plus Chinese cover copy into social covers with batch generation, local history, and two production image engines.
 
 ## Features
 
 - macOS-style creator UI with a LIPA app icon
 - PWA manifest and service worker
-- Generate 1, 2, 4, or 10 covers
+- Generate up to 10 covers across 16:9, 4:3, 1:1, 3:4, and 9:16 ratios
 - Local IndexedDB history
 - Engine selector before generation
-- OpenAI GPT-Image-2 adapter
-- Alibaba DashScope / Tongyi Wanxiang adapter
-- Dreamina / 即梦 CLI adapter
+- Image2 / OpenAI GPT-Image-2 adapter
+- SeeDance / 即梦 CLI adapter
 
 ## Setup
 
@@ -24,10 +23,9 @@ Fill `.env.local` with the providers you want to use:
 
 ```env
 OPENAI_API_KEY=
-DASHSCOPE_API_KEY=
 ```
 
-For Dreamina / 即梦, install and log in once on the machine:
+For SeeDance / 即梦, install and log in once on the machine:
 
 ```bash
 curl -s https://jimeng.jianying.com/cli | bash
@@ -57,4 +55,4 @@ PORT=8790 npm run preview
 
 ## Notes
 
-Do not commit `.env.local` or provider keys. Dreamina login state is stored in the local user account outside this project and is intentionally not part of the repository.
+Do not commit `.env.local` or provider keys. SeeDance / Dreamina login state is stored in the local user account outside this project and is intentionally not part of the repository.
