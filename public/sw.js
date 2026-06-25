@@ -1,4 +1,4 @@
-const CACHE_NAME = "lipa-cover-generator-v2";
+const CACHE_NAME = "koc-v3";
 const ASSETS = ["/", "/manifest.json", "/icons/lipa-icon.png", "/samples/base-hiker.png"];
 
 self.addEventListener("install", (event) => {

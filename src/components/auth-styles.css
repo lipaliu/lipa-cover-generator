@@ -1,0 +1,359 @@
+/* ─── Login Modal ─── */
+.login-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  padding: 1rem;
+}
+
+.login-modal,
+.recharge-modal {
+  background: #1a1a2e;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  padding: 2rem;
+  width: 100%;
+  max-width: 400px;
+  position: relative;
+  animation: modal-in 0.2s ease-out;
+}
+
+.recharge-modal {
+  max-width: 520px;
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.login-modal-close {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 6px;
+  transition: color 0.2s;
+}
+.login-modal-close:hover {
+  color: #fff;
+}
+
+.login-modal-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+.login-modal-header h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 0.5rem;
+}
+.login-modal-header p {
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.login-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.login-input-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  transition: border-color 0.2s;
+}
+.login-input-group:focus-within {
+  border-color: rgba(99, 102, 241, 0.6);
+}
+.login-input-icon {
+  color: rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
+}
+.login-input-group input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 1rem;
+  letter-spacing: 0.5px;
+}
+.login-input-group input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.login-resend-btn {
+  background: none;
+  border: none;
+  color: #6366f1;
+  font-size: 0.85rem;
+  cursor: pointer;
+  white-space: nowrap;
+  padding: 2px 6px;
+}
+.login-resend-btn:disabled {
+  color: rgba(255, 255, 255, 0.3);
+  cursor: not-allowed;
+}
+
+.login-phone-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+.login-btn-text {
+  background: none;
+  border: none;
+  color: #6366f1;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+.login-btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.85rem;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border: none;
+  border-radius: 10px;
+  color: #fff;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.login-btn-primary:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.login-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.login-error {
+  color: #f87171;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.login-modal-footer {
+  text-align: center;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.login-modal-footer p {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* ─── Credits Badge ─── */
+.credits-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.credits-badge--login {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  border: none;
+  color: #fff;
+  padding: 0.4rem 1rem;
+  cursor: pointer;
+  font-weight: 600;
+  border-radius: 8px;
+  transition: opacity 0.2s;
+}
+.credits-badge--login:hover {
+  opacity: 0.9;
+}
+
+.credits-badge--logged-in {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  padding: 0.35rem 0.75rem;
+  gap: 0.5rem;
+}
+
+.credits-badge-info {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.credits-badge-crown {
+  color: #fbbf24;
+}
+
+.credits-badge-plan {
+  font-weight: 600;
+  color: #a78bfa;
+}
+
+.credits-badge-divider {
+  color: rgba(255, 255, 255, 0.2);
+}
+
+.credits-badge-amount {
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.credits-badge-logout {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.3);
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+}
+.credits-badge-logout:hover {
+  color: #f87171;
+}
+
+/* ─── Recharge Modal ─── */
+.recharge-modal-header {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+.recharge-modal-header h2 {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 0.5rem;
+}
+.recharge-modal-header p {
+  font-size: 0.9rem;
+  color: rgba(255, 255, 255, 0.6);
+}
+.recharge-modal-header strong {
+  color: #fbbf24;
+}
+
+.recharge-section {
+  margin-bottom: 1.5rem;
+}
+.recharge-section h3 {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.8);
+  margin-bottom: 0.75rem;
+}
+
+.recharge-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 0.75rem;
+}
+
+.recharge-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 1rem 0.75rem;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  color: #fff;
+}
+.recharge-card:hover {
+  border-color: #6366f1;
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.recharge-card--sub {
+  border-color: rgba(139, 92, 246, 0.3);
+}
+
+.recharge-tag {
+  position: absolute;
+  top: -8px;
+  right: 8px;
+  background: linear-gradient(135deg, #f59e0b, #ef4444);
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.recharge-credits {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.recharge-price {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.recharge-unit {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.recharge-plan-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #a78bfa;
+}
+
+.recharge-modal-footer {
+  text-align: center;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+.recharge-modal-footer p {
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.4);
+}

@@ -1,0 +1,68 @@
+/**
+ * Database connection module.
+ *
+ * Uses mysql2 with promise API.
+ * Falls back gracefully when MySQL is not configured (for local dev without DB).
+ */
+
+import mysql from "mysql2/promise";
+
+let pool = null;
+
+/**
+ * Get or create the MySQL connection pool.
+ * Returns null if MySQL is not configured.
+ */
+export function getPool() {
+  if (pool) return pool;
+
+  const host = process.env.MYSQL_HOST;
+  const database = process.env.MYSQL_DATABASE;
+
+  if (!host || !database) {
+    console.warn("[DB] MySQL not configured. Running in no-DB mode (auth/credits disabled).");
+    return null;
+  }
+
+  pool = mysql.createPool({
+    host,
+    port: Number(process.env.MYSQL_PORT || 3306),
+    user: process.env.MYSQL_USER || "root",
+    password: process.env.MYSQL_PASSWORD || "",
+    database,
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0,
+    charset: "utf8mb4",
+  });
+
+  console.log(`[DB] MySQL pool created → ${host}:${process.env.MYSQL_PORT || 3306}/${database}`);
+  return pool;
+}
+
+/**
+ * Execute a query. Returns [rows, fields].
+ * Throws if DB is not configured.
+ */
+export async function query(sql, params = []) {
+  const p = getPool();
+  if (!p) throw new Error("Database not configured.");
+  return p.execute(sql, params);
+}
+
+/**
+ * Check if database is available.
+ */
+export function isDbAvailable() {
+  return getPool() !== null;
+}
+
+/**
+ * Graceful shutdown.
+ */
+export async function closeDb() {
+  if (pool) {
+    await pool.end();
+    pool = null;
+  }
+}

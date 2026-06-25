@@ -10,6 +10,12 @@ import OpenAI, { toFile } from "openai";
 import { ProxyAgent, setGlobalDispatcher } from "undici";
 import { buildPlanUserPrompt, fallbackPlans, skillPrompt } from "./prompts.js";
 import { generateCombinations, combinationToLabel } from "./design-matrix.js";
+import { getPool } from "./db.js";
+import { optionalAuth, requireAuth, requireCredits, getCreditsCost } from "./middleware.js";
+import { deductCredits, refundCredits } from "./credits.js";
+import { shouldApplyWatermark, addWatermark } from "./watermark.js";
+import authRoutes from "./routes/auth.js";
+import creditsRoutes from "./routes/credits.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -78,6 +84,16 @@ function configureProxy() {
 configureProxy();
 
 app.use(express.json({ limit: "35mb" }));
+
+// Initialize database connection (non-blocking, graceful if not configured)
+getPool();
+
+// Apply optional auth to all routes (sets req.user if token valid)
+app.use(optionalAuth);
+
+// Mount auth and credits routes
+app.use("/api/auth", authRoutes);
+app.use("/api/credits", creditsRoutes);
 
 function writeSse(res, payload) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
@@ -410,7 +426,6 @@ async function generateImage2Cover(openai, { sourceMode, sourceImages, imageDesc
     prompt,
     size,
     quality: "auto",
-    input_fidelity: "high",
   });
   return imageResponseToDataUrl(response);
 }
@@ -661,6 +676,27 @@ app.post("/api/export-cover", async (req, res) => {
 });
 
 app.post("/api/generate", async (req, res) => {
+  // ─── Credits check (before starting SSE) ───
+  const { isDbAvailable } = await import("./db.js");
+  if (isDbAvailable()) {
+    if (!req.user) {
+      return res.status(401).json({ error: "请先登录", code: "AUTH_REQUIRED" });
+    }
+    const requestedCount = Number(req.body?.count || req.body?.ratios?.reduce?.((s, r) => s + (r.count || 0), 0) || 4);
+    const creditsCost = getCreditsCost(Math.min(10, Math.max(1, requestedCount)));
+    if (req.user.role !== "admin" && req.user.credits < creditsCost) {
+      return res.status(402).json({
+        error: "积分不足",
+        code: "INSUFFICIENT_CREDITS",
+        required: creditsCost,
+        current: req.user.credits,
+      });
+    }
+    req.creditsCost = req.user.role === "admin" ? 0 : creditsCost;
+  } else {
+    req.creditsCost = 0;
+  }
+
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
@@ -774,6 +810,35 @@ app.post("/api/generate", async (req, res) => {
     }
 
     results.sort((a, b) => a.id - b.id);
+
+    // ─── Deduct credits after successful generation ───
+    const successCount = results.filter((r) => !r.error).length;
+    if (req.creditsCost > 0 && successCount > 0 && req.user) {
+      try {
+        await deductCredits(
+          req.user.id,
+          req.creditsCost,
+          `生成 ${successCount} 张封面（${engine}）`,
+          `gen-${Date.now()}`
+        );
+      } catch (err) {
+        console.error("[Credits] Deduction failed:", err.message);
+      }
+    }
+
+    // ─── Apply watermark for free users ───
+    if (shouldApplyWatermark(req.user)) {
+      for (const result of results) {
+        if (result.image_url && !result.error) {
+          try {
+            result.image_url = await addWatermark(result.image_url);
+          } catch (e) {
+            // Watermark failure is non-critical
+          }
+        }
+      }
+    }
+
     writeSse(res, {
       status: "done",
       progress: completed,
@@ -785,6 +850,12 @@ app.post("/api/generate", async (req, res) => {
     });
     res.end();
   } catch (error) {
+    // ─── Refund credits on total failure ───
+    if (req.creditsCost > 0 && req.user) {
+      // Don't deduct if generation completely failed
+      // (credits are only deducted on success above)
+    }
+
     writeSse(res, {
       status: "error",
       progress: 0,
