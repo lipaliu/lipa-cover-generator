@@ -136,6 +136,8 @@ input, select, textarea { color: inherit; }
   gap: 6px;
   padding: 8px 14px;
   border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-card);
   font-size: 13px;
   color: var(--ink-secondary);
   transition: var(--transition);
@@ -471,6 +473,103 @@ input, select, textarea { color: inherit; }
   font-size: 11px;
   color: var(--ink-tertiary);
   line-height: 1.3;
+}
+
+/* ─── Engine Selector ─── */
+.engine-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(135deg, rgba(167, 139, 250, 0.08), rgba(236, 72, 153, 0.04)),
+    var(--bg-card);
+}
+
+.engine-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.engine-header h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-primary);
+}
+
+.engine-header span {
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: var(--accent-glow);
+  color: var(--accent-hover);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.engine-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.engine-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px 10px;
+  min-height: 92px;
+  padding: 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.035);
+  text-align: left;
+  transition: var(--transition);
+}
+
+.engine-card:hover {
+  border-color: var(--border-strong);
+  background: var(--bg-card-hover);
+  transform: translateY(-1px);
+}
+
+.engine-card.is-active {
+  border-color: var(--accent);
+  background: rgba(167, 139, 250, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(167, 139, 250, 0.22);
+}
+
+.engine-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink-primary);
+}
+
+.engine-title svg {
+  color: var(--accent);
+}
+
+.engine-vendor {
+  justify-self: end;
+  align-self: start;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--ink-secondary);
+  font-size: 11px;
+}
+
+.engine-desc {
+  grid-column: 1 / -1;
+  color: var(--ink-tertiary);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 /* ─── Elements Zone ─── */
@@ -1298,9 +1397,15 @@ input, select, textarea { color: inherit; }
 @media (max-width: 640px) {
   .hero { padding: 32px 0 16px; }
   .hero-title { font-size: 32px; }
+  .site-header { align-items: flex-start; }
+  .header-nav { gap: 8px; }
+  .nav-btn span { display: none; }
   .step-indicator { gap: 24px; padding: 24px 0; }
   .step-icon { width: 34px; height: 34px; }
   .step-content { min-height: 320px; }
+  .source-modes { grid-template-columns: 1fr; }
+  .engine-grid { grid-template-columns: 1fr; }
+  .ratio-grid { grid-template-columns: repeat(2, 1fr); }
   .results-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   .step-nav { padding: 16px 0 32px; }
   .overlay-panel { width: 100vw; }

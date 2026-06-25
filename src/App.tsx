@@ -556,6 +556,30 @@ export function App() {
               </button>
             </div>
 
+            <div className="engine-section">
+              <div className="engine-header">
+                <h3>选择生成模型</h3>
+                <span>{engineOptions.find((opt) => opt.id === engine)?.title || "Image2"}</span>
+              </div>
+              <div className="engine-grid">
+                {engineOptions.map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={cn("engine-card", engine === opt.id && "is-active")}
+                    onClick={() => setEngine(opt.id)}
+                  >
+                    <span className="engine-title">
+                      <Sparkles size={16} />
+                      {opt.title}
+                    </span>
+                    <span className="engine-vendor">{opt.vendor}</span>
+                    <span className="engine-desc">{opt.description}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Mode: Base Image */}
             {sourceMode === "base" && (
               <label className="upload-zone magazine-style">
