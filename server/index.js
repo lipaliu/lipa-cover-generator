@@ -172,6 +172,13 @@ function assertEngineAvailable(engine) {
   throw new Error(`${label} 还没有完成后端 adapter。当前只支持 Image2 和 SeeDance。`);
 }
 
+function isLocalFreeMode(req) {
+  if (process.env.LOCAL_FREE_MODE === "0") return false;
+  if (process.env.LOCAL_FREE_MODE === "1") return true;
+  const host = String(req.headers.host || "").split(":")[0];
+  return ["localhost", "127.0.0.1", "::1"].includes(host);
+}
+
 function normalizeSourceMode(value) {
   if (value === "elements" || value === "describe") return value;
   return "base";
@@ -678,7 +685,8 @@ app.post("/api/export-cover", async (req, res) => {
 app.post("/api/generate", async (req, res) => {
   // ─── Credits check (before starting SSE) ───
   const { isDbAvailable } = await import("./db.js");
-  if (isDbAvailable()) {
+  const localFreeMode = isLocalFreeMode(req);
+  if (isDbAvailable() && !localFreeMode) {
     if (!req.user) {
       return res.status(401).json({ error: "请先登录", code: "AUTH_REQUIRED" });
     }
@@ -827,7 +835,7 @@ app.post("/api/generate", async (req, res) => {
     }
 
     // ─── Apply watermark for free users ───
-    if (shouldApplyWatermark(req.user)) {
+    if (!localFreeMode && shouldApplyWatermark(req.user)) {
       for (const result of results) {
         if (result.image_url && !result.error) {
           try {

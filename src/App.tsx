@@ -42,8 +42,12 @@ const allEngineOptions: Array<{
   { id: "seedance", title: "SeeDance", vendor: "即梦", description: "复用本机即梦账号积分" },
 ];
 
-// 线上环境隐藏 SeeDance（仅本地开发可见）
-const engineOptions = import.meta.env.DEV
+const isLocalLipa =
+  typeof window !== "undefined" &&
+  ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
+
+// 本地 LIPA 使用模式：不登录、不积分，并显示 SeeDance。
+const engineOptions = import.meta.env.DEV || isLocalLipa
   ? allEngineOptions
   : allEngineOptions.filter((e) => e.id !== "seedance");
 
@@ -215,7 +219,7 @@ export function App() {
   }, []);
 
   // Computed: credits cost for current selection
-  const creditsCost = getCreditsCost(requestedCount || 1);
+  const creditsCost = isLocalLipa ? 0 : getCreditsCost(requestedCount || 1);
 
   /* ─── Ratio Helpers ─── */
   const toggleRatio = (id: AspectRatio) => {
@@ -291,8 +295,8 @@ export function App() {
     if (!title.trim()) { setErrorMessage("请先填写标题"); setRunState("error"); return; }
     if (totalCount === 0) { setErrorMessage("请至少选择一种比例和数量"); setRunState("error"); return; }
 
-    // Auth check: if no token, prompt login
-    if (!user && !getToken()) {
+    // Auth check: local LIPA mode does not require login or credits.
+    if (!isLocalLipa && !user && !getToken()) {
       setShowLogin(true);
       return;
     }
@@ -383,7 +387,7 @@ export function App() {
             results: final,
           }).then(() => refreshHistory());
           // Refresh credits balance after generation
-          if (user) {
+          if (!isLocalLipa && user) {
             fetchBalance().then((b) => setUser((prev) => prev ? { ...prev, credits: b.credits } : prev)).catch(() => {});
           }
         }
@@ -475,11 +479,15 @@ export function App() {
             <Settings2 size={18} />
             <span>设置</span>
           </button>
-          <CreditsBadge
-            user={user}
-            onLoginClick={() => setShowLogin(true)}
-            onLogout={() => { apiLogout(); setUser(null); }}
-          />
+          {isLocalLipa ? (
+            <span className="local-mode-badge">本地免费</span>
+          ) : (
+            <CreditsBadge
+              user={user}
+              onLoginClick={() => setShowLogin(true)}
+              onLogout={() => { apiLogout(); setUser(null); }}
+            />
+          )}
         </nav>
       </header>
 
@@ -880,7 +888,7 @@ export function App() {
                 <div className="summary-item">
                   <span className="summary-label">消耗积分</span>
                   <span className="summary-value" style={{ color: "#fbbf24", fontWeight: 700 }}>
-                    {user?.role === "admin" ? "0（管理员免费）" : `${creditsCost} 积分`}
+                    {isLocalLipa ? "0（本地免费）" : user?.role === "admin" ? "0（管理员免费）" : `${creditsCost} 积分`}
                   </span>
                 </div>
               </div>
@@ -999,13 +1007,17 @@ export function App() {
       </footer>
 
       {/* Auth Modals */}
-      <LoginModal open={showLogin} onClose={() => setShowLogin(false)} onLogin={setUser} />
-      <RechargeModal
-        open={showRecharge}
-        onClose={() => setShowRecharge(false)}
-        currentCredits={rechargeInfo.current}
-        requiredCredits={rechargeInfo.required}
-      />
+      {!isLocalLipa && (
+        <>
+          <LoginModal open={showLogin} onClose={() => setShowLogin(false)} onLogin={setUser} />
+          <RechargeModal
+            open={showRecharge}
+            onClose={() => setShowRecharge(false)}
+            currentCredits={rechargeInfo.current}
+            requiredCredits={rechargeInfo.required}
+          />
+        </>
+      )}
     </main>
   );
 }
