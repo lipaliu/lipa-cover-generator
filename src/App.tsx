@@ -25,9 +25,14 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import { deleteHistoryBatch, getHistory, saveHistoryBatch } from "./lib/history";
 import { downloadImageUrl, fileToDataUrl, formatTime, urlToDataUrl } from "./lib/image";
 import type { CoverResult, GenerateEvent, HistoryBatch, ImageEngine } from "./lib/types";
+import { LoginModal } from "./components/LoginModal";
+import { CreditsBadge } from "./components/CreditsBadge";
+import { RechargeModal } from "./components/RechargeModal";
+import { fetchMe, logout as apiLogout, getToken, getCreditsCost, fetchBalance, type UserInfo } from "./lib/api";
+import "./components/auth-styles.css";
 
 /* ─── Constants ─── */
-const engineOptions: Array<{
+const allEngineOptions: Array<{
   id: ImageEngine;
   title: string;
   vendor: string;
@@ -36,6 +41,11 @@ const engineOptions: Array<{
   { id: "image2", title: "Image2", vendor: "OpenAI", description: "GPT-Image-2，风格更灵活" },
   { id: "seedance", title: "SeeDance", vendor: "即梦", description: "复用本机即梦账号积分" },
 ];
+
+// 线上环境隐藏 SeeDance（仅本地开发可见）
+const engineOptions = import.meta.env.DEV
+  ? allEngineOptions
+  : allEngineOptions.filter((e) => e.id !== "seedance");
 
 type AspectRatio = "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
 
@@ -145,6 +155,12 @@ export function App() {
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
+  // Auth state
+  const [user, setUser] = useState<UserInfo | null>(null);
+  const [showLogin, setShowLogin] = useState(false);
+  const [showRecharge, setShowRecharge] = useState(false);
+  const [rechargeInfo, setRechargeInfo] = useState({ required: 0, current: 0 });
+
   // Step 1: Image + Ratio
   type SourceMode = "base" | "elements" | "describe";
   const [sourceMode, setSourceMode] = useState<SourceMode>("base");
@@ -190,6 +206,16 @@ export function App() {
   }, []);
 
   useEffect(() => { refreshHistory(); }, [refreshHistory]);
+
+  // Check login status on mount
+  useEffect(() => {
+    if (getToken()) {
+      fetchMe().then(({ user: u }) => { if (u) setUser(u); });
+    }
+  }, []);
+
+  // Computed: credits cost for current selection
+  const creditsCost = getCreditsCost(requestedCount || 1);
 
   /* ─── Ratio Helpers ─── */
   const toggleRatio = (id: AspectRatio) => {
@@ -265,6 +291,12 @@ export function App() {
     if (!title.trim()) { setErrorMessage("请先填写标题"); setRunState("error"); return; }
     if (totalCount === 0) { setErrorMessage("请至少选择一种比例和数量"); setRunState("error"); return; }
 
+    // Auth check: if no token, prompt login
+    if (!user && !getToken()) {
+      setShowLogin(true);
+      return;
+    }
+
     const count = requestedCount;
 
     abortRef.current?.abort();
@@ -279,9 +311,13 @@ export function App() {
 
     try {
       const image = await getImageDataUrl();
+      const token = getToken();
       const response = await fetch("/api/generate", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({
           image: image || undefined,
           title: title.trim(),
@@ -300,6 +336,20 @@ export function App() {
         }),
         signal: controller.signal,
       });
+
+      // Handle auth/credits errors (non-SSE JSON responses)
+      if (response.status === 401) {
+        setShowLogin(true);
+        setRunState("idle");
+        return;
+      }
+      if (response.status === 402) {
+        const data = await response.json();
+        setRechargeInfo({ required: data.required || 0, current: data.current || 0 });
+        setShowRecharge(true);
+        setRunState("idle");
+        return;
+      }
 
       const collected: CoverResult[] = [];
       await readSseStream(response, (event) => {
@@ -332,6 +382,10 @@ export function App() {
             baseImage: imagePreview || "",
             results: final,
           }).then(() => refreshHistory());
+          // Refresh credits balance after generation
+          if (user) {
+            fetchBalance().then((b) => setUser((prev) => prev ? { ...prev, credits: b.credits } : prev)).catch(() => {});
+          }
         }
         if (event.status === "error") {
           setRunState("error");
@@ -421,6 +475,11 @@ export function App() {
             <Settings2 size={18} />
             <span>设置</span>
           </button>
+          <CreditsBadge
+            user={user}
+            onLoginClick={() => setShowLogin(true)}
+            onLogout={() => { apiLogout(); setUser(null); }}
+          />
         </nav>
       </header>
 
@@ -818,6 +877,12 @@ export function App() {
                   <span className="summary-label">总计</span>
                   <span className="summary-value">{totalCount} 张</span>
                 </div>
+                <div className="summary-item">
+                  <span className="summary-label">消耗积分</span>
+                  <span className="summary-value" style={{ color: "#fbbf24", fontWeight: 700 }}>
+                    {user?.role === "admin" ? "0（管理员免费）" : `${creditsCost} 积分`}
+                  </span>
+                </div>
               </div>
 
               <div className="style-controls">
@@ -932,6 +997,15 @@ export function App() {
           )
         )}
       </footer>
+
+      {/* Auth Modals */}
+      <LoginModal open={showLogin} onClose={() => setShowLogin(false)} onLogin={setUser} />
+      <RechargeModal
+        open={showRecharge}
+        onClose={() => setShowRecharge(false)}
+        currentCredits={rechargeInfo.current}
+        requiredCredits={rechargeInfo.required}
+      />
     </main>
   );
 }
