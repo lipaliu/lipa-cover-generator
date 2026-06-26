@@ -50,6 +50,106 @@ const fallbackAnalysis = {
   background_complexity: "medium",
 };
 
+function envNumber(keys, fallback, { min = 0, max = Number.MAX_SAFE_INTEGER } = {}) {
+  const candidates = Array.isArray(keys) ? keys : [keys];
+  for (const key of candidates) {
+    const value = Number(process.env[key]);
+    if (Number.isFinite(value)) {
+      return Math.max(min, Math.min(max, Math.floor(value)));
+    }
+  }
+  return fallback;
+}
+
+function timeoutSeconds(ms) {
+  return Math.max(1, Math.round(ms / 1000));
+}
+
+function textRequestTimeoutMs() {
+  return envNumber(["OPENAI_TEXT_TIMEOUT_MS", "OPENAI_REQUEST_TIMEOUT_MS"], 45000, {
+    min: 10000,
+    max: 180000,
+  });
+}
+
+function imageFetchTimeoutMs() {
+  return envNumber("IMAGE_FETCH_TIMEOUT_MS", 45000, {
+    min: 10000,
+    max: 180000,
+  });
+}
+
+function imageJobTimeoutMs(engine) {
+  const prefix = engine === "seedance" ? "SEEDANCE" : "IMAGE2";
+  const fallback = engine === "seedance" ? 150000 : 180000;
+  return envNumber([`${prefix}_JOB_TIMEOUT_MS`, "IMAGE_JOB_TIMEOUT_MS"], fallback, {
+    min: 30000,
+    max: 600000,
+  });
+}
+
+function generationConcurrency(engine, totalCount) {
+  const prefix = engine === "seedance" ? "SEEDANCE" : "IMAGE2";
+  const fallback = engine === "seedance" ? 1 : 2;
+  const limit = envNumber([`${prefix}_CONCURRENCY`, "GENERATION_CONCURRENCY"], fallback, {
+    min: 1,
+    max: 4,
+  });
+  return Math.max(1, Math.min(totalCount, limit));
+}
+
+function requestOptions(timeoutMs) {
+  return { timeout: timeoutMs, maxRetries: 0 };
+}
+
+async function withTimeout(promise, timeoutMs, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error(`${label} timed out after ${timeoutSeconds(timeoutMs)} seconds.`));
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchBufferWithTimeout(url, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) {
+      throw new Error(`Image fetch failed with HTTP ${response.status}.`);
+    }
+    return Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    if (error?.name === "AbortError") {
+      throw new Error(`Image fetch timed out after ${timeoutSeconds(timeoutMs)} seconds.`);
+    }
+    throw error;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function mapWithConcurrency(items, limit, worker) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await worker(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
 function loadLocalEnv() {
   for (const filename of [".env.local", ".env"]) {
     const envPath = join(__dirname, "..", filename);
@@ -135,11 +235,7 @@ async function imageUrlToBuffer(imageUrl) {
     }
   }
 
-  const response = await fetch(imageUrl);
-  if (!response.ok) {
-    throw new Error(`Image export failed with HTTP ${response.status}.`);
-  }
-  return Buffer.from(await response.arrayBuffer());
+  return fetchBufferWithTimeout(imageUrl, imageFetchTimeoutMs());
 }
 
 function normalizeCount(value) {
@@ -283,7 +379,7 @@ async function analyzeImage(openai, image, { title, subtitle, keywords }) {
         ],
       },
     ],
-  });
+  }, requestOptions(textRequestTimeoutMs()));
 
   return parseJsonObject(completion.choices?.[0]?.message?.content, fallbackAnalysis);
 }
@@ -306,7 +402,7 @@ async function planCovers(openai, { analysis, title, subtitle, keywords, count, 
         content: buildPlanUserPrompt({ analysis, title, subtitle, keywords, count, stylePreferences, matrixCombinations }),
       },
     ],
-  });
+  }, requestOptions(textRequestTimeoutMs()));
 
   const parsed = parseJsonObject(completion.choices?.[0]?.message?.content, { plans: [] });
   const fallback = fallbackPlans({ analysis, title, subtitle, count, keywords });
@@ -381,6 +477,10 @@ function friendlyProviderError(error, engine) {
     return `${engineLabels[engine] || "当前引擎"} 的 API Key 无效或未授权，请检查 .env.local 后重启服务。`;
   }
 
+  if (/timed out|timeout|aborted|deadline/iu.test(raw)) {
+    return `${engineLabels[engine] || "当前引擎"} 单张生成超时，已跳过这张，其他图片会继续生成。`;
+  }
+
   if (/fetch failed|connect timeout|timeout|econnreset|unable to get local issuer certificate/iu.test(raw)) {
     return `${engineLabels[engine] || "当前引擎"} 网络连接失败，请检查代理/VPN 或稍后重试。`;
   }
@@ -402,8 +502,7 @@ async function imageResponseToDataUrl(response) {
   }
 
   if (item?.url) {
-    const imageResponse = await fetch(item.url);
-    const buffer = Buffer.from(await imageResponse.arrayBuffer());
+    const buffer = await fetchBufferWithTimeout(item.url, imageFetchTimeoutMs());
     return `data:image/png;base64,${buffer.toString("base64")}`;
   }
 
@@ -413,15 +512,17 @@ async function imageResponseToDataUrl(response) {
 async function generateImage2Cover(openai, { sourceMode, sourceImages, imageDescription, plan, ratio }) {
   const prompt = buildImage2Prompt(plan, { sourceMode, imageDescription, ratio });
   const size = image2SizeForRatio(ratio);
+  const timeoutMs = imageJobTimeoutMs("image2");
+  const quality = process.env.IMAGE2_QUALITY || "auto";
 
   if (sourceImages.length === 0) {
     const response = await openai.images.generate({
       model: "gpt-image-2",
       prompt,
       size,
-      quality: "auto",
+      quality,
       moderation: "auto",
-    });
+    }, requestOptions(timeoutMs));
     return imageResponseToDataUrl(response);
   }
 
@@ -433,8 +534,8 @@ async function generateImage2Cover(openai, { sourceMode, sourceImages, imageDesc
     image: imageFiles.length === 1 ? imageFiles[0] : imageFiles,
     prompt,
     size,
-    quality: "auto",
-  });
+    quality,
+  }, requestOptions(timeoutMs));
   return imageResponseToDataUrl(response);
 }
 
@@ -653,12 +754,21 @@ async function generateSeedanceCover({ sourceMode, sourceImages, imageDescriptio
 }
 
 async function generateByEngine({ openai, engine, sourceMode, sourceImages, imageDescription, plan, ratio }) {
+  const timeoutMs = imageJobTimeoutMs(engine);
   if (engine === "image2") {
     if (!openai) throw new Error("OpenAI client is not configured.");
-    return generateImage2Cover(openai, { sourceMode, sourceImages, imageDescription, plan, ratio });
+    return withTimeout(
+      generateImage2Cover(openai, { sourceMode, sourceImages, imageDescription, plan, ratio }),
+      timeoutMs,
+      `${engineLabels[engine]} 单张生成`,
+    );
   }
   if (engine === "seedance") {
-    return generateSeedanceCover({ sourceMode, sourceImages, imageDescription, plan, ratio });
+    return withTimeout(
+      generateSeedanceCover({ sourceMode, sourceImages, imageDescription, plan, ratio }),
+      timeoutMs,
+      `${engineLabels[engine]} 单张生成`,
+    );
   }
   throw new Error(`${engineLabels[engine] || engine} is not implemented.`);
 }
@@ -757,7 +867,13 @@ app.post("/api/generate", async (req, res) => {
     const analysisImage = sourceImages[0] || "";
     const planKeywords = [keywords, imageDescription ? `画面描述：${imageDescription}` : ""].filter(Boolean).join("\n");
 
-    const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
+    const openai = process.env.OPENAI_API_KEY
+      ? new OpenAI({
+          apiKey: process.env.OPENAI_API_KEY,
+          timeout: envNumber("OPENAI_REQUEST_TIMEOUT_MS", 120000, { min: 15000, max: 600000 }),
+          maxRetries: 0,
+        })
+      : null;
     const fallbackAnalysisWithColor = {
       ...fallbackAnalysis,
       dominant_color: stylePreferences?.imageDominantColor || fallbackAnalysis.dominant_color,
@@ -770,21 +886,58 @@ app.post("/api/generate", async (req, res) => {
       engine,
       message: `正在使用 ${engineLabels[engine]} 分析素材...`,
     });
-    const analysis =
-      openai && analysisImage
-        ? await analyzeImage(openai, analysisImage, { title, subtitle, keywords: planKeywords })
-        : fallbackAnalysisWithColor;
+    let analysis = fallbackAnalysisWithColor;
+    if (openai && analysisImage) {
+      try {
+        analysis = await analyzeImage(openai, analysisImage, { title, subtitle, keywords: planKeywords });
+      } catch (error) {
+        console.warn("[Generate] Image analysis fallback:", error.message);
+        writeSse(res, {
+          status: "analyzing",
+          progress: 0,
+          total: totalCount,
+          engine,
+          message: "素材分析超时，已使用本地色彩信息继续生成...",
+        });
+      }
+    }
     writeSse(res, { status: "planning", progress: 0, total: totalCount, engine, analysis, message: "正在生成方案..." });
 
-    const plans = openai
-      ? await planCovers(openai, { analysis, title, subtitle, keywords: planKeywords, count: totalCount, stylePreferences })
-      : fallbackPlans({ analysis, title, subtitle, count: totalCount, keywords: planKeywords });
+    let plans = fallbackPlans({ analysis, title, subtitle, count: totalCount, keywords: planKeywords });
+    if (openai) {
+      try {
+        plans = await planCovers(openai, { analysis, title, subtitle, keywords: planKeywords, count: totalCount, stylePreferences });
+      } catch (error) {
+        console.warn("[Generate] Cover planning fallback:", error.message);
+        writeSse(res, {
+          status: "planning",
+          progress: 0,
+          total: totalCount,
+          engine,
+          message: "方案生成超时，已使用内置封面方案继续生成...",
+        });
+      }
+    }
     const jobs = expandRatioJobs(ratioGroups, plans);
     writeSse(res, { status: "planned", progress: 0, total: totalCount, engine, plans, message: "方案已生成" });
 
     let completed = 0;
-    const results = [];
-    for (const { plan, ratio } of jobs) {
+    const concurrency = generationConcurrency(engine, totalCount);
+    writeSse(res, {
+      status: "generating",
+      progress: 0,
+      total: totalCount,
+      engine,
+      message: concurrency > 1 ? `开始生成，当前 ${concurrency} 张并行...` : "开始生成封面...",
+    });
+    const results = await mapWithConcurrency(jobs, concurrency, async ({ plan, ratio }, jobIndex) => {
+      writeSse(res, {
+        status: "generating",
+        progress: completed,
+        total: totalCount,
+        engine,
+        message: `开始生成封面 ${jobIndex + 1}/${totalCount}`,
+      });
       try {
         const imageUrl = await generateByEngine({
           openai,
@@ -804,7 +957,6 @@ app.post("/api/generate", async (req, res) => {
           engine,
           ratio,
         };
-        results.push(result);
         completed += 1;
         writeSse(res, {
           status: "generating",
@@ -812,8 +964,9 @@ app.post("/api/generate", async (req, res) => {
           total: totalCount,
           engine,
           result,
-          message: `正在生成封面 ${completed}/${totalCount}`,
+          message: `已完成封面 ${completed}/${totalCount}`,
         });
+        return result;
       } catch (error) {
         completed += 1;
         const result = {
@@ -825,7 +978,6 @@ app.post("/api/generate", async (req, res) => {
           engine,
           ratio,
         };
-        results.push(result);
         writeSse(res, {
           status: "generating",
           progress: completed,
@@ -834,8 +986,9 @@ app.post("/api/generate", async (req, res) => {
           result,
           message: `封面 ${plan.id} 生成失败`,
         });
+        return result;
       }
-    }
+    });
 
     results.sort((a, b) => a.id - b.id);
 

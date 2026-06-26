@@ -46,6 +46,20 @@ npm run build
 PORT=8790 npm run preview
 ```
 
+## Speed Controls
+
+Generation runs with bounded concurrency and per-image timeouts so one slow image cannot block the whole batch:
+
+```env
+IMAGE2_CONCURRENCY=2
+IMAGE2_JOB_TIMEOUT_MS=180000
+SEEDANCE_CONCURRENCY=1
+SEEDANCE_JOB_TIMEOUT_MS=150000
+OPENAI_TEXT_TIMEOUT_MS=45000
+```
+
+Image2 can safely run a small number of jobs in parallel. SeeDance defaults to one job at a time because the local CLI login/session is more fragile under parallel runs.
+
 ## Scripts
 
 - `npm run dev` starts the Vite frontend and Express API.
