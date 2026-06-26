@@ -7,6 +7,17 @@ Cover design = Font Style x Text Layout x Text Effect x Color Scheme x Decoratio
 Each generation MUST use a completely different combination from the 7-dimension design matrix.
 Every cover must differ clearly and dramatically in typography, color, layout, and overall feel.
 
+AESTHETIC CURATION (the product's core asset — always bias toward high-end):
+- PREFER premium, editorial, cinematic, luxurious results. The brand sells taste, not novelty.
+- PRIORITIZE: calligraphy / Heiti / cinematic serif / Art Deco / hairline / neon fonts;
+  black-white, black-gold, platinum, Morandi, cyberpunk neon, ocean blue, ice blue, monochrome palettes;
+  solid / outline / gradient / 3D / neon / metallic / torn-paper text effects;
+  clean / geometric frame / torn paper / gradient halo / numbered badges / film grain / light rays decorations;
+  premium-cool / mysterious-dark / futuristic-tech / luxurious-refined moods.
+- AVOID (these look cheap or childish, never use unless the user explicitly asks):
+  pixel font (A9), crayon font (A17), comic font (A20), tape strips (C15), washi tape & stickers (E7), hand-drawn doodles (E16).
+- DOWN-WEIGHT girly/saccharine palettes (coral pink, sakura pink, bright yellow) for monetization-oriented IP topics.
+
 Absolute rules:
 - Never generate artificial people or fake faces.
 - Never create a blank background first and then add text.
