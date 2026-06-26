@@ -39,7 +39,8 @@ const engineAliases = {
   seedance: "seedance",
   seedream: "seedance",
 };
-const supportedRatios = new Set(["16:9", "4:3", "1:1", "3:4", "9:16"]);
+// bilibili-safe：B站封面，按 16:9 出图，但核心元素须落在 16:9 与 4:3 的公共安全区内。
+const supportedRatios = new Set(["16:9", "4:3", "1:1", "3:4", "9:16", "bilibili-safe"]);
 const fallbackAnalysis = {
   dominant_color: "#1A1A2E",
   brightness: "medium",
@@ -325,6 +326,7 @@ function image2SizeForRatio(ratio) {
     "1:1": "1024x1024",
     "3:4": "1152x1536",
     "9:16": "864x1536",
+    "bilibili-safe": "1536x864", // B站安全框：16:9 出图
   };
   return sizes[ratio] || "1152x1536";
 }
@@ -447,10 +449,42 @@ function buildSourceInstruction({ sourceMode, imageDescription }) {
   return "Source mode: base image editing. Preserve the uploaded base image as the visual foundation and add typography/decorations on top.";
 }
 
-function buildImage2Prompt(plan, context) {
-  return `${buildSourceInstruction(context)}
-Target aspect ratio: ${context.ratio}.
+// 根据目标比例生成构图/画面延展指令。
+function buildLayoutInstruction(ratio, sourceMode) {
+  const isBilibiliSafe = ratio === "bilibili-safe";
+  const isWide = ratio === "16:9" || ratio === "4:3" || isBilibiliSafe;
+  const canOutpaint = sourceMode === "base" || sourceMode === "elements";
+  const lines = [];
 
+  if (isWide && canOutpaint) {
+    lines.push(
+      "WIDE CANVAS / SCENE EXTENSION (CRITICAL):",
+      "- The source photo is vertical. To fill this wider canvas, you MUST realistically EXTEND (outpaint) the original scene outward.",
+      "- Analyze the real environment in the photo (e.g. floor-to-ceiling windows, city skyline, indoor light, plants, desk) and continue it naturally into the new side areas, matching perspective, lighting direction, color temperature, depth of field and texture.",
+      "- The result must look like one single photo originally shot in this aspect ratio, NOT a vertical photo with flat color bars, blurred padding, gradient blocks, mirrored copies, or pasted panels on the sides.",
+      "- Absolutely DO NOT add solid color blocks, plain colored side panels, or simple blurred background fill to complete the ratio. Generate believable extended environment instead.",
+      "- Keep the person/subject and their proportions natural; do not stretch or distort the original subject.",
+    );
+  }
+
+  if (isBilibiliSafe) {
+    lines.push(
+      "BILIBILI DUAL-RATIO SAFE ZONE (CRITICAL):",
+      "- Output a 16:9 image, but Bilibili may also crop it to 4:3.",
+      "- Keep ALL core content (main title text, subtitle, the person's face and key subject, logos) strictly within the CENTER SAFE ZONE: the central region shared by 16:9 and 4:3 (i.e. leave roughly the left ~12.5% and right ~12.5% width as outer margin).",
+      "- The left/right outer margins must contain ONLY extended background environment (sky, window, wall, ambient scenery) so that cropping to 4:3 never cuts off any text or the subject.",
+      "- Do not place any text or important subject element inside those outer side margins.",
+    );
+  }
+
+  return lines.length ? `\n${lines.join("\n")}\n` : "";
+}
+
+function buildImage2Prompt(plan, context) {
+  const ratioLabel = context.ratio === "bilibili-safe" ? "16:9 (Bilibili safe-zone)" : context.ratio;
+  return `${buildSourceInstruction(context)}
+Target aspect ratio: ${ratioLabel}.
+${buildLayoutInstruction(context.ratio, context.sourceMode)}
 ${plan.prompt}
 
 CONTENT SAFETY CONTEXT:

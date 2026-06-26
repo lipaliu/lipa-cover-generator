@@ -51,7 +51,7 @@ const engineOptions = import.meta.env.DEV || isLocalLipa
   ? allEngineOptions
   : allEngineOptions.filter((e) => e.id !== "seedance");
 
-type AspectRatio = "16:9" | "4:3" | "1:1" | "3:4" | "9:16";
+type AspectRatio = "16:9" | "4:3" | "1:1" | "3:4" | "9:16" | "bilibili-safe";
 
 const ratioOptions: Array<{
   id: AspectRatio;
@@ -61,11 +61,12 @@ const ratioOptions: Array<{
   h: number;
   icon: "landscape" | "portrait" | "square";
 }> = [
-  { id: "16:9", label: "16:9", desc: "横版宽屏", w: 16, h: 9, icon: "landscape" },
-  { id: "4:3", label: "4:3", desc: "横版经典", w: 4, h: 3, icon: "landscape" },
-  { id: "1:1", label: "1:1", desc: "方形", w: 1, h: 1, icon: "square" },
-  { id: "3:4", label: "3:4", desc: "竖版经典", w: 3, h: 4, icon: "portrait" },
-  { id: "9:16", label: "9:16", desc: "竖版全屏", w: 9, h: 16, icon: "portrait" },
+  { id: "3:4", label: "小红书封面", desc: "3:4 竖版主力", w: 3, h: 4, icon: "portrait" },
+  { id: "9:16", label: "竖版长图", desc: "9:16 全面屏", w: 9, h: 16, icon: "portrait" },
+  { id: "bilibili-safe", label: "B站封面（安全框）", desc: "16:9 出图·核心居中防裁切", w: 16, h: 9, icon: "landscape" },
+  { id: "16:9", label: "横版 16:9", desc: "环境延展宽屏", w: 16, h: 9, icon: "landscape" },
+  { id: "4:3", label: "横版 4:3", desc: "环境延展经典", w: 4, h: 3, icon: "landscape" },
+  { id: "1:1", label: "方形 1:1", desc: "通用方形", w: 1, h: 1, icon: "square" },
 ];
 
 type RatioSelection = Record<AspectRatio, number>; // 0 = not selected, 1-10 = count
@@ -175,7 +176,7 @@ export function App() {
   const [detectedColor, setDetectedColor] = useState("#6F7C79");
   const [imageColors, setImageColors] = useState<string[]>([]);
   const [ratioSelection, setRatioSelection] = useState<RatioSelection>({
-    "16:9": 0, "4:3": 0, "1:1": 0, "3:4": 4, "9:16": 0,
+    "16:9": 0, "4:3": 0, "1:1": 0, "3:4": 4, "9:16": 0, "bilibili-safe": 0,
   });
 
   // Step 2: Copy
@@ -445,7 +446,7 @@ export function App() {
     setSubtitle(batch.subtitle);
     setKeywords(batch.keywords || "");
     setEngine(normalizeStoredEngine(batch.engine));
-    setRatioSelection({ "16:9": 0, "4:3": 0, "1:1": 0, "3:4": Math.min(10, batch.count), "9:16": 0 });
+    setRatioSelection({ "16:9": 0, "4:3": 0, "1:1": 0, "3:4": Math.min(10, batch.count), "9:16": 0, "bilibili-safe": 0 });
     setTotal(batch.count);
     setImagePreview(batch.baseImage);
     setImageName("历史底图");
