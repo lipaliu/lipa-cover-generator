@@ -10,7 +10,9 @@ for (let i = 0; i < N; i++) {
   }
 }
 
-const banned = ["A9", "A17", "A20", "C15", "E7", "E16"];
+// weight=0 的禁用项（像素体 / 蜡笔体 / 漫画体 / 胶带）。
+// 注：胶带贴纸 E7、手绘涂鸦 E16 已按创作者审美重新启用（低权重），不再属于禁用项。
+const banned = ["A9", "A17", "A20", "C15"];
 const leaked = banned.filter((b) => counts[b]);
 console.log("禁用项是否泄漏(应为空):", leaked.length ? leaked.map((b) => `${b}:${counts[b]}`) : "无泄漏 OK");
 

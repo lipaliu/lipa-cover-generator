@@ -7,16 +7,23 @@ Cover design = Font Style x Text Layout x Text Effect x Color Scheme x Decoratio
 Each generation MUST use a completely different combination from the 7-dimension design matrix.
 Every cover must differ clearly and dramatically in typography, color, layout, and overall feel.
 
-AESTHETIC CURATION (the product's core asset — always bias toward high-end):
-- PREFER premium, editorial, cinematic, luxurious results. The brand sells taste, not novelty.
-- PRIORITIZE: calligraphy / Heiti / cinematic serif / Art Deco / hairline / neon fonts;
-  black-white, black-gold, platinum, Morandi, cyberpunk neon, ocean blue, ice blue, monochrome palettes;
-  solid / outline / gradient / 3D / neon / metallic / torn-paper text effects;
-  clean / geometric frame / torn paper / gradient halo / numbered badges / film grain / light rays decorations;
-  premium-cool / mysterious-dark / futuristic-tech / luxurious-refined moods.
-- AVOID (these look cheap or childish, never use unless the user explicitly asks):
-  pixel font (A9), crayon font (A17), comic font (A20), tape strips (C15), washi tape & stickers (E7), hand-drawn doodles (E16).
-- DOWN-WEIGHT girly/saccharine palettes (coral pink, sakura pink, bright yellow) for monetization-oriented IP topics.
+AESTHETIC CURATION (the product's core asset — see references/aesthetic-profile.md):
+- TARGET LOOK: bright, sunny, energetic REAL photos x high-end big-type layout ("出片感 + editorial typography"). The brand sells taste, not gimmicks. Travel / cycling / sport / vlog / photography lifestyle.
+- PRIORITIZE: heavy Heiti / ultra-black / brush calligraphy & dry-brush / cinematic & hairline serif / bold condensed sans in thick WHITE outline; handwritten script as an accent layer;
+  white, BRIGHT-YELLOW (signature accent), ocean-blue, forest-green, sunset-orange, mono+pop-accent palettes;
+  solid fill / thick outline / color-block / sticker white-edge cut-out / torn-paper collage text effects;
+  magazine collage / multi-grid / numbered badges (01, VOL.01) / color strips / tasteful hand-drawn doodles & sparkles;
+  energetic-dynamic / fresh-literary / warm-healing / natural-organic moods (premium-cool only for the quiet editorial subset).
+- HOUSE STYLE (reproduce often — distilled from the curated covers + 80 caption presets):
+  (1) one HUGE main title (Heiti / ultra-black / brush) at 60%+ of frame width;
+  (2) a small English / pinyin secondary line beside or under it (e.g. "DAO YU SEN LIN", "Daily Vlog", "cycling with lemon");
+  (3) tiny editorial marks: 01 / VOL.01 / NO.01, (R) (TM) (C)2025, #topic, Co.,Ltd.;
+  (4) thick white stroke or white-edge cut-out so the type pops off a busy photo;
+  (5) optionally one handwritten-script line contrasting the hard bold title.
+- AVOID (look cheap or childish, never use unless the user explicitly asks):
+  pixel font (A9), crayon font (A17), comic font (A20), tape strips (C15);
+  overall dark / luxury-gold / cyberpunk-neon / girly-pink color grading; mysterious-dark and gold-opulence moods.
+- Keep the original photo bright and un-regraded; only add typography and light decorations.
 
 Absolute rules:
 - Never generate artificial people or fake faces.
@@ -286,6 +293,13 @@ LINE 2 (Subtitle): "${subtitle || ""}"
 DECORATION: ${combo.e.desc}
 COMPOSITION: ${combo.f.desc}
 MOOD: ${combo.g.desc}
+
+EDITORIAL HOUSE STYLE (the brand signature — apply tastefully, do not clutter):
+- Bright, premium "出片" editorial feel. Keep the photo bright and natural; do NOT regrade it into dark, luxury-gold, or neon.
+- Add a small English or pinyin accent line near the title (romanized title or a short thematic English phrase) for an international editorial touch.
+- When it fits the style, add ONE tiny refined editorial mark: a number badge (01 / VOL.01), a (R)/(TM)/(C)2025, or a #topic tag — small, never cluttered.
+- Give the main title a thick white stroke or clean white-edge cut-out when the photo is busy, so the type pops and stays readable.
+- Main title is HUGE (60%+ of width); every secondary line stays clearly smaller (size contrast at least 3:1).
 
 RULES:
 - This is non-sexual health, wellness, beauty, or lifestyle cover design. If the uploaded photo contains a mouth, tongue, lips, teeth, skin, or body close-up, treat it as clinical/educational content only.
