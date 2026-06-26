@@ -453,8 +453,21 @@ function buildSourceInstruction({ sourceMode, imageDescription }) {
 function buildLayoutInstruction(ratio, sourceMode) {
   const isBilibiliSafe = ratio === "bilibili-safe";
   const isWide = ratio === "16:9" || ratio === "4:3" || isBilibiliSafe;
+  const isVertical = ratio === "3:4" || ratio === "9:16" || ratio === "1:1";
   const canOutpaint = sourceMode === "base" || sourceMode === "elements";
   const lines = [];
+
+  // 竖构图（含方形）：原图本身就是竖/方构图，无需扩图。严格遵循 Skill 排版叠字，
+  // 保留原图与原始环境，绝不做高概念/电影感背景替换（高概念仅用于横版扩图区域）。
+  if (isVertical) {
+    lines.push(
+      "NATIVE VERTICAL CANVAS (CRITICAL):",
+      "- The source photo is already vertical and fits this canvas. Do NOT outpaint, do NOT extend, and do NOT replace or rebuild the background.",
+      "- Preserve the ORIGINAL photo and its real environment exactly as shot. Keep the person and the real scene unchanged.",
+      "- Your ONLY job is to add the designed Chinese typography and decorations strictly following the assigned design-matrix style (the Skill style). This is an overlay/typography task, not a scene re-creation.",
+      "- ABSOLUTELY FORBIDDEN: cinematic high-concept scene replacement, neon cyberpunk backdrops, studio relighting, surreal dreamscapes, or any dramatic background swap. Keep it true to the original photo.",
+    );
+  }
 
   if (isWide && canOutpaint) {
     lines.push(
