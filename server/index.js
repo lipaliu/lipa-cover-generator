@@ -949,41 +949,49 @@ app.post("/api/generate", async (req, res) => {
     });
 
     let analysis = fallbackAnalysisWithColor;
-    const analysisPromise = openai && analysisImage
-      ? analyzeImage(openai, analysisImage, { title, subtitle, keywords: planKeywords }).catch((error) => {
-          console.warn("[Generate] Image analysis fallback:", error.message);
-          return null;
-        })
-      : Promise.resolve(null);
+
+    // ─── 快路径（默认开启）：FAST_DIRECT_MODE ───
+    // 直接用本地设计矩阵（已审美优选权重）+ Skill prompt 生图，完全跳过 gpt-4o 的
+    // 分析底图与规划方案两次文本调用。这是产品的核心链路：底图 + Skill 直接生图，
+    // 又快又稳，且不会被 gpt-4o 重写稀释 Skill 指令。
+    // 设为 0 才走 gpt-4o 编排（用于需要 AI 重写文案的高级场景）。
+    const fastDirect = process.env.FAST_DIRECT_MODE !== "0";
 
     // 先用本地兜底方案（基于设计矩阵），无需等待任何网络调用。
     let plans = fallbackPlans({ analysis, title, subtitle, count: totalCount, keywords: planKeywords });
 
-    // GPT-4o 规划在后台并行进行：先拿到分析结果（若有）再规划，跑出来就替换为更优方案。
-    const planningPromise = openai
-      ? analysisPromise
-          .then((analyzed) => {
-            if (analyzed) analysis = analyzed;
-            return planCovers(openai, {
-              analysis,
-              title,
-              subtitle,
-              keywords: planKeywords,
-              count: totalCount,
-              stylePreferences,
-            });
-          })
-          .catch((error) => {
-            console.warn("[Generate] Cover planning fallback:", error.message);
+    if (!fastDirect && openai) {
+      // 慢路径：gpt-4o 分析 + 规划（保留为可选）。
+      const analysisPromise = analysisImage
+        ? analyzeImage(openai, analysisImage, { title, subtitle, keywords: planKeywords }).catch((error) => {
+            console.warn("[Generate] Image analysis fallback:", error.message);
             return null;
           })
-      : Promise.resolve(null);
+        : Promise.resolve(null);
 
-    // 给规划一个上限等待（不超过文本超时），到点就用本地兜底方案直接开生，避免长时间卡顿。
-    const planWaitMs = Math.min(textRequestTimeoutMs(), 20000);
-    const planned = await withTimeout(planningPromise, planWaitMs, "方案生成").catch(() => null);
-    if (Array.isArray(planned) && planned.length > 0) {
-      plans = planned;
+      const planningPromise = analysisPromise
+        .then((analyzed) => {
+          if (analyzed) analysis = analyzed;
+          return planCovers(openai, {
+            analysis,
+            title,
+            subtitle,
+            keywords: planKeywords,
+            count: totalCount,
+            stylePreferences,
+          });
+        })
+        .catch((error) => {
+          console.warn("[Generate] Cover planning fallback:", error.message);
+          return null;
+        });
+
+      // 给规划一个上限等待（不超过文本超时），到点就用本地兜底方案直接开生。
+      const planWaitMs = Math.min(textRequestTimeoutMs(), 20000);
+      const planned = await withTimeout(planningPromise, planWaitMs, "方案生成").catch(() => null);
+      if (Array.isArray(planned) && planned.length > 0) {
+        plans = planned;
+      }
     }
 
     const jobs = expandRatioJobs(ratioGroups, plans);
