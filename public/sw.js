@@ -1,5 +1,11 @@
-const CACHE_NAME = "koc-v3";
-const ASSETS = ["/", "/manifest.json", "/icons/lipa-icon.png", "/samples/base-hiker.png"];
+const CACHE_NAME = "koc-v4";
+const ASSETS = [
+  "/",
+  "/manifest.json",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  "/samples/base-hiker.png",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));

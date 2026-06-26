@@ -129,15 +129,13 @@ export async function fetchCreditHistory(
 }
 
 // ─── Pricing constants (keep in sync with server/middleware.js) ───
-
-export const CREDITS_COST_MAP: Record<number, number> = {
-  1: 3,
-  2: 5,
-  4: 8,
-  10: 15,
-};
+// 阶梯计费：1=3, 2=5, 3-4=8, 5-7=12, 8-10=15
 
 export function getCreditsCost(count: number): number {
-  if (CREDITS_COST_MAP[count] !== undefined) return CREDITS_COST_MAP[count];
-  return Math.ceil(count * 1.5);
+  const n = Math.max(1, Math.min(10, Math.floor(Number(count) || 1)));
+  if (n === 1) return 3;
+  if (n === 2) return 5;
+  if (n <= 4) return 8;
+  if (n <= 7) return 12;
+  return 15;
 }

@@ -66,8 +66,8 @@ function timeoutSeconds(ms) {
 }
 
 function textRequestTimeoutMs() {
-  return envNumber(["OPENAI_TEXT_TIMEOUT_MS", "OPENAI_REQUEST_TIMEOUT_MS"], 45000, {
-    min: 10000,
+  return envNumber(["OPENAI_TEXT_TIMEOUT_MS", "OPENAI_REQUEST_TIMEOUT_MS"], 25000, {
+    min: 8000,
     max: 180000,
   });
 }
@@ -90,10 +90,10 @@ function imageJobTimeoutMs(engine) {
 
 function generationConcurrency(engine, totalCount) {
   const prefix = engine === "seedance" ? "SEEDANCE" : "IMAGE2";
-  const fallback = engine === "seedance" ? 1 : 2;
+  const fallback = engine === "seedance" ? 1 : 4;
   const limit = envNumber([`${prefix}_CONCURRENCY`, "GENERATION_CONCURRENCY"], fallback, {
     min: 1,
-    max: 4,
+    max: 8,
   });
   return Math.max(1, Math.min(totalCount, limit));
 }
@@ -879,47 +879,56 @@ app.post("/api/generate", async (req, res) => {
       dominant_color: stylePreferences?.imageDominantColor || fallbackAnalysis.dominant_color,
     };
 
+    // ─── 分析与规划并行执行，避免串行等待两次 GPT-4o 调用 ───
+    // 分析为“尽力而为”，不阻塞主流程；规划先用本地设计矩阵兜底，确保生图几乎立即开始。
     writeSse(res, {
       status: "analyzing",
       progress: 0,
       total: totalCount,
       engine,
-      message: `正在使用 ${engineLabels[engine]} 分析素材...`,
+      message: `正在准备方案并分析素材（${engineLabels[engine]}）...`,
     });
-    let analysis = fallbackAnalysisWithColor;
-    if (openai && analysisImage) {
-      try {
-        analysis = await analyzeImage(openai, analysisImage, { title, subtitle, keywords: planKeywords });
-      } catch (error) {
-        console.warn("[Generate] Image analysis fallback:", error.message);
-        writeSse(res, {
-          status: "analyzing",
-          progress: 0,
-          total: totalCount,
-          engine,
-          message: "素材分析超时，已使用本地色彩信息继续生成...",
-        });
-      }
-    }
-    writeSse(res, { status: "planning", progress: 0, total: totalCount, engine, analysis, message: "正在生成方案..." });
 
+    let analysis = fallbackAnalysisWithColor;
+    const analysisPromise = openai && analysisImage
+      ? analyzeImage(openai, analysisImage, { title, subtitle, keywords: planKeywords }).catch((error) => {
+          console.warn("[Generate] Image analysis fallback:", error.message);
+          return null;
+        })
+      : Promise.resolve(null);
+
+    // 先用本地兜底方案（基于设计矩阵），无需等待任何网络调用。
     let plans = fallbackPlans({ analysis, title, subtitle, count: totalCount, keywords: planKeywords });
-    if (openai) {
-      try {
-        plans = await planCovers(openai, { analysis, title, subtitle, keywords: planKeywords, count: totalCount, stylePreferences });
-      } catch (error) {
-        console.warn("[Generate] Cover planning fallback:", error.message);
-        writeSse(res, {
-          status: "planning",
-          progress: 0,
-          total: totalCount,
-          engine,
-          message: "方案生成超时，已使用内置封面方案继续生成...",
-        });
-      }
+
+    // GPT-4o 规划在后台并行进行：先拿到分析结果（若有）再规划，跑出来就替换为更优方案。
+    const planningPromise = openai
+      ? analysisPromise
+          .then((analyzed) => {
+            if (analyzed) analysis = analyzed;
+            return planCovers(openai, {
+              analysis,
+              title,
+              subtitle,
+              keywords: planKeywords,
+              count: totalCount,
+              stylePreferences,
+            });
+          })
+          .catch((error) => {
+            console.warn("[Generate] Cover planning fallback:", error.message);
+            return null;
+          })
+      : Promise.resolve(null);
+
+    // 给规划一个上限等待（不超过文本超时），到点就用本地兜底方案直接开生，避免长时间卡顿。
+    const planWaitMs = Math.min(textRequestTimeoutMs(), 20000);
+    const planned = await withTimeout(planningPromise, planWaitMs, "方案生成").catch(() => null);
+    if (Array.isArray(planned) && planned.length > 0) {
+      plans = planned;
     }
+
     const jobs = expandRatioJobs(ratioGroups, plans);
-    writeSse(res, { status: "planned", progress: 0, total: totalCount, engine, plans, message: "方案已生成" });
+    writeSse(res, { status: "planned", progress: 0, total: totalCount, engine, plans, analysis, message: "方案已生成" });
 
     let completed = 0;
     const concurrency = generationConcurrency(engine, totalCount);

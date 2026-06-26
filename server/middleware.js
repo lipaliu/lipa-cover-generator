@@ -93,16 +93,19 @@ export function requireCredits(req, res, next) {
 }
 
 /**
- * Calculate credits cost based on image count.
+ * Calculate credits cost based on image count (阶梯计费).
  *
- * 1 张 = 3 积分
- * 2 张 = 5 积分
- * 4 张 = 8 积分
- * 10 张 = 15 积分
- * 其他 = 按 1.5 积分/张 向上取整
+ * 1 张   = 3 积分
+ * 2 张   = 5 积分
+ * 3-4 张 = 8 积分
+ * 5-7 张 = 12 积分
+ * 8-10 张 = 15 积分
  */
 export function getCreditsCost(imageCount) {
-  const costMap = { 1: 3, 2: 5, 4: 8, 10: 15 };
-  if (costMap[imageCount] !== undefined) return costMap[imageCount];
-  return Math.ceil(imageCount * 1.5);
+  const count = Math.max(1, Math.min(10, Math.floor(Number(imageCount) || 1)));
+  if (count === 1) return 3;
+  if (count === 2) return 5;
+  if (count <= 4) return 8;
+  if (count <= 7) return 12;
+  return 15;
 }
