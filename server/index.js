@@ -281,23 +281,27 @@ function normalizeSourceMode(value) {
   return "base";
 }
 
-function normalizeRatios(ratios, count) {
+// 总张数安全上限（防止滥用 / 资源耗尽）：5 种比例 × 10 张 = 50。
+const MAX_TOTAL_COUNT = envNumber("MAX_TOTAL_COUNT", 50, { min: 1, max: 200 });
+
+// 每个比例各自独立 1-10 张，互不占用名额；总数为各比例之和，受 MAX_TOTAL_COUNT 封顶。
+function normalizeRatios(ratios) {
   const requestedRatios = Array.isArray(ratios) ? ratios : [];
   const normalized = [];
-  let remaining = count;
+  let total = 0;
 
   for (const item of requestedRatios) {
     const ratio = String(item?.ratio || "").trim();
-    if (!supportedRatios.has(ratio) || remaining <= 0) continue;
-    const itemCount = normalizeCount(item?.count);
-    const take = Math.min(itemCount, remaining);
+    if (!supportedRatios.has(ratio) || total >= MAX_TOTAL_COUNT) continue;
+    let take = normalizeCount(item?.count);
+    take = Math.min(take, MAX_TOTAL_COUNT - total);
     if (take > 0) {
       normalized.push({ ratio, count: take });
-      remaining -= take;
+      total += take;
     }
   }
 
-  return normalized.length > 0 ? normalized : [{ ratio: "3:4", count }];
+  return normalized.length > 0 ? normalized : [{ ratio: "3:4", count: 4 }];
 }
 
 function expandRatioJobs(ratios, plans) {
@@ -820,8 +824,8 @@ app.post("/api/generate", async (req, res) => {
     if (!req.user) {
       return res.status(401).json({ error: "请先登录", code: "AUTH_REQUIRED" });
     }
-    const requestedCount = Number(req.body?.count || req.body?.ratios?.reduce?.((s, r) => s + (r.count || 0), 0) || 4);
-    const creditsCost = getCreditsCost(Math.min(10, Math.max(1, requestedCount)));
+    const requestedCount = Number(req.body?.ratios?.reduce?.((s, r) => s + (r.count || 0), 0) || req.body?.count || 4);
+    const creditsCost = getCreditsCost(Math.max(1, requestedCount));
     if (req.user.role !== "admin" && req.user.credits < creditsCost) {
       return res.status(402).json({
         error: "积分不足",
@@ -855,9 +859,13 @@ app.post("/api/generate", async (req, res) => {
     stylePreferences = null,
   } = req.body || {};
   const sourceMode = normalizeSourceMode(requestedSourceMode);
-  const count = normalizeCount(requestedCount);
   const engine = resolveEngine(normalizeEngine(requestedEngine));
-  const ratioGroups = normalizeRatios(requestedRatios, count);
+  // 每个比例独立计数，总数为各比例之和（不再受单个 count 限制）。
+  let ratioGroups = normalizeRatios(requestedRatios);
+  // 兼容：若未传 ratios 但传了 count，退回单一默认比例。
+  if (!Array.isArray(requestedRatios) || requestedRatios.length === 0) {
+    ratioGroups = [{ ratio: "3:4", count: normalizeCount(requestedCount) }];
+  }
   const totalCount = ratioGroups.reduce((sum, item) => sum + item.count, 0);
 
   try {
@@ -870,6 +878,8 @@ app.post("/api/generate", async (req, res) => {
     const openai = process.env.OPENAI_API_KEY
       ? new OpenAI({
           apiKey: process.env.OPENAI_API_KEY,
+          // 显式指定 baseURL，避免被外部 OPENAI_BASE_URL 环境变量意外覆盖；默认官方。
+          baseURL: process.env.OPENAI_API_BASE_URL || "https://api.openai.com/v1",
           timeout: envNumber("OPENAI_REQUEST_TIMEOUT_MS", 120000, { min: 15000, max: 600000 }),
           maxRetries: 0,
         })

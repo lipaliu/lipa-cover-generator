@@ -205,7 +205,8 @@ export function App() {
   const [history, setHistory] = useState<HistoryBatch[]>([]);
 
   const totalCount = Object.values(ratioSelection).reduce((sum, v) => sum + v, 0);
-  const requestedCount = Math.min(10, totalCount);
+  // 每个比例各自最多 10 张，总数为各比例之和（不再被截断到 10）。
+  const requestedCount = totalCount;
   const selectedRatios = Object.entries(ratioSelection).filter(([, v]) => v > 0) as [AspectRatio, number][];
   const isGenerating = runState === "analyzing" || runState === "planning" || runState === "generating";
   const completedCount = results.filter((r) => r.image_url || r.error).length;
@@ -231,19 +232,17 @@ export function App() {
   const toggleRatio = (id: AspectRatio) => {
     setRatioSelection((prev) => ({
       ...prev,
-      [id]: prev[id] > 0 ? 0 : Object.values(prev).reduce((sum, v) => sum + v, 0) >= 10 ? 0 : 1,
+      // 每个比例独立：选中时默认 1 张，不再受其他比例总数限制。
+      [id]: prev[id] > 0 ? 0 : 1,
     }));
   };
 
   const adjustRatioCount = (id: AspectRatio, delta: number) => {
-    setRatioSelection((prev) => {
-      const currentTotal = Object.values(prev).reduce((sum, v) => sum + v, 0);
-      if (delta > 0 && currentTotal >= 10) return prev;
-      return {
-        ...prev,
-        [id]: Math.max(0, Math.min(10, prev[id] + delta)),
-      };
-    });
+    setRatioSelection((prev) => ({
+      ...prev,
+      // 每个比例各自 0-10 张，互不影响。
+      [id]: Math.max(0, Math.min(10, prev[id] + delta)),
+    }));
   };
 
   /* ─── File Handling ─── */

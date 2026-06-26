@@ -131,11 +131,19 @@ export async function fetchCreditHistory(
 // ─── Pricing constants (keep in sync with server/middleware.js) ───
 // 阶梯计费：1=3, 2=5, 3-4=8, 5-7=12, 8-10=15
 
-export function getCreditsCost(count: number): number {
-  const n = Math.max(1, Math.min(10, Math.floor(Number(count) || 1)));
+function tierCost(n: number): number {
+  if (n <= 0) return 0;
   if (n === 1) return 3;
   if (n === 2) return 5;
   if (n <= 4) return 8;
   if (n <= 7) return 12;
   return 15;
+}
+
+export function getCreditsCost(count: number): number {
+  const n = Math.max(1, Math.floor(Number(count) || 1));
+  // 1-10 阶梯；超过 10 张按每满 10 张叠加 15 分 + 余数阶梯。
+  const fullTens = Math.floor(n / 10);
+  const remainder = n % 10;
+  return fullTens * 15 + tierCost(remainder);
 }
