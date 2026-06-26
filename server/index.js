@@ -458,12 +458,14 @@ function buildLayoutInstruction(ratio, sourceMode) {
 
   if (isWide && canOutpaint) {
     lines.push(
-      "WIDE CANVAS / SCENE EXTENSION (CRITICAL):",
-      "- The source photo is vertical. To fill this wider canvas, you MUST realistically EXTEND (outpaint) the original scene outward.",
-      "- Analyze the real environment in the photo (e.g. floor-to-ceiling windows, city skyline, indoor light, plants, desk) and continue it naturally into the new side areas, matching perspective, lighting direction, color temperature, depth of field and texture.",
-      "- The result must look like one single photo originally shot in this aspect ratio, NOT a vertical photo with flat color bars, blurred padding, gradient blocks, mirrored copies, or pasted panels on the sides.",
-      "- Absolutely DO NOT add solid color blocks, plain colored side panels, or simple blurred background fill to complete the ratio. Generate believable extended environment instead.",
-      "- Keep the person/subject and their proportions natural; do not stretch or distort the original subject.",
+      "WIDE CANVAS / DRAMATIC HIGH-CONCEPT SCENE REPLACEMENT (CRITICAL):",
+      "- The source photo is vertical. To fill this wider canvas, do NOT just continue the original room. Instead, BOLDLY REPLACE and rebuild the entire background into a dramatic, high-concept, cinematic environment while keeping ONLY the person.",
+      "- You are encouraged to fully reimagine the setting. Strong target directions (pick one that fits the topic/mood): glowing neon cyberpunk atmosphere, moody dark photography studio with a single dramatic key light, sweeping nighttime city skyline with bokeh lights, surreal high-concept dreamscape, premium minimalist gradient backdrop with volumetric light beams, abstract architectural space, or epic cinematic movie-still scene.",
+      "- Lean into drama: strong directional/rim lighting, deep shadows, rich cinematic color grading (neon teal-magenta, moody blue hour, golden cinematic glow, or high-contrast monochrome), atmospheric haze, lens bokeh, and an expensive fashion-magazine / movie-poster look.",
+      "- It is OK and desired for the new background to look very different from the original room \u2014 prioritize a striking, premium, art-directed visual over literal fidelity to the original environment.",
+      "- CRITICAL: preserve the PERSON exactly \u2014 same face, identity, hairstyle, clothing, pose and proportions \u2014 and relight the person convincingly so they blend naturally into the new dramatic scene. Do not stretch, distort, duplicate or AI-fake the person.",
+      "- The final result must look like one cohesive, intentional, professionally shot/composited wide cinematic image \u2014 NEVER a vertical photo with flat color bars, blurred padding, gradient blocks, mirrored copies, pasted side panels, or a cheap stretched background.",
+      "- Absolutely FORBIDDEN: solid color blocks, plain colored side panels, simple gaussian-blur fill, or low-effort duplicated scenery to complete the ratio.",
     );
   }
 
