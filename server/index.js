@@ -958,7 +958,12 @@ app.post("/api/generate", async (req, res) => {
     const fastDirect = process.env.FAST_DIRECT_MODE !== "0";
 
     // 先用本地兜底方案（基于设计矩阵），无需等待任何网络调用。
-    let plans = fallbackPlans({ analysis, title, subtitle, count: totalCount, keywords: planKeywords });
+    // 按每个比例分别生成 plans，竖版启用安全矩阵过滤器。
+    let plans = [];
+    for (const group of ratioGroups) {
+      const groupPlans = fallbackPlans({ analysis, title, subtitle, count: group.count, keywords: planKeywords, ratio: group.ratio });
+      plans.push(...groupPlans);
+    }
 
     if (!fastDirect && openai) {
       // 慢路径：gpt-4o 分析 + 规划（保留为可选）。

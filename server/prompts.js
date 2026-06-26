@@ -241,13 +241,19 @@ Rules:
 `;
 }
 
-export function fallbackPlans({ analysis, title, subtitle, count, keywords }) {
-  // 使用设计矩阵生成多样化的 fallback 方案
-  const combinations = generateCombinations(count, keywords);
+export function fallbackPlans({ analysis, title, subtitle, count, keywords, ratio = "" }) {
+  // 使用设计矩阵生成多样化的 fallback 方案（竖版启用安全矩阵过滤器）
+  const combinations = generateCombinations(count, keywords, ratio);
+  const isVertical = ["3:4", "9:16", "1:1"].includes(ratio);
 
   return combinations.map((combo, index) => {
     const label = combinationToLabel(combo);
     const directive = combinationToDesignDirective(combo);
+
+    // 竖版追加像素级保护指令
+    const verticalPixelRule = isVertical
+      ? `\n- PIXEL PRESERVATION (CRITICAL): The ONLY pixels you may change are those directly under the text characters and minimal decorations. ALL other pixels MUST remain byte-for-byte identical to the source photo. Do NOT apply any color grading, filters, overlays, lighting changes, vignettes, grain, or atmosphere effects to the background.`
+      : "";
 
     return {
       id: index + 1,
@@ -287,8 +293,7 @@ RULES:
 - Text must feel integrated into the photo, not floating.
 - Main title huge and readable.
 - Preserve original photo exactly.
-- Only add typography and decorations.
-- Use vertical 1024x1536 Xiaohongshu composition.
+- Only add typography and decorations.${verticalPixelRule}
 - STRICTLY follow all 7 dimensions of the assigned design matrix combination.`,
     };
   });

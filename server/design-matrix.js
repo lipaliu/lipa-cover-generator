@@ -294,6 +294,37 @@ function getDimensionOptions(dimension) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 竖版安全矩阵过滤器
+// 竖版（3:4 / 9:16 / 1:1）必须保留原图不调色，因此禁止会诱发整体调色的维度选项。
+// ─────────────────────────────────────────────────────────────────────────────
+const VERTICAL_RATIOS = new Set(["3:4", "9:16", "1:1"]);
+
+// 竖版 G 维度白名单：只允许不会诱发调色的温和氛围
+const VERTICAL_MOOD_WHITELIST = new Set(["G1", "G2", "G5", "G8"]);
+
+// 竖版 D 维度黑名单：会诱发整体调色的配色方案
+const VERTICAL_COLOR_BLACKLIST = new Set(["D5", "D2"]);
+
+// 竖版 E 维度黑名单：会诱发重度视觉干扰的装饰
+const VERTICAL_DECO_BLACKLIST = new Set(["E8", "E18", "E19"]);
+
+/**
+ * 应用竖版安全过滤：从候选池中移除会诱发调色的选项
+ */
+function applyVerticalSafetyFilter(list, dimension) {
+  if (dimension === "G") {
+    return list.filter((x) => VERTICAL_MOOD_WHITELIST.has(x.id));
+  }
+  if (dimension === "D") {
+    return list.filter((x) => !VERTICAL_COLOR_BLACKLIST.has(x.id));
+  }
+  if (dimension === "E") {
+    return list.filter((x) => !VERTICAL_DECO_BLACKLIST.has(x.id));
+  }
+  return list;
+}
+
 /**
  * 为一批封面生成不重复的设计矩阵组合（审美加权版）
  *
@@ -301,13 +332,16 @@ function getDimensionOptions(dimension) {
  * - C / E / F / G 维度：使用加权随机，偏好高级项
  * - weight=0 的选项（如像素体 A9 / 蜡笔体 A17 / 漫画体 A20 / 胶带 C15 E7 /
  *   手绘涂鸦 E16）默认不会出现，除非被用户关键词显式约束选中。
+ * - 竖版（3:4 / 9:16 / 1:1）启用安全矩阵过滤器：禁止会诱发调色的 G/D/E 选项。
  *
  * @param {number} count - 需要生成的封面数量
  * @param {string} keywords - 用户关键词（用于约束维度）
+ * @param {string} [ratio] - 目标比例（可选），竖版时启用安全过滤
  * @returns {Array<Object>} 组合数组，每个元素包含各维度的选择
  */
-export function generateCombinations(count, keywords = "") {
+export function generateCombinations(count, keywords = "", ratio = "") {
   const constraints = resolveConstraints(keywords);
+  const isVertical = VERTICAL_RATIOS.has(ratio);
   const combinations = [];
   const usedCombinationKeys = new Set();
 
@@ -316,15 +350,21 @@ export function generateCombinations(count, keywords = "") {
   const filterByConstraint = (list, dim) =>
     constraints[dim] ? list.filter((s) => constraints[dim].includes(s.id)) : list;
 
+  // 竖版安全过滤（在关键词约束之后再过滤，确保安全规则优先级最高）
+  const safeFilter = (list, dim) => {
+    const constrained = filterByConstraint(list, dim);
+    return isVertical ? applyVerticalSafetyFilter(constrained, dim) : constrained;
+  };
+
   const shuffledA = weightedShuffle(filterByConstraint(fontStyles, "A"));
   const shuffledB = weightedShuffle(filterByConstraint(textLayouts, "B"));
-  const shuffledD = weightedShuffle(filterByConstraint(colorSchemes, "D"));
+  const shuffledD = weightedShuffle(safeFilter(colorSchemes, "D"));
 
   // C / E / F / G 维度的候选池（受约束时取子集），加权随机选取
   const poolC = filterByConstraint(textEffects, "C");
-  const poolE = filterByConstraint(decorations, "E");
+  const poolE = safeFilter(decorations, "E");
   const poolF = filterByConstraint(compositions, "F");
-  const poolG = filterByConstraint(moods, "G");
+  const poolG = safeFilter(moods, "G");
 
   let aIndex = 0;
   let bIndex = 0;
