@@ -22,6 +22,7 @@ const __dirname = dirname(__filename);
 const execFileAsync = promisify(execFile);
 const app = express();
 const port = Number(process.env.PORT || 8787);
+const exportDir = join(__dirname, "..", "exports");
 const serveDist = process.argv.includes("--serve-dist");
 const engineLabels = {
   image2: "Image2（OpenAI GPT-Image-2）",
@@ -669,17 +670,36 @@ app.post("/api/export-cover", async (req, res) => {
 
     const safeName = sanitizeExportFilename(filename);
     const buffer = await imageUrlToBuffer(imageUrl);
-    const exportDir = join(__dirname, "..", "exports");
     await mkdir(exportDir, { recursive: true });
     const filePath = join(exportDir, safeName);
     await writeFile(filePath, buffer);
-    res.json({ ok: true, filename: safeName, path: filePath });
+    res.json({
+      ok: true,
+      filename: safeName,
+      path: filePath,
+      downloadUrl: `/api/download/${encodeURIComponent(safeName)}`,
+    });
   } catch (error) {
     res.status(500).json({
       ok: false,
       message: error instanceof Error ? error.message : "Export failed.",
     });
   }
+});
+
+app.get("/api/download/:filename", (req, res) => {
+  const safeName = sanitizeExportFilename(req.params.filename);
+  const filePath = join(exportDir, safeName);
+  if (!existsSync(filePath)) {
+    res.status(404).send("File not found.");
+    return;
+  }
+
+  res.download(filePath, safeName, (error) => {
+    if (error && !res.headersSent) {
+      res.status(500).send("Download failed.");
+    }
+  });
 });
 
 app.post("/api/generate", async (req, res) => {

@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { deleteHistoryBatch, getHistory, saveHistoryBatch } from "./lib/history";
-import { downloadImageUrl, fileToDataUrl, formatTime, urlToDataUrl } from "./lib/image";
+import { downloadImageUrl, exportImageUrl, fileToDataUrl, formatTime, urlToDataUrl } from "./lib/image";
 import type { CoverResult, GenerateEvent, HistoryBatch, ImageEngine } from "./lib/types";
 import { LoginModal } from "./components/LoginModal";
 import { CreditsBadge } from "./components/CreditsBadge";
@@ -193,6 +193,12 @@ export function App() {
   const [total, setTotal] = useState(4);
   const [message, setMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
+  const [downloadingCoverId, setDownloadingCoverId] = useState<number | null>(null);
+  const [downloadStatus, setDownloadStatus] = useState<{
+    message: string;
+    filename?: string;
+    downloadUrl?: string;
+  } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   // History
@@ -409,9 +415,30 @@ export function App() {
     setRunState("idle");
   };
 
-  const downloadCover = (cover: CoverResult) => {
+  const downloadCover = async (cover: CoverResult) => {
     if (!cover.image_url) return;
-    downloadImageUrl(cover.image_url, `lipa-cover-${String(cover.id).padStart(2, "0")}.png`);
+    const filename = `lipa-cover-${String(cover.id).padStart(2, "0")}.png`;
+    setDownloadingCoverId(cover.id);
+    setDownloadStatus(null);
+    try {
+      const exported = await exportImageUrl(cover.image_url, filename);
+      downloadImageUrl(exported.downloadUrl, exported.filename);
+      setDownloadStatus({
+        filename: exported.filename,
+        downloadUrl: exported.downloadUrl,
+        message: `已导出 ${exported.filename}。如果 Codex 没弹下载，请点右侧链接，或到项目 exports 文件夹查看。`,
+      });
+    } catch (error) {
+      downloadImageUrl(cover.image_url, filename);
+      setDownloadStatus({
+        filename,
+        message: error instanceof Error
+          ? `服务端导出失败：${error.message}。已尝试浏览器直接下载。`
+          : "服务端导出失败，已尝试浏览器直接下载。",
+      });
+    } finally {
+      setDownloadingCoverId(null);
+    }
   };
 
   const openBatch = (batch: HistoryBatch) => {
@@ -917,7 +944,7 @@ export function App() {
               <span className="step-number">04</span>
               <div>
                 <h2>{runState === "done" ? "创作完成" : isGenerating ? "正在创作..." : "开始生成"}</h2>
-                <p>{runState === "done" ? "点击封面即可下载" : isGenerating ? message : "一切就绪，点击下方按钮开始 AI 创作"}</p>
+                <p>{runState === "done" ? "点击封面即可导出下载" : isGenerating ? message : "一切就绪，点击下方按钮开始 AI 创作"}</p>
               </div>
             </div>
 
@@ -938,14 +965,40 @@ export function App() {
               <div className="gen-error"><p>{errorMessage}</p></div>
             )}
 
+            {downloadStatus && (
+              <div className="download-note">
+                <Download size={16} />
+                <span>{downloadStatus.message}</span>
+                {downloadStatus.downloadUrl && (
+                  <a href={downloadStatus.downloadUrl} download={downloadStatus.filename}>
+                    打开下载
+                  </a>
+                )}
+              </div>
+            )}
+
             {results.length > 0 && (
               <div className="results-grid">
                 {results.map((cover) => (
                   <article key={cover.id} className={cn("result-card", !cover.image_url && !cover.error && "is-loading")}>
                     {cover.image_url ? (
-                      <button type="button" className="result-image" onClick={() => downloadCover(cover)}>
+                      <button
+                        type="button"
+                        className="result-image"
+                        disabled={downloadingCoverId === cover.id}
+                        onClick={() => { void downloadCover(cover); }}
+                      >
                         <img src={cover.image_url} alt={cover.label} />
-                        <span className="result-download"><Download size={20} /></span>
+                        <span className="result-download">
+                          {downloadingCoverId === cover.id ? (
+                            <>
+                              <LoaderCircle className="spin" size={20} />
+                              <small>导出中</small>
+                            </>
+                          ) : (
+                            <Download size={20} />
+                          )}
+                        </span>
                       </button>
                     ) : cover.error ? (
                       <div className="result-error"><p>{cover.error}</p></div>
