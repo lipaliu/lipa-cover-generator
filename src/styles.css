@@ -88,7 +88,7 @@ input, select, textarea { color: inherit; }
 /* ─── Header ─── */
 .site-header {
   width: 100%;
-  max-width: 1200px;
+  max-width: 1600px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -180,7 +180,7 @@ input, select, textarea { color: inherit; }
 /* ─── Hero ─── */
 .hero {
   width: 100%;
-  max-width: 800px;
+  max-width: 960px;
   text-align: center;
   padding: 8px 0 8px;
 }
@@ -315,13 +315,13 @@ input, select, textarea { color: inherit; }
 /* ─── Step Content ─── */
 .step-content {
   width: 100%;
-  max-width: 680px;
+  max-width: 960px;
   min-height: 400px;
   padding: 0 0 32px;
 }
 /* 结果展示时放宽到接近整页，方便一排多个缩略图对比 */
 .step-content.is-wide {
-  max-width: 1200px;
+  max-width: 1600px;
 }
 
 .step-panel {
@@ -1305,7 +1305,7 @@ input, select, textarea { color: inherit; }
 /* ─── Step Navigation ─── */
 .step-nav {
   width: 100%;
-  max-width: 680px;
+  max-width: 960px;
   display: flex;
   align-items: center;
   justify-content: space-between;
