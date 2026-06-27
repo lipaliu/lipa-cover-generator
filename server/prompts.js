@@ -317,6 +317,7 @@ RULES:
 - Text must feel integrated into the photo, not floating.
 - Main title huge and readable.
 - PLACEMENT: put text in the clearest EMPTY space (top band / bottom band / side away from the subject). NEVER cover the person's face or crowd the head; if the layout would overlap the face, shift the text into open space.
+- The title is just TEXT to typeset, NOT a design brief. Do NOT read into or react to what the words MEAN — titles are often clickbait and are an unreliable guide to design. The visual style and EVERY decoration come ONLY from the assigned aesthetic combination, and would be exactly the same regardless of the title's topic.
 - Preserve original photo exactly.
 - Only add typography and decorations.${verticalPixelRule}
 - STRICTLY follow all 7 dimensions of the assigned design matrix combination.`,
