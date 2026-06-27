@@ -583,9 +583,9 @@ export function App() {
       {/* Header */}
       <header className="site-header">
         <div className="header-brand">
-          <span className="brand-mark">B</span>
+          <span className="brand-mark">巴</span>
           <span className="brand-text">
-            <strong>BAKABAKA</strong>
+            <strong>巴卡巴卡 BAKABAKA</strong>
             <small>自媒体封面之王 · King of Cover</small>
           </span>
         </div>
@@ -674,8 +674,9 @@ export function App() {
 
       {/* Hero Section */}
       <section className="hero">
-        <span className="hero-eyebrow">BAKABAKA · KING OF COVER</span>
-        <h1 className="hero-title">自媒体封面之王</h1>
+        <span className="hero-eyebrow">BAKABAKA</span>
+        <h1 className="hero-title">巴卡巴卡</h1>
+        <p className="hero-slogan">自媒体封面之王 · King of Cover</p>
         <p className="hero-subtitle">上传一张底图，AI 按爆款审美自动排版花字、多引擎多风格一次出图，一眼挑出最吸睛的封面。</p>
       </section>
 

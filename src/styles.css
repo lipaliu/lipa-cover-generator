@@ -213,15 +213,20 @@ input, select, textarea { color: inherit; }
 
 .hero-title {
   font-family: var(--font-display);
-  font-size: clamp(28px, 5vw, 48px);
-  font-weight: 600;
-  letter-spacing: -0.02em;
+  font-size: clamp(36px, 6vw, 64px);
+  font-weight: 700;
+  letter-spacing: 0.02em;
   line-height: 1.1;
-  margin: 0 0 8px;
-  background: linear-gradient(135deg, #f5f5f7 0%, rgba(255,255,255,0.7) 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  margin: 0 0 4px;
+  color: #ffffff;
+}
+
+.hero-slogan {
+  font-size: clamp(15px, 2vw, 19px);
+  font-weight: 600;
+  color: var(--ink-primary);
+  margin: 6px 0 12px;
+  letter-spacing: 0.02em;
 }
 
 .hero-subtitle {
