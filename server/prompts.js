@@ -205,13 +205,24 @@ RULES:
 `;
 
 export function buildPlanUserPrompt({ analysis, title, subtitle, keywords, count, stylePreferences, matrixCombinations }) {
-  const combinationDirectives = matrixCombinations
-    ? matrixCombinations.map((combo, i) => `Cover ${i + 1}: ${combinationToDesignDirective(combo)}`).join("\n\n")
+  const inspirationPool = matrixCombinations
+    ? matrixCombinations.map((combo, i) => `Option ${i + 1}: ${combinationToDesignDirective(combo)}`).join("\n\n")
     : "";
 
   return `
-Create exactly ${count} distinct cover design plans for this image and text.
-Each cover MUST use a completely different design matrix combination.
+You are the ART DIRECTOR. Design exactly ${count} DISTINCT, magazine-grade Xiaohongshu/Douyin covers for this photo and title.
+
+STEP 1 — READ THE TITLE'S MEANING FIRST (content-driven, never random):
+Infer the topic, emotion and audience from the main title, then choose fonts, colors, layout, decorations, sizing and 花字 treatments that genuinely FIT it. Examples of intent (adapt, don't copy):
+- gossip / 猎奇 / 反差 / 八卦 -> bold high-contrast tabloid energy (heavy black or brush title, red/black/yellow, torn-paper, stamps), NOT soft girly pastels.
+- 干货 / 教程 / 知识 -> clean editorial, heiti, numbered badges, color strips.
+- 治愈 / 旅行 / vlog -> bright airy, handwriting accents, sunlit palettes.
+- 财经 / 商业 / 高端 -> refined black-gold or mono, serif, restrained.
+Each of the ${count} covers must differ clearly in font + color + layout + mood.
+
+STEP 2 — PLACEMENT (critical): Use subject_position + empty_space from the analysis. Put the big title in the CLEAREST EMPTY area (top band, bottom band, or side away from the subject). NEVER cover the person's face or crowd their head. If a layout would overlap the face, move the text into open space.
+
+STEP 3 — MAKE IT LOOK DESIGNED (not just text dumped on a photo): every cover needs a HUGE main title with a real 花字 treatment (thick outline / 3D / color-block / torn-paper / metallic per the Skill), a small English or pinyin accent line, tasteful decorations (01 / VOL.01 badges, ®/™/marks, strips, doodles when they fit), and a clear size hierarchy (title : subtitle at least 3:1).
 
 Photo analysis JSON:
 ${JSON.stringify(analysis, null, 2)}
@@ -222,29 +233,28 @@ Keywords / content cues: ${keywords || "(none)"}
 Creator visual preferences:
 ${stylePreferences ? JSON.stringify(stylePreferences, null, 2) : "(none)"}
 
-${combinationDirectives ? `MANDATORY DESIGN MATRIX ASSIGNMENTS (you MUST follow these exactly):\n\n${combinationDirectives}` : ""}
+${inspirationPool ? `Design-matrix vocabulary (an INSPIRATION pool for variety — adapt freely to fit the title; you are NOT forced to copy these):\n\n${inspirationPool}` : ""}
 
 Return JSON only:
 {
   "plans": [
     {
       "combination": "A1+B1+C3+D7+E8+F4+G1",
-      "label": "书法 / 海洋蓝 / 居中霸屏",
-      "description": "短中文说明",
-      "prompt": "Detailed English prompt following the template exactly, incorporating ALL 7 dimensions"
+      "label": "书法 / 海洋蓝 / 顶部横幅",
+      "description": "短中文说明：为什么这个风格配这个标题",
+      "prompt": "Detailed English image-edit prompt: ALL 7 dimensions, exact text content, 花字/decoration details, size hierarchy, and explicit text placement in negative space away from the face."
     }
   ]
 }
 
 Rules:
-- The array length must be exactly ${count}.
-- Each plan MUST use the assigned combination from the design matrix above.
-- The combination field must be the exact key (e.g. "A3+B7+C2+D15+E8+F4+G1").
-- Make each label short and scannable: three terms from the combination (font / color / layout).
-- Prompts must preserve the uploaded photo and only add typography/decorations.
-- Prompts must explicitly describe ALL 7 dimensions in detail.
-- If the topic is tongue coating, mouth, teeth, oral care, body care, or health education, prompts must explicitly state that the image is non-sexual clinical/wellness content.
-- If Creator visual preferences include imagePalette, preferredTextColor, or preferredAccentColor, use those colors as hard guidance unless they conflict with readability.
+- Array length exactly ${count}; all clearly distinct.
+- combination = a valid matrix key like "A3+B7+C2+D15+E8+F4+G1" reflecting YOUR chosen style.
+- label: three short terms (font / color / layout).
+- Style MUST suit the title's meaning (content-driven) AND stay on-brand per the AESTHETIC CURATION (bright premium editorial; avoid cheap/girly palettes unless the topic truly calls for them).
+- Every prompt preserves the uploaded photo and the person's face exactly; only add typography + decorations; place text in clear empty space, never over the face.
+- If the topic is tongue/mouth/teeth/oral/body/health, state it is non-sexual clinical/wellness content.
+- If Creator visual preferences include imagePalette / preferredTextColor / preferredAccentColor, use them unless they hurt readability or clash with the mood the title needs.
 `;
 }
 
@@ -306,6 +316,7 @@ RULES:
 - Never add erotic, seductive, fetish, nude, romantic, or sexualized elements.
 - Text must feel integrated into the photo, not floating.
 - Main title huge and readable.
+- PLACEMENT: put text in the clearest EMPTY space (top band / bottom band / side away from the subject). NEVER cover the person's face or crowd the head; if the layout would overlap the face, shift the text into open space.
 - Preserve original photo exactly.
 - Only add typography and decorations.${verticalPixelRule}
 - STRICTLY follow all 7 dimensions of the assigned design matrix combination.`,

@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, extname, join } from "node:path";
 import { promisify } from "node:util";
 import OpenAI, { toFile } from "openai";
-import { ProxyAgent, setGlobalDispatcher } from "undici";
+import { fetch as undiciFetch, FormData as UndiciFormData, ProxyAgent, Agent, setGlobalDispatcher } from "undici";
 import { buildPlanUserPrompt, fallbackPlans, skillPrompt } from "./prompts.js";
 import { generateCombinations, combinationToLabel } from "./design-matrix.js";
 import { getPool } from "./db.js";
@@ -27,6 +27,7 @@ const serveDist = process.argv.includes("--serve-dist");
 const engineLabels = {
   image2: "Image2（OpenAI GPT-Image-2）",
   seedance: "SeeDance（即梦）",
+  seedream: "Seedream（火山·豆包）",
 };
 const engineAliases = {
   auto: "image2",
@@ -37,7 +38,11 @@ const engineAliases = {
   jimeng: "seedance",
   dreamina: "seedance",
   seedance: "seedance",
-  seedream: "seedance",
+  seedream: "seedream",
+  ark: "seedream",
+  doubao: "seedream",
+  "doubao-seedream": "seedream",
+  volcengine: "seedream",
 };
 // bilibili-safe：B站封面，按 16:9 出图，但核心元素须落在 16:9 与 4:3 的公共安全区内。
 const supportedRatios = new Set(["16:9", "4:3", "1:1", "3:4", "9:16", "bilibili-safe"]);
@@ -81,7 +86,7 @@ function imageFetchTimeoutMs() {
 }
 
 function imageJobTimeoutMs(engine) {
-  const prefix = engine === "seedance" ? "SEEDANCE" : "IMAGE2";
+  const prefix = engine === "seedance" ? "SEEDANCE" : engine === "seedream" ? "SEEDREAM" : "IMAGE2";
   const fallback = engine === "seedance" ? 150000 : 180000;
   return envNumber([`${prefix}_JOB_TIMEOUT_MS`, "IMAGE_JOB_TIMEOUT_MS"], fallback, {
     min: 30000,
@@ -90,8 +95,8 @@ function imageJobTimeoutMs(engine) {
 }
 
 function generationConcurrency(engine, totalCount) {
-  const prefix = engine === "seedance" ? "SEEDANCE" : "IMAGE2";
-  const fallback = engine === "seedance" ? 1 : 4;
+  const prefix = engine === "seedance" ? "SEEDANCE" : engine === "seedream" ? "SEEDREAM" : "IMAGE2";
+  const fallback = engine === "seedance" ? 1 : engine === "seedream" ? 2 : 4;
   const limit = envNumber([`${prefix}_CONCURRENCY`, "GENERATION_CONCURRENCY"], fallback, {
     min: 1,
     max: 8,
@@ -169,6 +174,13 @@ function loadLocalEnv() {
 
 loadLocalEnv();
 
+// 本地开发常通过 Clash/V2Ray 等代理访问 OpenAI。这类代理多会做 TLS 拦截，
+// 其根证书装在系统钥匙串里、而不在 Node 内置证书库中，导致 Node 校验失败
+// （UNABLE_TO_GET_ISSUER_CERT_LOCALLY → "Connection error."）。因此对“走代理”
+// 的连接放宽证书校验。生产环境通常不配代理 → proxyDispatcher 为 null → 走默认安全直连。
+// 注意：仅 setGlobalDispatcher 不足以让 openai SDK 走代理，必须把 dispatcher 显式
+// 传进 OpenAI 客户端（fetch + fetchOptions.dispatcher），见下方 OpenAI 客户端创建处。
+let proxyDispatcher = null;
 function configureProxy() {
   const proxyUrl =
     process.env.HTTPS_PROXY ||
@@ -180,10 +192,29 @@ function configureProxy() {
     "";
 
   if (!proxyUrl) return;
-  setGlobalDispatcher(new ProxyAgent(proxyUrl));
+  proxyDispatcher = new ProxyAgent({ uri: proxyUrl, requestTls: { rejectUnauthorized: false } });
+  setGlobalDispatcher(proxyDispatcher);
+  // 用 undici 的 fetch 走代理时，multipart 文件上传（images.edit 传底图）要求 body 用
+  // undici 的 FormData，否则报 "does not support file uploads with the current global
+  // FormData class"。仅本地配代理时覆盖全局 FormData；生产无代理 → 不覆盖、走默认。
+  globalThis.FormData = UndiciFormData;
 }
 
 configureProxy();
+
+// 火山方舟（Seedream）专用网络通道：火山是国内服务，必须“直连”（不走 Clash 代理）。
+// 本机 Node 内置证书库不认火山证书，用导出的系统证书包补信任（仅本地，路径来自 ARK_CA_CERTS）。
+// 生产（无代理、域名证书可信）默认即可，arkDispatcher 可为 null。
+let arkDispatcher = null;
+function configureArk() {
+  const caPath = process.env.ARK_CA_CERTS;
+  const ca = caPath && existsSync(caPath) ? readFileSync(caPath, "utf8") : null;
+  // 本地配了代理时：必须给 ark 一个“直连且不经代理”的 dispatcher，否则会被全局代理拦截。
+  if (proxyDispatcher || ca) {
+    arkDispatcher = new Agent(ca ? { connect: { ca } } : {});
+  }
+}
+configureArk();
 
 app.use(express.json({ limit: "35mb" }));
 
@@ -266,8 +297,15 @@ function assertEngineAvailable(engine) {
     return;
   }
 
+  if (engine === "seedream") {
+    if (!process.env.ARK_API_KEY) {
+      throw new Error("缺少 ARK_API_KEY。请在 .env.local 配置火山方舟 API Key 后重启服务。");
+    }
+    return;
+  }
+
   const label = engineLabels[engine] || engine;
-  throw new Error(`${label} 还没有完成后端 adapter。当前只支持 Image2 和 SeeDance。`);
+  throw new Error(`${label} 还没有完成后端 adapter。当前只支持 Image2 / SeeDance / Seedream。`);
 }
 
 function isLocalFreeMode(req) {
@@ -329,6 +367,19 @@ function image2SizeForRatio(ratio) {
     "bilibili-safe": "1536x864", // B站安全框：16:9 出图
   };
   return sizes[ratio] || "1152x1536";
+}
+
+// Seedream 要求输出 >= 约 369 万像素（2K 起步），按比例给合规尺寸。
+function seedreamSizeForRatio(ratio) {
+  const sizes = {
+    "16:9": "2880x1620",
+    "4:3": "2304x1728",
+    "1:1": "2048x2048",
+    "3:4": "1728x2304",
+    "9:16": "1620x2880",
+    "bilibili-safe": "2880x1620", // B站：16:9 输出
+  };
+  return sizes[ratio] || "1728x2304";
 }
 
 function getSourceImages({ sourceMode, image, elementImages }) {
@@ -471,13 +522,13 @@ function buildLayoutInstruction(ratio, sourceMode) {
 
   if (isWide && canOutpaint) {
     lines.push(
-      "WIDE CANVAS / DRAMATIC HIGH-CONCEPT SCENE REPLACEMENT (CRITICAL):",
-      "- The source photo is vertical. To fill this wider canvas, do NOT just continue the original room. Instead, BOLDLY REPLACE and rebuild the entire background into a dramatic, high-concept, cinematic environment while keeping ONLY the person.",
-      "- You are encouraged to fully reimagine the setting. Strong target directions (pick one that fits the topic/mood): glowing neon cyberpunk atmosphere, moody dark photography studio with a single dramatic key light, sweeping nighttime city skyline with bokeh lights, surreal high-concept dreamscape, premium minimalist gradient backdrop with volumetric light beams, abstract architectural space, or epic cinematic movie-still scene.",
-      "- Lean into drama: strong directional/rim lighting, deep shadows, rich cinematic color grading (neon teal-magenta, moody blue hour, golden cinematic glow, or high-contrast monochrome), atmospheric haze, lens bokeh, and an expensive fashion-magazine / movie-poster look.",
-      "- It is OK and desired for the new background to look very different from the original room \u2014 prioritize a striking, premium, art-directed visual over literal fidelity to the original environment.",
-      "- CRITICAL: preserve the PERSON exactly \u2014 same face, identity, hairstyle, clothing, pose and proportions \u2014 and relight the person convincingly so they blend naturally into the new dramatic scene. Do not stretch, distort, duplicate or AI-fake the person.",
-      "- The final result must look like one cohesive, intentional, professionally shot/composited wide cinematic image \u2014 NEVER a vertical photo with flat color bars, blurred padding, gradient blocks, mirrored copies, pasted side panels, or a cheap stretched background.",
+      "WIDE CANVAS / TOPIC-RELEVANT BACKGROUND EXTENSION (CRITICAL):",
+      "- The source photo is vertical and does not fill this wider canvas. Extend and rebuild the left and right areas so the final image fully fills the wide frame as ONE cohesive photo.",
+      "- The extended background MUST fit the cover's TITLE, TOPIC and MOOD. First understand what this cover is about from the title and keywords, then build a setting/scene that genuinely matches that subject and tone.",
+      "- Keep it relevant and natural to the topic. Do NOT default to unrelated neon cyberpunk, hard-light photo studios, or random sci-fi / dramatic scenes \u2014 only go darker or more cinematic if the TOPIC itself calls for it.",
+      "- Default to the brand's bright, premium, editorial look; match the lighting and color of the extension to the original photo so the whole frame reads as one continuous shot.",
+      "- CRITICAL: preserve the PERSON exactly \u2014 same face, identity, hairstyle, clothing, pose and proportions \u2014 relight only as needed to blend naturally. Do not stretch, distort, duplicate or AI-fake the person.",
+      "- The result must look like one cohesive, intentional, professionally composited wide image \u2014 NEVER a vertical photo with flat color bars, blurred padding, gradient blocks, mirrored copies, or pasted side panels.",
       "- Absolutely FORBIDDEN: solid color blocks, plain colored side panels, simple gaussian-blur fill, or low-effort duplicated scenery to complete the ratio.",
     );
   }
@@ -710,9 +761,10 @@ function extractImageReferenceFromText(text) {
 }
 
 function compactDreaminaPrompt(prompt) {
+  // 放宽上限，保留完整的排版/花字/装饰指令（之前 2600 会把设计细节截断，导致出图太素）。
   return String(prompt || "")
     .replace(/\s+/gu, " ")
-    .slice(0, 2600);
+    .slice(0, 6000);
 }
 
 async function dreaminaOutputToDataUrl(output, downloadDir) {
@@ -747,9 +799,10 @@ async function queryDreaminaResult(submitId, downloadDir, pollSeconds) {
 }
 
 function buildSeedancePrompt(plan, context) {
+  const ratioLabel = context.ratio === "bilibili-safe" ? "16:9 (Bilibili safe-zone)" : context.ratio;
   return compactDreaminaPrompt(`${buildSourceInstruction(context)}
-Target aspect ratio: ${context.ratio}.
-
+Target aspect ratio: ${ratioLabel}.
+${buildLayoutInstruction(context.ratio, context.sourceMode)}
 ${plan.prompt}`);
 }
 
@@ -773,11 +826,17 @@ async function generateSeedanceCover({ sourceMode, sourceImages, imageDescriptio
       }
     }
 
+    // dreamina 不认识 "bilibili-safe"，它是 16:9 输出 + 4:3 安全区，故映射为 16:9。
+    const dreaminaRatio =
+      ratio === "bilibili-safe"
+        ? "16:9"
+        : ratio || process.env.SEEDANCE_RATIO || process.env.DREAMINA_RATIO || "3:4";
+
     args.push(
       "--prompt",
       prompt,
       "--ratio",
-      ratio || process.env.SEEDANCE_RATIO || process.env.DREAMINA_RATIO || "3:4",
+      dreaminaRatio,
       "--resolution_type",
       process.env.SEEDANCE_RESOLUTION_TYPE || process.env.DREAMINA_RESOLUTION_TYPE || "2k",
       "--poll",
@@ -806,6 +865,46 @@ async function generateSeedanceCover({ sourceMode, sourceImages, imageDescriptio
   }
 }
 
+async function generateSeedreamCover({ sourceMode, sourceImages, plan, ratio }) {
+  const apiKey = process.env.ARK_API_KEY;
+  if (!apiKey) {
+    throw new Error("缺少 ARK_API_KEY。请在 .env.local 配置火山方舟 API Key 后重启服务。");
+  }
+  const model = process.env.ARK_MODEL || "doubao-seedream-5-0-260128";
+  const baseUrl = process.env.ARK_API_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
+  // 用完整设计提示词（与 Image2 同款，不截断）——保证花字/排版/装饰指令完整传达。
+  const prompt = buildImage2Prompt(plan, { sourceMode, ratio });
+  const body = {
+    model,
+    prompt,
+    size: seedreamSizeForRatio(ratio),
+    response_format: "url",
+    watermark: false,
+  };
+  // 图生图：把底图作为输入（base64 data URL）。当前取首图，多参考图后续可扩展。
+  if (sourceImages.length > 0) {
+    body.image = sourceImages[0];
+  }
+  const fetchOpts = arkDispatcher ? { dispatcher: arkDispatcher } : {};
+  const response = await undiciFetch(`${baseUrl}/images/generations`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    ...fetchOpts,
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok || json?.error) {
+    throw new Error(json?.error?.message || `Seedream API 返回 ${response.status}`);
+  }
+  const item = json?.data?.[0];
+  if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
+  if (!item?.url) throw new Error("Seedream 未返回图片。");
+  const imgResp = await undiciFetch(item.url, fetchOpts);
+  if (!imgResp.ok) throw new Error(`下载 Seedream 结果失败 HTTP ${imgResp.status}`);
+  const buf = Buffer.from(await imgResp.arrayBuffer());
+  return `data:image/png;base64,${buf.toString("base64")}`;
+}
+
 async function generateByEngine({ openai, engine, sourceMode, sourceImages, imageDescription, plan, ratio }) {
   const timeoutMs = imageJobTimeoutMs(engine);
   if (engine === "image2") {
@@ -819,6 +918,13 @@ async function generateByEngine({ openai, engine, sourceMode, sourceImages, imag
   if (engine === "seedance") {
     return withTimeout(
       generateSeedanceCover({ sourceMode, sourceImages, imageDescription, plan, ratio }),
+      timeoutMs,
+      `${engineLabels[engine]} 单张生成`,
+    );
+  }
+  if (engine === "seedream") {
+    return withTimeout(
+      generateSeedreamCover({ sourceMode, sourceImages, plan, ratio }),
       timeoutMs,
       `${engineLabels[engine]} 单张生成`,
     );
@@ -906,6 +1012,7 @@ app.post("/api/generate", async (req, res) => {
     elementImages = [],
     ratios: requestedRatios = [],
     stylePreferences = null,
+    slotEngines: requestedSlotEngines = [],
   } = req.body || {};
   const sourceMode = normalizeSourceMode(requestedSourceMode);
   const engine = resolveEngine(normalizeEngine(requestedEngine));
@@ -918,7 +1025,7 @@ app.post("/api/generate", async (req, res) => {
   const totalCount = ratioGroups.reduce((sum, item) => sum + item.count, 0);
 
   try {
-    assertEngineAvailable(engine);
+    // 引擎可用性在下方按“实际用到的引擎集合”逐一校验（支持逐张混合引擎）。
     validateGenerateInput({ sourceMode, image, elementImages, imageDescription, title });
     const sourceImages = getSourceImages({ sourceMode, image, elementImages });
     const analysisImage = sourceImages[0] || "";
@@ -931,6 +1038,10 @@ app.post("/api/generate", async (req, res) => {
           baseURL: process.env.OPENAI_API_BASE_URL || "https://api.openai.com/v1",
           timeout: envNumber("OPENAI_REQUEST_TIMEOUT_MS", 120000, { min: 15000, max: 600000 }),
           maxRetries: 0,
+          // 配了代理时（本地开发），用 undici 的 fetch + 代理 dispatcher，否则走默认直连。
+          ...(proxyDispatcher
+            ? { fetch: undiciFetch, fetchOptions: { dispatcher: proxyDispatcher } }
+            : {}),
         })
       : null;
     const fallbackAnalysisWithColor = {
@@ -991,19 +1102,33 @@ app.post("/api/generate", async (req, res) => {
           return null;
         });
 
-      // 给规划一个上限等待（不超过文本超时），到点就用本地兜底方案直接开生。
-      const planWaitMs = Math.min(textRequestTimeoutMs(), 20000);
+      // 给规划充足等待时间（内容驱动需要 gpt-4o 看图+规划，质量优先于速度）。
+      const planWaitMs = envNumber("PLAN_WAIT_MS", 90000, { min: 15000, max: 180000 });
       const planned = await withTimeout(planningPromise, planWaitMs, "方案生成").catch(() => null);
       if (Array.isArray(planned) && planned.length > 0) {
         plans = planned;
       }
     }
 
+    // 跨比例重排 id，保证全局唯一：否则各比例的方案都从 1 开始，前端按 id 合并时
+    // 后生成的比例（如横版）会覆盖先生成的（竖版），且缺失的 id 会显示“未返回结果”。
+    plans = plans.map((plan, index) => ({ ...plan, id: index + 1 }));
     const jobs = expandRatioJobs(ratioGroups, plans);
+
+    // 逐张引擎分配：前端可为每一张封面单独指定引擎（slotEngines，按 jobs 顺序对齐），
+    // 缺省回退到全局 engine。然后只校验“实际用到的引擎”。
+    const slotEngineList = Array.isArray(requestedSlotEngines) ? requestedSlotEngines : [];
+    jobs.forEach((job, i) => {
+      job.engine = resolveEngine(normalizeEngine(slotEngineList[i] || requestedEngine));
+    });
+    const usedEngines = [...new Set(jobs.map((j) => j.engine))];
+    for (const usedEngine of usedEngines) assertEngineAvailable(usedEngine);
+
     writeSse(res, { status: "planned", progress: 0, total: totalCount, engine, plans, analysis, message: "方案已生成" });
 
     let completed = 0;
-    const concurrency = generationConcurrency(engine, totalCount);
+    // 混合引擎时取各引擎并发的最小值（即梦 CLI 串行=1），保证稳定。
+    const concurrency = Math.min(...usedEngines.map((e) => generationConcurrency(e, totalCount)));
     writeSse(res, {
       status: "generating",
       progress: 0,
@@ -1011,18 +1136,18 @@ app.post("/api/generate", async (req, res) => {
       engine,
       message: concurrency > 1 ? `开始生成，当前 ${concurrency} 张并行...` : "开始生成封面...",
     });
-    const results = await mapWithConcurrency(jobs, concurrency, async ({ plan, ratio }, jobIndex) => {
+    const results = await mapWithConcurrency(jobs, concurrency, async ({ plan, ratio, engine: jobEngine }, jobIndex) => {
       writeSse(res, {
         status: "generating",
         progress: completed,
         total: totalCount,
-        engine,
-        message: `开始生成封面 ${jobIndex + 1}/${totalCount}`,
+        engine: jobEngine,
+        message: `开始生成封面 ${jobIndex + 1}/${totalCount}（${engineLabels[jobEngine] || jobEngine}）`,
       });
       try {
         const imageUrl = await generateByEngine({
           openai,
-          engine,
+          engine: jobEngine,
           sourceMode,
           sourceImages,
           imageDescription,
@@ -1035,7 +1160,7 @@ app.post("/api/generate", async (req, res) => {
           label: plan.label,
           description: plan.description,
           image_url: imageUrl,
-          engine,
+          engine: jobEngine,
           ratio,
         };
         completed += 1;
@@ -1055,15 +1180,15 @@ app.post("/api/generate", async (req, res) => {
           combination: plan.combination,
           label: plan.label,
           description: plan.description,
-          error: friendlyProviderError(error, engine),
-          engine,
+          error: friendlyProviderError(error, jobEngine),
+          engine: jobEngine,
           ratio,
         };
         writeSse(res, {
           status: "generating",
           progress: completed,
           total: totalCount,
-          engine,
+          engine: jobEngine,
           result,
           message: `封面 ${plan.id} 生成失败`,
         });

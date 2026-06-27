@@ -1,5 +1,5 @@
 export type GenerateCount = number;
-export type ImageEngine = "image2" | "seedance";
+export type ImageEngine = "image2" | "seedance" | "seedream";
 
 export type CoverResult = {
   id: number;

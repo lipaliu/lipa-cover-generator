@@ -12,3 +12,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# 本地火山 Ark 用的系统证书包（仅本机开发）
+.ca-bundle.pem

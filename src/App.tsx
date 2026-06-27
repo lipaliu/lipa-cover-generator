@@ -39,6 +39,7 @@ const allEngineOptions: Array<{
   description: string;
 }> = [
   { id: "image2", title: "Image2", vendor: "OpenAI", description: "GPT-Image-2，风格更灵活" },
+  { id: "seedream", title: "Seedream", vendor: "火山·豆包", description: "国内 API，可上线，图生图" },
   { id: "seedance", title: "SeeDance", vendor: "即梦", description: "复用本机即梦账号积分" },
 ];
 
@@ -82,7 +83,31 @@ function cn(...values: Array<string | false | null | undefined>) {
 function normalizeStoredEngine(value?: string | null): ImageEngine {
   const normalized = String(value || "").toLowerCase();
   if (normalized === "seedance" || normalized === "jimeng" || normalized === "dreamina") return "seedance";
+  if (normalized === "seedream" || normalized === "ark" || normalized === "doubao") return "seedream";
   return "image2";
+}
+
+// 引擎短标签（逐张选择器 / 封面角标用）。
+function engineShortLabel(id?: ImageEngine | string | null): string {
+  if (id === "seedance") return "即梦";
+  if (id === "seedream") return "Seedream";
+  return "Image2";
+}
+
+// 横构图（缩略图按真实比例完整显示，横竖分排）。
+const LANDSCAPE_RATIOS = new Set(["16:9", "4:3", "bilibili-safe"]);
+function isLandscapeRatio(ratio?: string): boolean {
+  return !!ratio && LANDSCAPE_RATIOS.has(ratio);
+}
+function ratioAspectCss(ratio?: string): string {
+  switch (ratio) {
+    case "16:9":
+    case "bilibili-safe": return "16 / 9";
+    case "4:3": return "4 / 3";
+    case "1:1": return "1 / 1";
+    case "9:16": return "9 / 16";
+    default: return "3 / 4";
+  }
 }
 
 async function readSseStream(response: Response, onEvent: (event: GenerateEvent) => void) {
@@ -200,6 +225,9 @@ export function App() {
     filename?: string;
     downloadUrl?: string;
   } | null>(null);
+  const [previewCover, setPreviewCover] = useState<CoverResult | null>(null);
+  // 逐张引擎：每张封面单独指定 Image2 / SeeDance，顺序与后端 jobs 展开一致。
+  const [slotEngines, setSlotEngines] = useState<ImageEngine[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   // History
@@ -209,6 +237,8 @@ export function App() {
   // 每个比例各自最多 10 张，总数为各比例之和（不再被截断到 10）。
   const requestedCount = totalCount;
   const selectedRatios = Object.entries(ratioSelection).filter(([, v]) => v > 0) as [AspectRatio, number][];
+  // 展开成与后端一致顺序的封面槽位（每个比例按数量展开）。
+  const slots = selectedRatios.flatMap(([ratio, count]) => Array.from({ length: count }, () => ({ ratio })));
   const isGenerating = runState === "analyzing" || runState === "planning" || runState === "generating";
   const completedCount = results.filter((r) => r.image_url || r.error).length;
   const progressPercent = total > 0 ? Math.min(100, Math.round((Math.max(progress, completedCount) / total) * 100)) : 0;
@@ -218,6 +248,11 @@ export function App() {
   }, []);
 
   useEffect(() => { refreshHistory(); }, [refreshHistory]);
+
+  // 逐张引擎数组长度跟随总张数；新增/未指定的位置用当前默认引擎填充。
+  useEffect(() => {
+    setSlotEngines((prev) => Array.from({ length: totalCount }, (_, i) => prev[i] ?? engine));
+  }, [totalCount, engine]);
 
   // Check login status on mount
   useEffect(() => {
@@ -339,6 +374,7 @@ export function App() {
           imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
           elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
           ratios: selectedRatios.map(([ratio, cnt]) => ({ ratio, count: cnt })),
+          slotEngines: slots.map((_, i) => slotEngines[i] ?? engine),
           stylePreferences: {
             imageDominantColor: detectedColor,
             imagePalette: imageColors,
@@ -441,6 +477,31 @@ export function App() {
     }
   };
 
+  const downloadAll = async () => {
+    for (const cover of results) {
+      if (cover.image_url) await downloadCover(cover);
+    }
+  };
+
+  // 完成本组、开新封面项目（旧的一组已存入历史，可在「历史」里找回）。
+  const startNewProject = () => {
+    abortRef.current?.abort();
+    setResults([]);
+    setPreviewCover(null);
+    setRunState("idle");
+    setProgress(0);
+    setImagePreview(null);
+    setImageName("");
+    setElementImages([]);
+    setImageDescription("");
+    setTitle("");
+    setSubtitle("");
+    setKeywords("");
+    setErrorMessage("");
+    setDownloadStatus(null);
+    setStep(1);
+  };
+
   const openBatch = (batch: HistoryBatch) => {
     setTitle(batch.title);
     setSubtitle(batch.subtitle);
@@ -484,6 +545,36 @@ export function App() {
     { num: 4, label: "生成", icon: <Sparkles size={18} /> },
   ];
 
+  // 单张封面卡片：缩略图按真实比例完整显示，点击放大。
+  const renderCard = (cover: CoverResult) => {
+    const aspect = ratioAspectCss(cover.ratio);
+    return (
+      <article key={cover.id} className={cn("result-card", !cover.image_url && !cover.error && "is-loading")}>
+        {cover.image_url ? (
+          <button type="button" className="result-image" style={{ aspectRatio: aspect }} onClick={() => setPreviewCover(cover)}>
+            <img src={cover.image_url} alt={cover.label} />
+            <span className="result-download"><Sparkles size={20} /><small>点击放大</small></span>
+          </button>
+        ) : cover.error ? (
+          <div className="result-error" style={{ aspectRatio: aspect }}><p>{cover.error}</p></div>
+        ) : (
+          <div className="result-loading" style={{ aspectRatio: aspect }}>
+            <LoaderCircle className="spin" size={28} />
+            <small>生成中...</small>
+          </div>
+        )}
+        <footer className="result-meta">
+          <span>{cover.ratio ? `${cover.ratio} · ${cover.label}` : cover.label}</span>
+          {cover.engine && <span style={{ fontSize: 11, opacity: 0.65 }}>{engineShortLabel(cover.engine)}</span>}
+        </footer>
+      </article>
+    );
+  };
+
+  const verticalResults = results.filter((r) => !isLandscapeRatio(r.ratio));
+  const horizontalResults = results.filter((r) => isLandscapeRatio(r.ratio));
+  const doneCount = results.filter((r) => r.image_url).length;
+
   /* ─── Render ─── */
   return (
     <main className="app-shell">
@@ -492,15 +583,16 @@ export function App() {
       {/* Header */}
       <header className="site-header">
         <div className="header-brand">
-          <span className="brand-mark">L</span>
+          <span className="brand-mark">B</span>
           <span className="brand-text">
-            <strong>Lipa</strong> Cover
+            <strong>BAKABAKA</strong>
+            <small>自媒体封面之王 · King of Cover</small>
           </span>
         </div>
         <nav className="header-nav">
-          <button type="button" className={cn("nav-btn", showHistory && "is-active")} onClick={() => setShowHistory(!showHistory)}>
+          <button type="button" className={cn("nav-btn", "nav-btn-history", showHistory && "is-active")} onClick={() => setShowHistory(!showHistory)}>
             <History size={18} />
-            <span>历史</span>
+            <span>我的作品{history.length > 0 ? `（${history.length}）` : ""}</span>
           </button>
           <button type="button" className={cn("nav-btn", showSettings && "is-active")} onClick={() => setShowSettings(!showSettings)}>
             <Settings2 size={18} />
@@ -582,8 +674,9 @@ export function App() {
 
       {/* Hero Section */}
       <section className="hero">
-        <h1 className="hero-title">Create Your Cover</h1>
-        <p className="hero-subtitle">AI 驱动的封面创作工坊，从底图到成品，一步步引导你完成设计</p>
+        <span className="hero-eyebrow">BAKABAKA · KING OF COVER</span>
+        <h1 className="hero-title">自媒体封面之王</h1>
+        <p className="hero-subtitle">上传一张底图，AI 按爆款审美自动排版花字、多引擎多风格一次出图，一眼挑出最吸睛的封面。</p>
       </section>
 
       {/* Step Indicator */}
@@ -607,7 +700,7 @@ export function App() {
       </nav>
 
       {/* Step Content */}
-      <section className="step-content">
+      <section className={cn("step-content", step === 4 && results.length > 0 && "is-wide")}>
         {/* Step 1: Upload Image + Ratio Selection */}
         {step === 1 && (
           <div className="step-panel fade-in">
@@ -618,6 +711,14 @@ export function App() {
                 <p>选择素材来源方式，设定封面比例和数量</p>
               </div>
             </div>
+
+            {history.length > 0 && (
+              <button type="button" className="recent-banner" onClick={() => setShowHistory(true)}>
+                <History size={16} />
+                <span>你有 {history.length} 个历史项目，点这里查看 / 继续</span>
+                <ArrowRight size={14} />
+              </button>
+            )}
 
             {/* Source Mode Selector */}
             <div className="source-modes">
@@ -661,7 +762,7 @@ export function App() {
                     key={opt.id}
                     type="button"
                     className={cn("engine-card", engine === opt.id && "is-active")}
-                    onClick={() => setEngine(opt.id)}
+                    onClick={() => { setEngine(opt.id); setSlotEngines(Array.from({ length: totalCount }, () => opt.id)); }}
                   >
                     <span className="engine-title">
                       <Sparkles size={16} />
@@ -932,6 +1033,52 @@ export function App() {
                     <ChevronDown size={16} />
                   </div>
                 </label>
+
+                {totalCount > 0 && engineOptions.length > 1 && (
+                  <div className="slot-engine-section" style={{ marginTop: 18 }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+                      <span style={{ fontWeight: 600 }}>逐张引擎（共 {totalCount} 张，可单独指定）</span>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        {engineOptions.map((opt) => (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => setSlotEngines(Array.from({ length: totalCount }, () => opt.id))}
+                            style={{ padding: "4px 10px", borderRadius: 999, border: "1px solid rgba(255,255,255,0.18)", background: "transparent", color: "#cbd5e1", cursor: "pointer", fontSize: 12 }}
+                          >
+                            全部 {engineShortLabel(opt.id)}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 8 }}>
+                      {slots.map((slot, i) => (
+                        <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, padding: "7px 10px", borderRadius: 10, background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                          <span style={{ fontSize: 12, color: "#94a3b8" }}>封面{i + 1} · {slot.ratio}</span>
+                          <div style={{ display: "flex", gap: 4 }}>
+                            {engineOptions.map((opt) => {
+                              const active = (slotEngines[i] ?? engine) === opt.id;
+                              return (
+                                <button
+                                  key={opt.id}
+                                  type="button"
+                                  onClick={() => setSlotEngines((prev) => {
+                                    const next = Array.from({ length: totalCount }, (_, k) => prev[k] ?? engine);
+                                    next[i] = opt.id;
+                                    return next;
+                                  })}
+                                  style={{ padding: "3px 9px", borderRadius: 6, cursor: "pointer", fontSize: 11, border: "none", background: active ? "#fbbf24" : "rgba(255,255,255,0.08)", color: active ? "#1a1a1a" : "#cbd5e1", fontWeight: active ? 700 : 400 }}
+                                >
+                                  {engineShortLabel(opt.id)}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -944,7 +1091,7 @@ export function App() {
               <span className="step-number">04</span>
               <div>
                 <h2>{runState === "done" ? "创作完成" : isGenerating ? "正在创作..." : "开始生成"}</h2>
-                <p>{runState === "done" ? "点击封面即可导出下载" : isGenerating ? message : "一切就绪，点击下方按钮开始 AI 创作"}</p>
+                <p>{runState === "done" ? "点击封面放大预览，弹窗内可下载" : isGenerating ? message : "一切就绪，点击下方按钮开始 AI 创作"}</p>
               </div>
             </div>
 
@@ -978,42 +1125,14 @@ export function App() {
             )}
 
             {results.length > 0 && (
-              <div className="results-grid">
-                {results.map((cover) => (
-                  <article key={cover.id} className={cn("result-card", !cover.image_url && !cover.error && "is-loading")}>
-                    {cover.image_url ? (
-                      <button
-                        type="button"
-                        className="result-image"
-                        disabled={downloadingCoverId === cover.id}
-                        onClick={() => { void downloadCover(cover); }}
-                      >
-                        <img src={cover.image_url} alt={cover.label} />
-                        <span className="result-download">
-                          {downloadingCoverId === cover.id ? (
-                            <>
-                              <LoaderCircle className="spin" size={20} />
-                              <small>导出中</small>
-                            </>
-                          ) : (
-                            <Download size={20} />
-                          )}
-                        </span>
-                      </button>
-                    ) : cover.error ? (
-                      <div className="result-error"><p>{cover.error}</p></div>
-                    ) : (
-                      <div className="result-loading">
-                        <LoaderCircle className="spin" size={28} />
-                        <small>生成中...</small>
-                      </div>
-                    )}
-                    <footer className="result-meta">
-                      <span>{cover.ratio ? `${cover.ratio} · ${cover.label}` : cover.label}</span>
-                    </footer>
-                  </article>
-                ))}
-              </div>
+              <>
+                {verticalResults.length > 0 && (
+                  <div className="results-grid is-vertical">{verticalResults.map(renderCard)}</div>
+                )}
+                {horizontalResults.length > 0 && (
+                  <div className="results-grid is-horizontal">{horizontalResults.map(renderCard)}</div>
+                )}
+              </>
             )}
 
             {!isGenerating && runState !== "done" && (
@@ -1029,10 +1148,20 @@ export function App() {
               </button>
             )}
             {runState === "done" && (
-              <button type="button" className="generate-btn" onClick={() => { setResults([]); setRunState("idle"); startGenerate(); }}>
-                <Sparkles size={20} />
-                重新生成
-              </button>
+              <div className="done-actions" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginTop: 8 }}>
+                <span style={{ fontWeight: 600 }}>本组 {doneCount}/{results.length} 张已完成 · 已自动存入「历史」</span>
+                <div style={{ display: "flex", gap: 10, marginLeft: "auto", flexWrap: "wrap" }}>
+                  <button type="button" className="stop-btn" style={{ width: "auto" }} onClick={() => { void downloadAll(); }}>
+                    <Download size={16} /> 下载全部
+                  </button>
+                  <button type="button" className="stop-btn" style={{ width: "auto" }} onClick={() => { setResults([]); setRunState("idle"); startGenerate(); }}>
+                    <Sparkles size={16} /> 再生成一批
+                  </button>
+                  <button type="button" className="generate-btn" style={{ width: "auto" }} onClick={startNewProject}>
+                    <ImagePlus size={20} /> 新建封面
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -1070,6 +1199,60 @@ export function App() {
             requiredCredits={rechargeInfo.required}
           />
         </>
+      )}
+
+      {/* Cover Preview Lightbox：点封面放大看，弹窗内可下载 */}
+      {previewCover?.image_url && (
+        <div
+          className="lightbox-overlay"
+          onClick={() => setPreviewCover(null)}
+          style={{
+            position: "fixed", inset: 0, zIndex: 1000,
+            background: "rgba(0,0,0,0.85)", backdropFilter: "blur(4px)",
+            display: "flex", flexDirection: "column",
+            alignItems: "center", justifyContent: "center",
+            padding: 24, gap: 16,
+          }}
+        >
+          <img
+            src={previewCover.image_url}
+            alt={previewCover.label}
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: "92vw", maxHeight: "78vh", objectFit: "contain",
+              borderRadius: 12, boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+            }}
+          />
+          <div onClick={(e) => e.stopPropagation()} style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>
+            <span style={{ color: "#cbd5e1", fontSize: 14 }}>
+              {previewCover.ratio ? `${previewCover.ratio} · ${previewCover.label}` : previewCover.label}
+            </span>
+            <button
+              type="button"
+              onClick={() => { void downloadCover(previewCover); }}
+              disabled={downloadingCoverId === previewCover.id}
+              style={{
+                display: "inline-flex", alignItems: "center", gap: 6,
+                padding: "8px 18px", borderRadius: 999, border: "none",
+                background: "#fbbf24", color: "#1a1a1a", fontWeight: 700, cursor: "pointer",
+              }}
+            >
+              {downloadingCoverId === previewCover.id ? <LoaderCircle className="spin" size={16} /> : <Download size={16} />}
+              下载
+            </button>
+            <button
+              type="button"
+              onClick={() => setPreviewCover(null)}
+              style={{
+                padding: "8px 18px", borderRadius: 999,
+                border: "1px solid rgba(255,255,255,0.3)",
+                background: "transparent", color: "#fff", cursor: "pointer",
+              }}
+            >
+              关闭
+            </button>
+          </div>
+        </div>
       )}
     </main>
   );
