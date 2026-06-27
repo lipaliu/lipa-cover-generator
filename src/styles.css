@@ -1352,6 +1352,24 @@ input, select, textarea { color: inherit; }
   background: linear-gradient(135deg, var(--accent), #8b5cf6);
   box-shadow: 0 4px 20px rgba(167, 139, 250, 0.3);
 }
+/* 禁用的「下一步」也要清晰可见（全局 button:disabled 的 0.4 + 默认底色太淡，几乎看不见）*/
+.nav-next:disabled {
+  opacity: 1;
+  background: rgba(167, 139, 250, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+  border: 1px solid var(--accent);
+}
+.nav-prev:disabled { opacity: 0.55; }
+.step-nav-next-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.step-nav-hint {
+  font-size: 13px;
+  color: var(--accent);
+  font-weight: 500;
+}
 
 /* ─── Overlay Panels ─── */
 .overlay-panel {

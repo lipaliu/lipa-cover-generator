@@ -1175,10 +1175,17 @@ export function App() {
           上一步
         </button>
         {step < 4 ? (
-          <button type="button" className="nav-next" onClick={nextStep} disabled={!canProceed(step)}>
-            下一步
-            <ArrowRight size={18} />
-          </button>
+          <div className="step-nav-next-group">
+            {!canProceed(step) && (
+              <span className="step-nav-hint">
+                {step === 1 ? "← 先上传底图、选好比例" : step === 2 ? "← 先填写主标题" : ""}
+              </span>
+            )}
+            <button type="button" className="nav-next" onClick={nextStep} disabled={!canProceed(step)}>
+              下一步
+              <ArrowRight size={18} />
+            </button>
+          </div>
         ) : (
           !isGenerating && runState !== "done" && (
             <button type="button" className="nav-next generate" onClick={startGenerate}>
