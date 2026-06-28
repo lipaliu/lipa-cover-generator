@@ -1540,187 +1540,413 @@ input, select, textarea { color: inherit; }
   .overlay-panel { width: 100vw; }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   BAKABAKA · 毛玻璃 (Glassmorphism) 主题层 — 覆盖在基础样式之上
-   半透明磨砂 + 紫色光晕 + 玻璃高光，保留原深紫色调。
-   ═══════════════════════════════════════════════════════════════ */
+
+
+/* ═══════════════════════════════════════════════════════════════════════
+   BAKABAKA · Liquid Glass 主题层 v2 — 苹果糖果色 + 真·通透玻璃
+   覆盖在基础样式之上：
+   - 柔和糖果色丝滑渐变背景（淡紫 / 薰衣草 / 宝蓝 / 青），偏亮通透不刺眼
+   - 真液态玻璃组件：高透明 + 折射亮边 + 顶部高光（macOS Tahoe 质感）
+   - 苹果系字体（SF Pro Display/Text + 苹方）
+   ═══════════════════════════════════════════════════════════════════════ */
 :root {
-  color-scheme: dark;
-  --ink-primary: #ffffff;
-  --ink-secondary: rgba(255, 255, 255, 0.82);
-  --ink-tertiary: rgba(255, 255, 255, 0.58);
-  --accent: #d6c8ff;
-  --accent-hover: #ece6ff;
-  --accent-glow: rgba(199, 181, 253, 0.26);
-  --border: rgba(255, 255, 255, 0.22);
-  --border-strong: rgba(255, 255, 255, 0.42);
-  --bg-card: rgba(255, 255, 255, 0.12);
-  --bg-card-hover: rgba(255, 255, 255, 0.18);
-  --bg-elevated: rgba(255, 255, 255, 0.16);
-  --bg-secondary: rgba(255, 255, 255, 0.1);
-  --shadow-sm: 0 2px 12px rgba(18, 6, 48, 0.32);
-  --shadow-md: 0 16px 50px rgba(18, 6, 48, 0.42);
-  --shadow-lg: 0 30px 72px rgba(18, 6, 48, 0.52);
-  --glass-blur: 28px;
-  --glass-bg: rgba(255, 255, 255, 0.12);
-  --glass-bg-2: rgba(255, 255, 255, 0.2);
-  --glass-brd: rgba(255, 255, 255, 0.3);
-  --glass-top: inset 0 1px 0 rgba(255, 255, 255, 0.5);
-  --glass-shadow: 0 16px 48px rgba(18, 6, 48, 0.42);
+  color-scheme: light;
+
+  /* —— 苹果字体 —— */
+  --font-body: -apple-system, "SF Pro Text", system-ui, "Helvetica Neue",
+    "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-display: -apple-system, "SF Pro Display", system-ui,
+    "PingFang SC", sans-serif;
+  --font-mono: "SF Mono", ui-monospace, "Menlo", monospace;
+
+  /* —— 文字（深色，落在亮背景上）—— */
+  --ink-primary: #1c1340;
+  --ink-secondary: rgba(38, 26, 86, 0.74);
+  --ink-tertiary: rgba(48, 36, 96, 0.5);
+
+  /* —— 品牌强调（薰衣草紫蓝）—— */
+  --accent: #6d5cf0;
+  --accent-hover: #8a76ff;
+  --accent-glow: rgba(124, 105, 246, 0.22);
+  --success: #2bb673;
+  --error: #e85d75;
+
+  /* —— 玻璃体系 —— */
+  --glass-blur: 30px;
+  --glass-bg: rgba(255, 255, 255, 0.16);
+  --glass-bg-strong: rgba(255, 255, 255, 0.26);
+  --glass-brd: rgba(255, 255, 255, 0.55);
+  --glass-edge: rgba(255, 255, 255, 0.9);
+  --glass-shadow: 0 18px 50px rgba(58, 40, 120, 0.18);
+
+  --border: rgba(255, 255, 255, 0.5);
+  --border-strong: rgba(255, 255, 255, 0.72);
+  --bg-card: rgba(255, 255, 255, 0.16);
+  --bg-card-hover: rgba(255, 255, 255, 0.26);
+  --bg-elevated: rgba(255, 255, 255, 0.3);
+  --bg-secondary: rgba(255, 255, 255, 0.2);
+
+  --shadow-sm: 0 2px 12px rgba(58, 40, 120, 0.12);
+  --shadow-md: 0 16px 44px rgba(58, 40, 120, 0.16);
+  --shadow-lg: 0 30px 70px rgba(58, 40, 120, 0.22);
+
   --radius-sm: 14px;
   --radius-md: 20px;
   --radius-lg: 26px;
   --radius-xl: 34px;
-  /* 苹果字体感：SF Pro（英文/数字）+ 苹方 PingFang SC（中文） */
-  --font-body: -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --font-display: -apple-system, system-ui, "SF Pro Display", "PingFang SC", sans-serif;
 }
 
-html, body { background: #2e1065; font-family: var(--font-body); }
-body, button, input, select, textarea, h1, h2, h3, p, span, strong, small { font-family: var(--font-body); }
-.hero-slogan, .step-number, .hero-title { font-family: var(--font-display); }
+html, body {
+  background: #b3aceb;
+  font-family: var(--font-body);
+  color: var(--ink-primary);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+body, button, input, select, textarea,
+h1, h2, h3, p, span, strong, small, label {
+  font-family: var(--font-body);
+}
+.hero-title, .hero-slogan, .step-number, .step-header h2,
+.overlay-header h2, .brand-text strong {
+  font-family: var(--font-display);
+}
 
-/* 深邃蓝紫丝绸背景：深靛紫 → 宝蓝（无青绿），贴近桌面壁纸 */
+/* ───────── 糖果色丝滑渐变背景 ─────────
+   多个柔和径向色团叠加 + 一层流动竖向光带，过渡奶油般顺滑 */
 .bg-gradient {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
   background:
-    radial-gradient(70% 55% at 76% 32%, rgba(59, 130, 246, 0.42) 0%, transparent 55%),
-    radial-gradient(56% 50% at 18% 14%, rgba(91, 33, 182, 0.5) 0%, transparent 58%),
-    radial-gradient(66% 60% at 88% 90%, rgba(37, 99, 235, 0.5) 0%, transparent 60%),
-    radial-gradient(52% 48% at 10% 82%, rgba(49, 46, 129, 0.58) 0%, transparent 60%),
-    linear-gradient(150deg, #160e3a 0%, #1e2a6e 42%, #1d3fb0 74%, #1e40af 100%);
+    radial-gradient(46% 40% at 18% 14%, rgba(150, 120, 248, 0.9) 0%, transparent 62%),
+    radial-gradient(50% 46% at 82% 12%, rgba(96, 128, 246, 0.82) 0%, transparent 60%),
+    radial-gradient(54% 50% at 88% 84%, rgba(72, 156, 244, 0.74) 0%, transparent 62%),
+    radial-gradient(48% 46% at 12% 86%, rgba(170, 126, 246, 0.74) 0%, transparent 60%),
+    radial-gradient(40% 38% at 50% 52%, rgba(126, 206, 226, 0.46) 0%, transparent 64%),
+    linear-gradient(150deg, #c5bcf6 0%, #aeb8f3 34%, #aac8f4 64%, #beb6f4 100%);
+  pointer-events: none;
+}
+/* 第二层：竖向柔光带，模拟壁纸的丝绸质感，叠加细微动效 */
+.bg-gradient::after {
+  content: "";
+  position: fixed;
+  inset: -10%;
+  z-index: -1;
+  background:
+    repeating-linear-gradient(
+      105deg,
+      rgba(255, 255, 255, 0.06) 0px,
+      rgba(255, 255, 255, 0.06) 120px,
+      rgba(150, 120, 255, 0.05) 240px,
+      rgba(120, 160, 255, 0.04) 380px,
+      rgba(255, 255, 255, 0.06) 520px
+    );
+  filter: blur(40px);
+  opacity: 0.8;
+  pointer-events: none;
+  animation: silkDrift 38s ease-in-out infinite alternate;
+}
+@keyframes silkDrift {
+  from { transform: translateX(-3%) translateY(-1%) scale(1.05); }
+  to   { transform: translateX(3%) translateY(1%) scale(1.12); }
 }
 
-/* —— 通用磨砂玻璃模糊 —— */
-.nav-btn,
-.mode-card,
-.engine-card,
-.ratio-card,
-.result-card,
-.summary-card,
-.overlay-panel,
-.recent-banner,
-.history-item,
-.download-note,
-.gen-progress,
-.local-mode-badge,
-.upload-zone,
-.elements-zone,
-.gen-error,
-.form-field input,
-.describe-zone textarea,
-.setting-item select,
-.style-select select,
-.generate-btn,
-.stop-btn,
-.nav-next,
-.nav-prev,
-.step-icon {
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(165%);
-  backdrop-filter: blur(var(--glass-blur)) saturate(165%);
+/* ───────── 通用：液态玻璃模糊 ───────── */
+.nav-btn, .mode-card, .engine-card, .engine-section, .ratio-card, .result-card,
+.summary-card, .overlay-panel, .recent-banner, .history-item, .download-note,
+.gen-progress, .local-mode-badge, .upload-zone, .elements-zone, .gen-error,
+.form-field input, .describe-zone textarea, .setting-item select,
+.select-wrap select, .generate-btn, .stop-btn, .nav-next, .nav-prev,
+.step-icon, .count-selector button, .ratio-counter button, .mode-icon, .mode-icon {
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(180%);
 }
 
-/* ───────── Liquid Glass：通透玻璃 + 亮边描光 + 顶部高光（macOS Tahoe 质感） ───────── */
-.nav-btn,
-.mode-card,
-.engine-card,
-.ratio-card,
-.summary-card,
-.recent-banner,
-.download-note,
-.gen-progress,
-.upload-zone,
-.elements-zone,
-.result-card,
-.form-field input,
-.describe-zone textarea,
-.setting-item select,
-.style-select select {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.06) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.38);
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.6),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-    inset 0 -10px 26px rgba(255, 255, 255, 0.05),
-    0 14px 44px rgba(10, 8, 40, 0.4);
-}
-
-/* 悬停：玻璃更亮、边缘更描光 */
-.nav-btn:hover,
-.mode-card:hover,
-.engine-card:hover,
-.ratio-card:hover,
-.result-card:hover {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.27) 0%, rgba(255, 255, 255, 0.1) 100%);
-  border-color: rgba(255, 255, 255, 0.55);
-}
-
-/* 历史 / 设置抽屉：深色玻璃 */
-.overlay-panel {
-  background: linear-gradient(160deg, rgba(46, 30, 92, 0.72), rgba(24, 16, 60, 0.7));
-  border-left: 1px solid rgba(255, 255, 255, 0.28);
-  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.18), -24px 0 70px rgba(8, 4, 30, 0.55);
-}
-
-/* 选中 / 激活：蓝紫玻璃 + 更亮的描光边 */
-.mode-card.is-active,
-.engine-card.is-active,
-.ratio-card.is-selected {
-  background: linear-gradient(160deg, rgba(150, 170, 255, 0.32), rgba(120, 110, 240, 0.18));
-  border-color: rgba(199, 210, 255, 0.85);
-  box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.75),
-    0 0 0 1px rgba(150, 170, 255, 0.4),
-    0 14px 40px rgba(80, 90, 220, 0.4);
-}
-
-/* 主按钮：液态玻璃药丸（亮边 + 顶部高光 + 蓝紫光） */
-.generate-btn,
-.nav-next:not(:disabled) {
-  background: linear-gradient(165deg, rgba(255, 255, 255, 0.32) 0%, rgba(150, 160, 255, 0.2) 55%, rgba(120, 110, 235, 0.24) 100%);
+/* ───────── 真·液态玻璃卡片：高透明 + 折射亮边 + 顶部高光 ─────────
+   关键：背景很淡（能透出后面渐变），靠多层 inset 亮边和高光制造"厚玻璃"折射感 */
+.nav-btn, .mode-card, .engine-card, .engine-section, .ratio-card, .summary-card,
+.recent-banner, .download-note, .gen-progress, .upload-zone, .elements-zone,
+.result-card, .form-field input, .describe-zone textarea, .setting-item select,
+.select-wrap select {
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.32) 0%, rgba(255, 255, 255, 0.1) 48%, rgba(255, 255, 255, 0.18) 100%);
   border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow:
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.95),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.12),
+    inset 0 -14px 30px rgba(180, 195, 255, 0.18),
+    0 14px 40px rgba(58, 40, 120, 0.16);
+  color: var(--ink-primary);
+}
+
+/* hover：玻璃更亮、边缘更描光、轻微上浮 */
+.nav-btn:hover, .mode-card:hover, .engine-card:hover, .ratio-card:hover,
+.result-card:hover, .recent-banner:hover {
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.42) 0%, rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0.24) 100%);
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow:
+    inset 0 1.5px 1px rgba(255, 255, 255, 1),
+    inset 0 -14px 30px rgba(180, 195, 255, 0.22),
+    0 18px 48px rgba(58, 40, 120, 0.2);
+}
+
+/* 引擎区外层用更通透的玻璃 */
+.engine-section {
+  background:
+    linear-gradient(155deg, rgba(255, 255, 255, 0.28), rgba(232, 236, 255, 0.12));
+}
+
+/* 选中 / 激活：薰衣草紫蓝玻璃 + 更亮描光边 */
+.mode-card.is-active, .engine-card.is-active, .ratio-card.is-selected {
+  background:
+    linear-gradient(155deg, rgba(160, 150, 255, 0.42), rgba(120, 150, 255, 0.24));
+  border-color: rgba(180, 180, 255, 0.95);
+  box-shadow:
+    inset 0 1.5px 1px rgba(255, 255, 255, 1),
+    0 0 0 1px rgba(140, 130, 255, 0.5),
+    0 16px 42px rgba(108, 92, 240, 0.3);
+}
+
+/* ───────── 抽屉面板：浅色玻璃 ───────── */
+.overlay-panel {
+  background:
+    linear-gradient(160deg, rgba(255, 255, 255, 0.42), rgba(226, 230, 255, 0.32));
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(180%);
+  border-left: 1px solid rgba(255, 255, 255, 0.6);
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.7), -24px 0 70px rgba(58, 40, 120, 0.2);
+}
+.overlay-header { border-bottom: 1px solid rgba(255, 255, 255, 0.4); }
+
+/* ───────── 主按钮：液态玻璃药丸（水珠质感：亮边 + 顶部高光 + 底部汇聚反光） ───────── */
+.generate-btn, .nav-next:not(:disabled) {
+  position: relative;
+  background:
+    linear-gradient(168deg, rgba(255, 255, 255, 0.55) 0%, rgba(150, 160, 255, 0.32) 46%, rgba(108, 92, 240, 0.42) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
   border-radius: 999px;
   color: #fff;
-  text-shadow: 0 1px 2px rgba(20, 16, 60, 0.4);
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(40, 30, 100, 0.35);
   box-shadow:
-    inset 0 1px 1px rgba(255, 255, 255, 0.85),
-    inset 0 -3px 8px rgba(110, 120, 240, 0.3),
-    0 10px 30px rgba(40, 40, 120, 0.4);
+    inset 0 2px 2px rgba(255, 255, 255, 1),
+    inset 0 -8px 16px rgba(108, 92, 240, 0.4),
+    0 12px 30px rgba(80, 70, 200, 0.32);
+  overflow: hidden;
 }
-.generate-btn:hover,
-.nav-next:not(:disabled):hover { filter: brightness(1.08) saturate(1.05); }
+/* 顶部弧形高光反射 */
+.generate-btn::before, .nav-next:not(:disabled)::before {
+  content: "";
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  top: 4px;
+  height: 42%;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.7), rgba(255, 255, 255, 0));
+  pointer-events: none;
+}
+.generate-btn:hover, .nav-next:not(:disabled):hover {
+  filter: brightness(1.06) saturate(1.05);
+  transform: translateY(-1px);
+}
 
 /* 次按钮 / 顶部导航：通透清玻璃药丸 */
-.stop-btn,
-.nav-prev,
-.nav-btn {
+.stop-btn, .nav-prev, .nav-btn { border-radius: 999px; }
+.stop-btn, .nav-prev {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.16));
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  color: var(--ink-primary);
+  box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, 0.95), 0 8px 22px rgba(58, 40, 120, 0.14);
+}
+.nav-btn { color: var(--ink-secondary); }
+.nav-btn:hover { color: var(--ink-primary); }
+.nav-btn.is-active, .nav-btn-history {
+  color: var(--accent);
+  background: linear-gradient(155deg, rgba(160, 150, 255, 0.4), rgba(120, 150, 255, 0.22));
+  border-color: rgba(180, 180, 255, 0.9);
+}
+
+/* 本地免费徽标：薄荷绿玻璃 */
+.local-mode-badge {
+  background: linear-gradient(155deg, rgba(120, 230, 180, 0.4), rgba(120, 230, 180, 0.18));
+  border: 1px solid rgba(120, 230, 180, 0.7);
+  color: #0c7a4d;
   border-radius: 999px;
-}
-.stop-btn,
-.nav-prev {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08));
-  border: 1px solid rgba(255, 255, 255, 0.42);
-  color: #fff;
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.6), 0 8px 22px rgba(10, 8, 40, 0.32);
+  box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, 0.9), 0 8px 20px rgba(40, 160, 110, 0.18);
 }
 
-/* 步骤圆点：清玻璃圆 */
+/* 步骤圆点：清玻璃水珠 */
 .step-icon {
-  background: linear-gradient(160deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.7), 0 6px 18px rgba(10, 8, 40, 0.3);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.18));
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  color: var(--ink-secondary);
+  box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, 0.95), 0 6px 18px rgba(58, 40, 120, 0.16);
+}
+.step-line { background: rgba(255, 255, 255, 0.5); }
+.step-line::after { background: linear-gradient(90deg, var(--accent), #8a76ff); }
+.step-dot.is-current .step-icon {
+  border-color: rgba(150, 140, 255, 0.95);
+  color: var(--accent);
+  background: linear-gradient(160deg, rgba(160, 150, 255, 0.45), rgba(120, 150, 255, 0.22));
+  box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, 1), 0 0 22px rgba(124, 105, 246, 0.4);
+}
+.step-label { color: var(--ink-tertiary); }
+.step-dot.is-current .step-label { color: var(--accent); }
+
+/* 计数器 / 小圆按钮：清玻璃 */
+.ratio-counter button, .count-selector button {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.16));
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  color: var(--ink-secondary);
+}
+.count-selector button.is-selected {
+  background: linear-gradient(155deg, rgba(160, 150, 255, 0.42), rgba(120, 150, 255, 0.24));
+  border-color: rgba(180, 180, 255, 0.9);
+  color: var(--accent);
 }
 
-/* —— BAKABAKA 玻璃 logo（透明字标，在深蓝紫上发光） —— */
+/* 输入框聚焦：紫蓝描光 */
+.form-field input:focus, .describe-zone textarea:focus {
+  border-color: rgba(150, 140, 255, 0.9);
+  box-shadow:
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.95),
+    0 0 0 4px rgba(124, 105, 246, 0.18);
+}
+.form-field input::placeholder, .describe-zone textarea::placeholder { color: var(--ink-tertiary); }
+
+/* 上传区虚线边在亮玻璃上更清晰 */
+.upload-zone { border: 1.5px dashed rgba(120, 110, 220, 0.5); }
+.upload-zone:hover { border-color: rgba(124, 105, 246, 0.9); }
+.element-add { border: 2px dashed rgba(120, 110, 220, 0.45); color: var(--ink-tertiary); }
+.element-add:hover { border-color: rgba(124, 105, 246, 0.9); color: var(--accent); }
+
+/* 结果卡片图片底色 */
+.result-card { background: linear-gradient(155deg, rgba(255, 255, 255, 0.3), rgba(255, 255, 255, 0.12)); }
+.result-meta { border-top: 1px solid rgba(255, 255, 255, 0.4); color: var(--ink-tertiary); }
+
+/* hero 文案在亮背景上的可读性 */
+.hero-title { color: var(--ink-primary); }
+.hero-slogan { color: var(--ink-primary); }
+.hero-subtitle { color: var(--ink-secondary); }
+.hero-eyebrow { color: var(--accent); }
+.step-header h2 { color: var(--ink-primary); }
+.step-header p { color: var(--ink-secondary); }
+.step-number { color: var(--accent); }
+
+/* ───────── BAKABAKA Logo · 液态玻璃铭牌（方案 A）─────────
+   把透明 logo 放进一块比背景更深、更实的通透玻璃铭牌里，
+   让字标在深色玻璃底上清晰跳出，又保留玻璃质感，不与背景糊在一起。 */
+
+/* —— 顶部小铭牌（header）—— */
+.brand-plate {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border-radius: 16px;
+  background:
+    linear-gradient(160deg, rgba(70, 58, 150, 0.55) 0%, rgba(44, 36, 110, 0.42) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.5);
+  -webkit-backdrop-filter: blur(22px) saturate(180%);
+  backdrop-filter: blur(22px) saturate(180%);
+  box-shadow:
+    inset 0 1.5px 1px rgba(255, 255, 255, 0.7),
+    inset 0 -8px 18px rgba(60, 50, 140, 0.35),
+    0 10px 26px rgba(40, 30, 100, 0.28);
+}
 .brand-logo {
-  height: 40px;
+  height: 30px;
   width: auto;
   display: block;
-  filter: drop-shadow(0 2px 12px rgba(150, 170, 255, 0.5));
+  filter:
+    drop-shadow(0 1px 1px rgba(20, 14, 60, 0.55))
+    drop-shadow(0 0 6px rgba(190, 200, 255, 0.5));
+}
+
+/* —— Hero 主铭牌 —— */
+.hero-logo-plate {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px auto 18px;
+  padding: 26px 46px;
+  border-radius: 30px;
+  background:
+    linear-gradient(160deg, rgba(74, 60, 158, 0.55) 0%, rgba(40, 32, 104, 0.46) 55%, rgba(54, 44, 132, 0.5) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  -webkit-backdrop-filter: blur(28px) saturate(185%);
+  backdrop-filter: blur(28px) saturate(185%);
+  box-shadow:
+    inset 0 2px 2px rgba(255, 255, 255, 0.8),
+    inset 0 -16px 36px rgba(56, 46, 140, 0.4),
+    0 20px 54px rgba(36, 26, 96, 0.34);
+  overflow: hidden;
+}
+/* 顶部弧形高光反射，强化厚玻璃质感 */
+.hero-logo-plate::before {
+  content: "";
+  position: absolute;
+  left: 6%;
+  right: 6%;
+  top: 5px;
+  height: 38%;
+  border-radius: 30px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0));
+  pointer-events: none;
 }
 .hero-logo {
-  width: min(400px, 74vw);
+  position: relative;
+  width: min(360px, 70vw);
   height: auto;
   display: block;
-  margin: 4px auto 12px;
-  filter: drop-shadow(0 8px 34px rgba(150, 170, 255, 0.5));
+  filter:
+    drop-shadow(0 2px 3px rgba(16, 10, 50, 0.6))
+    drop-shadow(0 0 14px rgba(190, 200, 255, 0.55));
 }
+@media (max-width: 640px) {
+  .hero-logo-plate { padding: 18px 28px; border-radius: 24px; }
+  .hero-logo { width: 64vw; }
+}
+
+/* 弹窗（登录 / 充值）改成浅色玻璃，和整体统一 */
+.login-modal, .recharge-modal {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.78), rgba(228, 232, 255, 0.66));
+  -webkit-backdrop-filter: blur(40px) saturate(180%);
+  backdrop-filter: blur(40px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: inset 0 1.5px 1px rgba(255, 255, 255, 0.9), 0 30px 70px rgba(58, 40, 120, 0.28);
+}
+.login-modal-header h2, .recharge-modal-header h2 { color: var(--ink-primary); }
+.login-modal-header p, .recharge-modal-header p { color: var(--ink-secondary); }
+.login-input-group {
+  background: rgba(255, 255, 255, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+}
+.login-input-group input { color: var(--ink-primary); }
+.login-input-group input::placeholder { color: var(--ink-tertiary); }
+.login-btn-primary, .credits-badge--login {
+  background: linear-gradient(168deg, rgba(150, 160, 255, 0.95), rgba(108, 92, 240, 1));
+}
+.credits-badge--logged-in {
+  background: linear-gradient(155deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.16));
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 999px;
+}
+.credits-badge-info { color: var(--ink-secondary); }
+.credits-badge-plan { color: var(--accent); }
+.credits-badge-amount, .credits-badge-crown { color: #c98a1e; }
+
+/* 滚动条美化 */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb {
+  background: rgba(124, 105, 246, 0.3);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(124, 105, 246, 0.5); background-clip: content-box; }
+::-webkit-scrollbar-track { background: transparent; }

@@ -583,7 +583,9 @@ export function App() {
       {/* Header */}
       <header className="site-header">
         <div className="header-brand">
-          <img src="/logo.png" alt="巴卡巴卡 BAKABAKA" className="brand-logo" />
+          <span className="brand-plate">
+            <img src="/logo.png" alt="巴卡巴卡 BAKABAKA" className="brand-logo" />
+          </span>
         </div>
         <nav className="header-nav">
           <button type="button" className={cn("nav-btn", "nav-btn-history", showHistory && "is-active")} onClick={() => setShowHistory(!showHistory)}>
@@ -670,7 +672,9 @@ export function App() {
 
       {/* Hero Section */}
       <section className="hero">
-        <img src="/logo.png" alt="巴卡巴卡 BAKABAKA" className="hero-logo" />
+        <div className="hero-logo-plate">
+          <img src="/logo.png" alt="巴卡巴卡 BAKABAKA" className="hero-logo" />
+        </div>
         <p className="hero-slogan">自媒体封面之王 · King of Cover</p>
         <p className="hero-subtitle">上传一张底图，AI 按爆款审美自动排版花字、多引擎多风格一次出图，一眼挑出最吸睛的封面。</p>
       </section>
