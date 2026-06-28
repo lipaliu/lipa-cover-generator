@@ -1545,26 +1545,49 @@ input, select, textarea { color: inherit; }
    半透明磨砂 + 紫色光晕 + 玻璃高光，保留原深紫色调。
    ═══════════════════════════════════════════════════════════════ */
 :root {
-  --glass-blur: 20px;
-  --glass-bg: rgba(255, 255, 255, 0.055);
-  --glass-bg-2: rgba(255, 255, 255, 0.10);
-  --glass-brd: rgba(255, 255, 255, 0.16);
-  --glass-top: inset 0 1px 0 rgba(255, 255, 255, 0.35);
-  --glass-shadow: 0 10px 34px rgba(12, 8, 28, 0.38);
-  --radius-sm: 12px;
-  --radius-md: 18px;
-  --radius-lg: 24px;
-  --radius-xl: 32px;
+  color-scheme: dark;
+  --ink-primary: #ffffff;
+  --ink-secondary: rgba(255, 255, 255, 0.82);
+  --ink-tertiary: rgba(255, 255, 255, 0.58);
+  --accent: #d6c8ff;
+  --accent-hover: #ece6ff;
+  --accent-glow: rgba(199, 181, 253, 0.26);
+  --border: rgba(255, 255, 255, 0.22);
+  --border-strong: rgba(255, 255, 255, 0.42);
+  --bg-card: rgba(255, 255, 255, 0.12);
+  --bg-card-hover: rgba(255, 255, 255, 0.18);
+  --bg-elevated: rgba(255, 255, 255, 0.16);
+  --bg-secondary: rgba(255, 255, 255, 0.1);
+  --shadow-sm: 0 2px 12px rgba(18, 6, 48, 0.32);
+  --shadow-md: 0 16px 50px rgba(18, 6, 48, 0.42);
+  --shadow-lg: 0 30px 72px rgba(18, 6, 48, 0.52);
+  --glass-blur: 28px;
+  --glass-bg: rgba(255, 255, 255, 0.12);
+  --glass-bg-2: rgba(255, 255, 255, 0.2);
+  --glass-brd: rgba(255, 255, 255, 0.3);
+  --glass-top: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+  --glass-shadow: 0 16px 48px rgba(18, 6, 48, 0.42);
+  --radius-sm: 14px;
+  --radius-md: 20px;
+  --radius-lg: 26px;
+  --radius-xl: 34px;
+  /* 苹果字体感：SF Pro（英文/数字）+ 苹方 PingFang SC（中文） */
+  --font-body: -apple-system, system-ui, "SF Pro Text", "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-display: -apple-system, system-ui, "SF Pro Display", "PingFang SC", sans-serif;
 }
 
-/* 更有颜色的背景，让磨砂玻璃能折射出紫/蓝光 */
+html, body { background: #2e1065; font-family: var(--font-body); }
+body, button, input, select, textarea, h1, h2, h3, p, span, strong, small { font-family: var(--font-body); }
+.hero-slogan, .step-number, .hero-title { font-family: var(--font-display); }
+
+/* 深邃蓝紫丝绸背景：深靛紫 → 宝蓝（无青绿），贴近桌面壁纸 */
 .bg-gradient {
   background:
-    radial-gradient(ellipse 70% 50% at 50% -8%, rgba(167, 139, 250, 0.26) 0%, transparent 55%),
-    radial-gradient(ellipse 60% 45% at 86% 12%, rgba(99, 102, 241, 0.18) 0%, transparent 55%),
-    radial-gradient(ellipse 55% 50% at 10% 88%, rgba(236, 72, 153, 0.13) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 45% at 82% 92%, rgba(56, 189, 248, 0.12) 0%, transparent 55%),
-    var(--bg-primary);
+    radial-gradient(70% 55% at 76% 32%, rgba(59, 130, 246, 0.42) 0%, transparent 55%),
+    radial-gradient(56% 50% at 18% 14%, rgba(91, 33, 182, 0.5) 0%, transparent 58%),
+    radial-gradient(66% 60% at 88% 90%, rgba(37, 99, 235, 0.5) 0%, transparent 60%),
+    radial-gradient(52% 48% at 10% 82%, rgba(49, 46, 129, 0.58) 0%, transparent 60%),
+    linear-gradient(150deg, #160e3a 0%, #1e2a6e 42%, #1d3fb0 74%, #1e40af 100%);
 }
 
 /* —— 通用磨砂玻璃模糊 —— */
@@ -1596,7 +1619,7 @@ input, select, textarea { color: inherit; }
   backdrop-filter: blur(var(--glass-blur)) saturate(165%);
 }
 
-/* 卡片 / 面板 / 输入框：磨砂玻璃 + 顶部高光 + 柔投影 */
+/* ───────── Liquid Glass：通透玻璃 + 亮边描光 + 顶部高光（macOS Tahoe 质感） ───────── */
 .nav-btn,
 .mode-card,
 .engine-card,
@@ -1612,62 +1635,92 @@ input, select, textarea { color: inherit; }
 .describe-zone textarea,
 .setting-item select,
 .style-select select {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-brd);
-  box-shadow: var(--glass-top), var(--glass-shadow);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.06) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.38);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.6),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+    inset 0 -10px 26px rgba(255, 255, 255, 0.05),
+    0 14px 44px rgba(10, 8, 40, 0.4);
 }
 
+/* 悬停：玻璃更亮、边缘更描光 */
+.nav-btn:hover,
+.mode-card:hover,
+.engine-card:hover,
+.ratio-card:hover,
+.result-card:hover {
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.27) 0%, rgba(255, 255, 255, 0.1) 100%);
+  border-color: rgba(255, 255, 255, 0.55);
+}
+
+/* 历史 / 设置抽屉：深色玻璃 */
 .overlay-panel {
-  background: rgba(20, 16, 34, 0.55);
-  border-left: 1px solid var(--glass-brd);
-  box-shadow: var(--glass-top), -20px 0 60px rgba(0, 0, 0, 0.45);
+  background: linear-gradient(160deg, rgba(46, 30, 92, 0.72), rgba(24, 16, 60, 0.7));
+  border-left: 1px solid rgba(255, 255, 255, 0.28);
+  box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.18), -24px 0 70px rgba(8, 4, 30, 0.55);
 }
 
-/* 选中 / 激活态：紫色玻璃 */
+/* 选中 / 激活：蓝紫玻璃 + 更亮的描光边 */
 .mode-card.is-active,
 .engine-card.is-active,
 .ratio-card.is-selected {
-  background: rgba(167, 139, 250, 0.16);
-  border-color: rgba(167, 139, 250, 0.5);
-  box-shadow: var(--glass-top), 0 10px 34px rgba(167, 139, 250, 0.3);
+  background: linear-gradient(160deg, rgba(150, 170, 255, 0.32), rgba(120, 110, 240, 0.18));
+  border-color: rgba(199, 210, 255, 0.85);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.75),
+    0 0 0 1px rgba(150, 170, 255, 0.4),
+    0 14px 40px rgba(80, 90, 220, 0.4);
 }
 
-/* 主按钮：紫色玻璃 + 玻璃高光 */
+/* 主按钮：液态玻璃药丸（亮边 + 顶部高光 + 蓝紫光） */
 .generate-btn,
 .nav-next:not(:disabled) {
-  background: linear-gradient(135deg, rgba(167, 139, 250, 0.92), rgba(139, 92, 246, 0.85));
-  border: 1px solid rgba(255, 255, 255, 0.28);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45), 0 10px 30px rgba(139, 92, 246, 0.4);
+  background: linear-gradient(165deg, rgba(255, 255, 255, 0.32) 0%, rgba(150, 160, 255, 0.2) 55%, rgba(120, 110, 235, 0.24) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  border-radius: 999px;
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(20, 16, 60, 0.4);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, 0.85),
+    inset 0 -3px 8px rgba(110, 120, 240, 0.3),
+    0 10px 30px rgba(40, 40, 120, 0.4);
 }
 .generate-btn:hover,
-.nav-next:not(:disabled):hover { filter: brightness(1.08); }
+.nav-next:not(:disabled):hover { filter: brightness(1.08) saturate(1.05); }
 
-/* 次按钮玻璃 */
+/* 次按钮 / 顶部导航：通透清玻璃药丸 */
+.stop-btn,
+.nav-prev,
+.nav-btn {
+  border-radius: 999px;
+}
 .stop-btn,
 .nav-prev {
-  background: var(--glass-bg-2);
-  border: 1px solid var(--glass-brd);
-  box-shadow: var(--glass-top);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.2), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  color: #fff;
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.6), 0 8px 22px rgba(10, 8, 40, 0.32);
 }
 
-/* 步骤圆点玻璃 */
+/* 步骤圆点：清玻璃圆 */
 .step-icon {
-  background: var(--glass-bg);
-  border: 1px solid var(--glass-brd);
-  box-shadow: var(--glass-top);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.7), 0 6px 18px rgba(10, 8, 40, 0.3);
 }
 
-/* —— BAKABAKA 玻璃 logo —— */
+/* —— BAKABAKA 玻璃 logo（透明字标，在深蓝紫上发光） —— */
 .brand-logo {
   height: 40px;
   width: auto;
   display: block;
-  filter: drop-shadow(0 2px 12px rgba(167, 139, 250, 0.45));
+  filter: drop-shadow(0 2px 12px rgba(150, 170, 255, 0.5));
 }
 .hero-logo {
   width: min(400px, 74vw);
   height: auto;
   display: block;
   margin: 4px auto 12px;
-  filter: drop-shadow(0 8px 32px rgba(167, 139, 250, 0.5));
+  filter: drop-shadow(0 8px 34px rgba(150, 170, 255, 0.5));
 }
