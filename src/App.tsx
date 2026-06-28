@@ -583,11 +583,7 @@ export function App() {
       {/* Header */}
       <header className="site-header">
         <div className="header-brand">
-          <span className="brand-mark">巴</span>
-          <span className="brand-text">
-            <strong>巴卡巴卡 BAKABAKA</strong>
-            <small>自媒体封面之王 · King of Cover</small>
-          </span>
+          <img src="/logo.png" alt="巴卡巴卡 BAKABAKA" className="brand-logo" />
         </div>
         <nav className="header-nav">
           <button type="button" className={cn("nav-btn", "nav-btn-history", showHistory && "is-active")} onClick={() => setShowHistory(!showHistory)}>
@@ -674,8 +670,7 @@ export function App() {
 
       {/* Hero Section */}
       <section className="hero">
-        <span className="hero-eyebrow">BAKABAKA</span>
-        <h1 className="hero-title">巴卡巴卡</h1>
+        <img src="/logo.png" alt="巴卡巴卡 BAKABAKA" className="hero-logo" />
         <p className="hero-slogan">自媒体封面之王 · King of Cover</p>
         <p className="hero-subtitle">上传一张底图，AI 按爆款审美自动排版花字、多引擎多风格一次出图，一眼挑出最吸睛的封面。</p>
       </section>
