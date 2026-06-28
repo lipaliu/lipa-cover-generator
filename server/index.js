@@ -108,6 +108,39 @@ function requestOptions(timeoutMs) {
   return { timeout: timeoutMs, maxRetries: 0 };
 }
 
+// 判断是否为「可重试」的瞬时错误：连接/网络层 + 429 + 5xx 才重试；
+// 4xx（内容策略、鉴权、参数错误）是确定性失败，重试也没用，直接抛。
+function isRetryableError(error) {
+  const status = error?.status ?? error?.response?.status;
+  if (status === 429) return true;
+  if (typeof status === "number") return status >= 500;
+  // 没有 HTTP 状态码 = 连接/网络层错误（OpenAI SDK 的笼统 "Connection error." 即属此类）
+  const name = `${error?.name || ""} ${error?.constructor?.name || ""}`;
+  if (/APIConnection|Connection/iu.test(name)) return true;
+  const msg = `${error?.message || ""} ${error?.cause?.code || ""} ${error?.cause?.message || ""}`;
+  return /connection error|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND|EPIPE|socket hang up|terminated|UND_ERR|fetch failed|network|aborted/iu.test(
+    msg,
+  );
+}
+
+// 对连接抖动自动重试（指数退避 + 抖动）。代理 / 长耗时生图偶发断连时挽救成功率。
+async function withConnectionRetry(fn, { retries = 3, baseDelayMs = 1200, label = "请求" } = {}) {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await fn();
+    } catch (error) {
+      attempt += 1;
+      if (attempt > retries || !isRetryableError(error)) throw error;
+      const delay = Math.round(baseDelayMs * attempt * (1 + Math.random() * 0.4));
+      console.warn(
+        `[retry] ${label} 第 ${attempt}/${retries} 次连接失败：${error?.message || error}；${delay}ms 后重试`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delay));
+    }
+  }
+}
+
 async function withTimeout(promise, timeoutMs, label) {
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -620,27 +653,32 @@ async function generateImage2Cover(openai, { sourceMode, sourceImages, imageDesc
   const quality = process.env.IMAGE2_QUALITY || "auto";
 
   if (sourceImages.length === 0) {
-    const response = await openai.images.generate({
+    return withConnectionRetry(async () => {
+      const response = await openai.images.generate({
+        model: "gpt-image-2",
+        prompt,
+        size,
+        quality,
+        moderation: "auto",
+      }, requestOptions(timeoutMs));
+      return imageResponseToDataUrl(response);
+    }, { label: "Image2 文生图" });
+  }
+
+  return withConnectionRetry(async () => {
+    // 文件对象在每次尝试内重建，避免上一次失败时 multipart 流已被消费。
+    const imageFiles = await Promise.all(
+      sourceImages.map((sourceImage, index) => imageDataUrlToFile(sourceImage, `source-${index + 1}.png`)),
+    );
+    const response = await openai.images.edit({
       model: "gpt-image-2",
+      image: imageFiles.length === 1 ? imageFiles[0] : imageFiles,
       prompt,
       size,
       quality,
-      moderation: "auto",
     }, requestOptions(timeoutMs));
     return imageResponseToDataUrl(response);
-  }
-
-  const imageFiles = await Promise.all(
-    sourceImages.map((sourceImage, index) => imageDataUrlToFile(sourceImage, `source-${index + 1}.png`)),
-  );
-  const response = await openai.images.edit({
-    model: "gpt-image-2",
-    image: imageFiles.length === 1 ? imageFiles[0] : imageFiles,
-    prompt,
-    size,
-    quality,
-  }, requestOptions(timeoutMs));
-  return imageResponseToDataUrl(response);
+  }, { label: "Image2 图生图" });
 }
 
 function imageExtensionForMime(mimeType) {
