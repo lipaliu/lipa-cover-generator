@@ -50,7 +50,7 @@ export const fontStyles = [
   { id: "A13", name: "极粗体", weight: 3, desc: "ultra-black compressed Chinese font, maximum weight fills frame, powerful and impactful" },
   { id: "A14", name: "霓虹体", weight: 1, desc: "neon tube glow font style, luminous colored outlines with soft glow halo, nightlife energy" },
   { id: "A15", name: "毛笔飞白", weight: 3, desc: "dry brush Chinese calligraphy with flying white (feibai) texture, broken ink strokes revealing paper beneath" },
-  { id: "A16", name: "钢笔手写", weight: 3, desc: "fountain pen handwritten style, elegant ink flow with slight pressure variation, personal letter feel" },
+  { id: "A16", name: "钢笔手写", weight: 3, desc: "fountain pen handwritten style with elegant ink flow; includes elegant English cursive/script titles in the 'Mini Vlog / Daily Vlog' vibe — flowing calligraphic English, often white, floating over a photo collage" },
   { id: "A17", name: "蜡笔质感", weight: 0, desc: "crayon/pastel texture font, rough waxy strokes, childlike creative energy" },
   { id: "A18", name: "印章体", weight: 1, desc: "Chinese seal script (Zhuanshu) style, red stamp aesthetic, ancient authority" },
   { id: "A19", name: "打字机体", weight: 1, desc: "typewriter monospace font, uneven ink density, vintage mechanical nostalgia" },
