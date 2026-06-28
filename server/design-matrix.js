@@ -12,12 +12,12 @@
  *   F. 构图方式 (10)
  *   G. 情绪氛围 (10)
  *
- * ─── 审美优选机制（weight）────────────────────────────────────────────────────
- * 每个选项带有 weight 字段，控制其被随机选中的概率（加权随机）：
- *   weight = 3  优先（贴合创作者审美的核心组合）
- *   weight = 2  普通（安全可用）
- *   weight = 1  降权（偏离主审美 / 风险较高，低概率出现）
- *   weight = 0  禁用（最容易把图做丑，默认不进抽样池）
+ * ─── 总库机制（weight 现在只表示「在库 / 禁用」，不再有高低排序）──────────────────
+ * 核心理念：凡是创作者喜欢、收进总库的审美，彼此一律平等——没有谁更优先。生成时在
+ * 库内「平等随机」抽取，最大化多样性。weight 字段现在只当作开关：
+ *   weight > 0  在库（创作者喜欢的审美，平等参与抽样；具体数值大小已不影响概率）
+ *   weight = 0  禁用（创作者明确不要的廉价感：像素体/蜡笔体/漫画体/胶带，不进库）
+ * 注：保留各项的 weight 数值仅为历史可读性，weightedPick/weightedShuffle 已改为均匀随机。
  *
  * ─── 审美定位（详见 references/aesthetic-profile.md）─────────────────────────────
  * 目标 = 「明亮、阳光、有活力的真实照片 × 高级感的大字排版」（出片感 + 编辑级排版），
@@ -229,15 +229,11 @@ const keywordConstraints = [
  * 若所有选项 weight<=0（极端情况），回退为均匀随机。
  */
 function weightedPick(arr) {
+  // 总库内一律平等（无权重高低）：只把禁用项（weight<=0，如像素/蜡笔/漫画/胶带）排除在库外，
+  // 其余都是创作者喜欢的审美，平等随机抽取。
   const pool = arr.filter((x) => (x.weight ?? 2) > 0);
   const candidates = pool.length > 0 ? pool : arr;
-  const total = candidates.reduce((sum, x) => sum + (x.weight ?? 2), 0);
-  let r = Math.random() * total;
-  for (const x of candidates) {
-    r -= x.weight ?? 2;
-    if (r <= 0) return x;
-  }
-  return candidates[candidates.length - 1];
+  return candidates[Math.floor(Math.random() * candidates.length)];
 }
 
 /**
@@ -246,16 +242,14 @@ function weightedPick(arr) {
  * 用于 A/B/D 等需要"尽量不重复但仍偏好高级项"的维度。
  */
 function weightedShuffle(arr) {
+  // 总库内平等洗牌（无权重偏好），只排除禁用项（weight<=0）。Fisher-Yates 均匀随机。
   const pool = arr.filter((x) => (x.weight ?? 2) > 0);
-  const candidates = pool.length > 0 ? pool : arr;
-  return candidates
-    .map((x) => ({
-      item: x,
-      // key = random^(1/weight)，weight 越大 key 越接近 1，越靠前
-      sortKey: Math.pow(Math.random(), 1 / Math.max(x.weight ?? 2, 0.0001)),
-    }))
-    .sort((a, b) => b.sortKey - a.sortKey)
-    .map((entry) => entry.item);
+  const candidates = [...(pool.length > 0 ? pool : arr)];
+  for (let i = candidates.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+  }
+  return candidates;
 }
 
 /**
