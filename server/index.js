@@ -141,6 +141,18 @@ async function withConnectionRetry(fn, { retries = 3, baseDelayMs = 1200, label 
   }
 }
 
+// 统一创建 OpenAI 客户端（生成 / 单张重生共用）。配了代理则走 undici 代理 dispatcher。
+function createOpenAIClient() {
+  if (!process.env.OPENAI_API_KEY) return null;
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    baseURL: process.env.OPENAI_API_BASE_URL || "https://api.openai.com/v1",
+    timeout: envNumber("OPENAI_REQUEST_TIMEOUT_MS", 120000, { min: 15000, max: 600000 }),
+    maxRetries: 0,
+    ...(proxyDispatcher ? { fetch: undiciFetch, fetchOptions: { dispatcher: proxyDispatcher } } : {}),
+  });
+}
+
 async function withTimeout(promise, timeoutMs, label) {
   let timer;
   const timeout = new Promise((_, reject) => {
@@ -649,7 +661,8 @@ async function imageResponseToDataUrl(response) {
 async function generateImage2Cover(openai, { sourceMode, sourceImages, imageDescription, plan, ratio }) {
   const prompt = buildImage2Prompt(plan, { sourceMode, imageDescription, ratio });
   const size = image2SizeForRatio(ratio);
-  const timeoutMs = imageJobTimeoutMs("image2");
+  // 单次请求超时设短于整体任务超时，挂死的请求快速中止后由 withConnectionRetry 重试，留出重试空间。
+  const timeoutMs = envNumber("IMAGE2_REQUEST_TIMEOUT_MS", 120000, { min: 30000, max: 300000 });
   const quality = process.env.IMAGE2_QUALITY || "auto";
 
   if (sourceImages.length === 0) {
@@ -1009,6 +1022,51 @@ app.get("/api/download/:filename", (req, res) => {
   });
 });
 
+// 单张重生：某一张失败或不满意时，单独重生（可换引擎）。复用整条生成逻辑，普通 JSON 返回，不计费。
+app.post("/api/regenerate", async (req, res) => {
+  const requestedEngineRaw = req.body?.engine || "image2";
+  try {
+    const {
+      plan,
+      ratio = "3:4",
+      sourceMode: requestedSourceMode = "base",
+      image,
+      elementImages = [],
+      imageDescription = "",
+    } = req.body || {};
+    if (!plan || typeof plan !== "object" || plan.id == null) {
+      return res.status(400).json({ error: "缺少方案数据（plan），无法重生这张封面。" });
+    }
+    const sourceMode = normalizeSourceMode(requestedSourceMode);
+    const engine = resolveEngine(normalizeEngine(requestedEngineRaw));
+    assertEngineAvailable(engine);
+    const sourceImages = getSourceImages({ sourceMode, image, elementImages });
+    const openai = createOpenAIClient();
+    const imageUrl = await generateByEngine({
+      openai,
+      engine,
+      sourceMode,
+      sourceImages,
+      imageDescription,
+      plan,
+      ratio,
+    });
+    return res.json({
+      id: plan.id,
+      combination: plan.combination,
+      label: plan.label,
+      description: plan.description,
+      image_url: imageUrl,
+      engine,
+      ratio,
+    });
+  } catch (error) {
+    const engine = resolveEngine(normalizeEngine(requestedEngineRaw));
+    console.warn(`[regenerate] 单张重生失败（${engine}）：${error?.message || error}`);
+    return res.json({ error: friendlyProviderError(error, engine) });
+  }
+});
+
 app.post("/api/generate", async (req, res) => {
   // ─── Credits check (before starting SSE) ───
   const { isDbAvailable } = await import("./db.js");
@@ -1069,19 +1127,7 @@ app.post("/api/generate", async (req, res) => {
     const analysisImage = sourceImages[0] || "";
     const planKeywords = [keywords, imageDescription ? `画面描述：${imageDescription}` : ""].filter(Boolean).join("\n");
 
-    const openai = process.env.OPENAI_API_KEY
-      ? new OpenAI({
-          apiKey: process.env.OPENAI_API_KEY,
-          // 显式指定 baseURL，避免被外部 OPENAI_BASE_URL 环境变量意外覆盖；默认官方。
-          baseURL: process.env.OPENAI_API_BASE_URL || "https://api.openai.com/v1",
-          timeout: envNumber("OPENAI_REQUEST_TIMEOUT_MS", 120000, { min: 15000, max: 600000 }),
-          maxRetries: 0,
-          // 配了代理时（本地开发），用 undici 的 fetch + 代理 dispatcher，否则走默认直连。
-          ...(proxyDispatcher
-            ? { fetch: undiciFetch, fetchOptions: { dispatcher: proxyDispatcher } }
-            : {}),
-        })
-      : null;
+    const openai = createOpenAIClient();
     const fallbackAnalysisWithColor = {
       ...fallbackAnalysis,
       dominant_color: stylePreferences?.imageDominantColor || fallbackAnalysis.dominant_color,

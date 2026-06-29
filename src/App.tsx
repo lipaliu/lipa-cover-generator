@@ -20,11 +20,12 @@ import {
   RectangleHorizontal,
   RectangleVertical,
   SquareIcon,
+  RotateCw,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { deleteHistoryBatch, getHistory, saveHistoryBatch } from "./lib/history";
 import { downloadImageUrl, exportImageUrl, fileToDataUrl, formatTime, urlToDataUrl } from "./lib/image";
-import type { CoverResult, GenerateEvent, HistoryBatch, ImageEngine } from "./lib/types";
+import type { CoverResult, CoverPlan, GenerateEvent, HistoryBatch, ImageEngine } from "./lib/types";
 import { LoginModal } from "./components/LoginModal";
 import { CreditsBadge } from "./components/CreditsBadge";
 import { RechargeModal } from "./components/RechargeModal";
@@ -215,6 +216,9 @@ export function App() {
   // Step 4: Generate
   const [runState, setRunState] = useState<RunState>("idle");
   const [results, setResults] = useState<CoverResult[]>([]);
+  // 完整方案（含 prompt），用于单张重生时回传服务端；以及正在重生的封面 id。
+  const [plansById, setPlansById] = useState<Record<number, CoverPlan>>({});
+  const [regeneratingIds, setRegeneratingIds] = useState<number[]>([]);
   const [progress, setProgress] = useState(0);
   const [total, setTotal] = useState(4);
   const [message, setMessage] = useState("");
@@ -350,6 +354,8 @@ export function App() {
     setRunState("analyzing");
     setErrorMessage("");
     setResults([]);
+    setPlansById({});
+    setRegeneratingIds([]);
     setProgress(0);
     setTotal(count);
     setMessage("正在分析底图...");
@@ -405,6 +411,13 @@ export function App() {
         if (event.status === "analyzing") setRunState("analyzing");
         if (event.status === "planning" || event.status === "planned") setRunState("planning");
         if (event.status === "generating") setRunState("generating");
+        if (event.plans && event.plans.length > 0) {
+          setPlansById((prev) => {
+            const next = { ...prev };
+            for (const p of event.plans as CoverPlan[]) next[p.id] = p;
+            return next;
+          });
+        }
         if (event.result) {
           collected.push(event.result);
           setResults((prev) => {
@@ -449,6 +462,55 @@ export function App() {
     abortRef.current?.abort();
     abortRef.current = null;
     setRunState("idle");
+  };
+
+  // 单张重生：用同一引擎或换一个引擎，重新生成某一张封面。
+  const regenerateCover = async (cover: CoverResult, newEngine?: ImageEngine) => {
+    if (regeneratingIds.includes(cover.id)) return;
+    const plan = plansById[cover.id];
+    if (!plan) {
+      setDownloadStatus({ filename: "", message: "这张缺少方案数据（可能来自历史记录），请整批重新生成后再单张重生。" });
+      return;
+    }
+    const useEngine: ImageEngine = newEngine || cover.engine || engine;
+    setRegeneratingIds((prev) => [...prev, cover.id]);
+    setResults((prev) => prev.map((c) => (c.id === cover.id ? { ...c, image_url: undefined, error: undefined } : c)));
+    try {
+      const img = await getImageDataUrl();
+      const token = getToken();
+      const response = await fetch("/api/regenerate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          plan,
+          ratio: cover.ratio,
+          engine: useEngine,
+          sourceMode,
+          image: img || undefined,
+          elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
+          imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
+        }),
+        signal: abortRef.current?.signal,
+      });
+      const data = (await response.json()) as CoverResult;
+      setResults((prev) =>
+        prev.map((c) =>
+          c.id === cover.id
+            ? { ...c, image_url: data.image_url, error: data.error, engine: data.engine || useEngine }
+            : c,
+        ),
+      );
+    } catch (error) {
+      setResults((prev) =>
+        prev.map((c) =>
+          c.id === cover.id
+            ? { ...c, image_url: undefined, error: error instanceof Error ? error.message : "重生失败" }
+            : c,
+        ),
+      );
+    } finally {
+      setRegeneratingIds((prev) => prev.filter((id) => id !== cover.id));
+    }
   };
 
   const downloadCover = async (cover: CoverResult) => {
@@ -548,9 +610,16 @@ export function App() {
   // 单张封面卡片：缩略图按真实比例完整显示，点击放大。
   const renderCard = (cover: CoverResult) => {
     const aspect = ratioAspectCss(cover.ratio);
+    const busy = regeneratingIds.includes(cover.id);
+    const canAct = !busy && (!!cover.image_url || !!cover.error) && !!plansById[cover.id];
     return (
-      <article key={cover.id} className={cn("result-card", !cover.image_url && !cover.error && "is-loading")}>
-        {cover.image_url ? (
+      <article key={cover.id} className={cn("result-card", busy && "is-loading")}>
+        {busy ? (
+          <div className="result-loading" style={{ aspectRatio: aspect }}>
+            <LoaderCircle className="spin" size={28} />
+            <small>重新生成中...</small>
+          </div>
+        ) : cover.image_url ? (
           <button type="button" className="result-image" style={{ aspectRatio: aspect }} onClick={() => setPreviewCover(cover)}>
             <img src={cover.image_url} alt={cover.label} />
             <span className="result-download"><Sparkles size={20} /><small>点击放大</small></span>
@@ -567,6 +636,26 @@ export function App() {
           <span>{cover.ratio ? `${cover.ratio} · ${cover.label}` : cover.label}</span>
           {cover.engine && <span style={{ fontSize: 11, opacity: 0.65 }}>{engineShortLabel(cover.engine)}</span>}
         </footer>
+        {canAct && (
+          <div className="result-actions">
+            <button type="button" className="result-act" onClick={() => regenerateCover(cover)} title="用同一引擎重新生成这张">
+              <RotateCw size={13} /> 重生
+            </button>
+            {engineOptions
+              .filter((opt) => opt.id !== cover.engine)
+              .map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  className="result-act result-act-engine"
+                  onClick={() => regenerateCover(cover, opt.id)}
+                  title={`改用 ${opt.title} 重新生成这张`}
+                >
+                  换{engineShortLabel(opt.id)}
+                </button>
+              ))}
+          </div>
+        )}
       </article>
     );
   };
