@@ -1,0 +1,29 @@
+# Render 部署蓝图（Blueprint）。在 Render 新建 Blueprint 时会自动读取本文件。
+# 云端：免登录(VITE_LOCAL_MODE=1) + 访问口令(ACCESS_USER/ACCESS_PASSWORD) + Image2/Seedream
+#（即梦是本机 CLI，云端自动隐藏，不构建进去）。
+services:
+  - type: web
+    name: bakabaka
+    runtime: node
+    plan: free                # 免费档（闲置会休眠，冷启动约 30 秒）；要常驻可改 starter
+    region: oregon            # 海外地域，OpenAI 直连、免备案
+    buildCommand: npm install --include=dev && VITE_LOCAL_MODE=1 npm run build
+    startCommand: node server/index.js --serve-dist
+    healthCheckPath: /healthz
+    autoDeploy: true          # push 到 GitHub 后自动重新部署
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: FAST_DIRECT_MODE
+        value: "1"
+      # —— 下面这些是密钥/口令，请在 Render 网页后台手动填，不要写进仓库 ——
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: ARK_API_KEY
+        sync: false
+      - key: ARK_MODEL
+        sync: false
+      - key: ACCESS_USER
+        sync: false
+      - key: ACCESS_PASSWORD
+        sync: false

@@ -11,8 +11,8 @@ PORT="${PORT:-8787}"
 # 读取访问口令（来自 .env.local，仅展示提醒用）
 PASS="$(grep -E '^ACCESS_PASSWORD=' .env.local 2>/dev/null | head -1 | cut -d= -f2- || true)"
 
-echo "① 构建最新前端（私有实例模式：免登录、三引擎全开）…"
-VITE_LOCAL_MODE=1 npm run build >/dev/null
+echo "① 构建最新前端（私有实例模式：免登录；本机隧道保留即梦）…"
+VITE_LOCAL_MODE=1 VITE_ENABLE_SEEDANCE=1 npm run build >/dev/null
 
 echo "② 启动生产服务（端口 ${PORT}，带访问口令）…"
 lsof -ti "tcp:${PORT}" 2>/dev/null | xargs kill 2>/dev/null || true

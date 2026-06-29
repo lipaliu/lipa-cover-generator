@@ -263,6 +263,9 @@ configureArk();
 
 app.use(express.json({ limit: "35mb" }));
 
+// 健康检查（云平台探活用，不经访问口令，必须放在口令中间件之前）。
+app.get("/healthz", (_req, res) => res.status(200).send("ok"));
+
 // 简单访问口令（小范围分享用）。仅当设置了 ACCESS_PASSWORD 时启用，整站（前端+接口）都要口令。
 // 本地不设则不拦；隧道 / 云上把 ACCESS_PASSWORD 传进来即可保护。用户名随意，只校验密码。
 const ACCESS_USER = process.env.ACCESS_USER || "";
@@ -1114,6 +1117,7 @@ app.post("/api/generate", async (req, res) => {
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
   res.setHeader("Cache-Control", "no-cache, no-transform");
   res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // 禁止反向代理缓冲 SSE（云/隧道下进度才能实时推送）
   res.flushHeaders?.();
 
   const startedAt = Date.now();
@@ -1367,6 +1371,8 @@ if (serveDist) {
   }
 }
 
-app.listen(port, "127.0.0.1", () => {
-  console.log(`LIPA API server running at http://127.0.0.1:${port}`);
+// 监听地址：默认 0.0.0.0（云平台必须对外监听；本机/隧道也兼容，因为含 127.0.0.1）。
+const host = process.env.HOST || "0.0.0.0";
+app.listen(port, host, () => {
+  console.log(`LIPA API server running at http://${host}:${port}`);
 });

@@ -45,14 +45,20 @@ const allEngineOptions: Array<{
 ];
 
 // 私有实例模式：本机访问，或构建时设了 VITE_LOCAL_MODE=1（如自用的公网隧道/私有部署，
-// 已有访问口令保护）。此模式下免登录、不计积分、三引擎全开（含本机即梦）。
+// 已有访问口令保护）。此模式下免登录、不计积分。
 const isLocalLipa =
   import.meta.env.VITE_LOCAL_MODE === "1" ||
   (typeof window !== "undefined" &&
     ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname));
 
-// 本地 LIPA 使用模式：不登录、不积分，并显示 SeeDance。
-const engineOptions = import.meta.env.DEV || isLocalLipa
+// 即梦(SeeDance)是本机 CLI：只有开发、真·本机、或构建时显式设了 VITE_ENABLE_SEEDANCE=1
+// （本地隧道分享时）才显示。云端没有 CLI，自动隐藏，只剩 Image2 + Seedream。
+const enableSeedance =
+  import.meta.env.DEV ||
+  import.meta.env.VITE_ENABLE_SEEDANCE === "1" ||
+  (typeof window !== "undefined" &&
+    ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname));
+const engineOptions = enableSeedance
   ? allEngineOptions
   : allEngineOptions.filter((e) => e.id !== "seedance");
 
