@@ -265,19 +265,23 @@ app.use(express.json({ limit: "35mb" }));
 
 // 简单访问口令（小范围分享用）。仅当设置了 ACCESS_PASSWORD 时启用，整站（前端+接口）都要口令。
 // 本地不设则不拦；隧道 / 云上把 ACCESS_PASSWORD 传进来即可保护。用户名随意，只校验密码。
+const ACCESS_USER = process.env.ACCESS_USER || "";
 const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD || "";
 if (ACCESS_PASSWORD) {
   app.use((req, res, next) => {
     const header = req.headers.authorization || "";
     if (header.startsWith("Basic ")) {
       const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
-      const password = decoded.slice(decoded.indexOf(":") + 1);
-      if (password === ACCESS_PASSWORD) return next();
+      const idx = decoded.indexOf(":");
+      const user = decoded.slice(0, idx);
+      const password = decoded.slice(idx + 1);
+      const userOk = !ACCESS_USER || user === ACCESS_USER; // 未设 ACCESS_USER 则不校验用户名
+      if (userOk && password === ACCESS_PASSWORD) return next();
     }
     res.set("WWW-Authenticate", 'Basic realm="BAKABAKA"');
-    return res.status(401).send("需要访问口令 / Access password required.");
+    return res.status(401).send("需要登录 / Login required.");
   });
-  console.log("[Access] 已启用访问口令保护（ACCESS_PASSWORD）。");
+  console.log(`[Access] 已启用登录保护（用户名:${ACCESS_USER || "任意"}）。`);
 }
 
 // Initialize database connection (non-blocking, graceful if not configured)

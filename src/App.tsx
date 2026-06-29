@@ -678,6 +678,7 @@ export function App() {
           <span className="brand-plate">
             <img src="/logo.png" alt="巴卡巴卡 BAKABAKA" className="brand-logo" />
           </span>
+          <small className="brand-copyright">Copyright © 畅导吃枸杞</small>
         </div>
         <nav className="header-nav">
           <button type="button" className={cn("nav-btn", "nav-btn-history", showHistory && "is-active")} onClick={() => setShowHistory(!showHistory)}>
