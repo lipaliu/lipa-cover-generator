@@ -435,21 +435,24 @@ export function App() {
           });
         }
         if (event.status === "done") {
-          const final = fillMissingResults(event.results || collected, event.total || count);
+          // 只保留成功出图的：失败/未返回的直接不显示（少一张就少一张，不弹错误原因）。
+          const final = (event.results || collected).filter((r) => r.image_url);
           setResults(final);
           setProgress(event.total || count);
           setRunState("done");
-          saveHistoryBatch({
-            id: `batch-${Date.now()}`,
-            createdAt: new Date().toISOString(),
-            title: title.trim(),
-            subtitle: subtitle.trim(),
-            keywords: keywords.trim(),
-            engine,
-            count,
-            baseImage: imagePreview || "",
-            results: final,
-          }).then(() => refreshHistory());
+          if (final.length > 0) {
+            saveHistoryBatch({
+              id: `batch-${Date.now()}`,
+              createdAt: new Date().toISOString(),
+              title: title.trim(),
+              subtitle: subtitle.trim(),
+              keywords: keywords.trim(),
+              engine,
+              count,
+              baseImage: imagePreview || "",
+              results: final,
+            }).then(() => refreshHistory());
+          }
           // Refresh credits balance after generation
           if (!isLocalLipa && user) {
             fetchBalance().then((b) => setUser((prev) => prev ? { ...prev, credits: b.credits } : prev)).catch(() => {});
@@ -669,8 +672,9 @@ export function App() {
     );
   };
 
-  const verticalResults = results.filter((r) => !isLandscapeRatio(r.ratio));
-  const horizontalResults = results.filter((r) => isLandscapeRatio(r.ratio));
+  // 失败的封面不显示（cover.error 的直接过滤掉，只保留成功或正在生成/重生的）。
+  const verticalResults = results.filter((r) => !isLandscapeRatio(r.ratio) && !r.error);
+  const horizontalResults = results.filter((r) => isLandscapeRatio(r.ratio) && !r.error);
   const doneCount = results.filter((r) => r.image_url).length;
 
   /* ─── Render ─── */
@@ -1248,7 +1252,7 @@ export function App() {
             )}
             {runState === "done" && (
               <div className="done-actions" style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12, marginTop: 8 }}>
-                <span style={{ fontWeight: 600 }}>本组 {doneCount}/{results.length} 张已完成 · 已自动存入「历史」</span>
+                <span style={{ fontWeight: 600 }}>本组 {doneCount} 张已完成 · 已自动存入「历史」</span>
                 <div style={{ display: "flex", gap: 10, marginLeft: "auto", flexWrap: "wrap" }}>
                   <button type="button" className="stop-btn" style={{ width: "auto" }} onClick={() => { void downloadAll(); }}>
                     <Download size={16} /> 下载全部
