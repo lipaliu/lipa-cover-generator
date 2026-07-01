@@ -1114,6 +1114,13 @@ app.post("/api/generate", async (req, res) => {
   res.setHeader("Connection", "keep-alive");
   res.setHeader("X-Accel-Buffering", "no"); // 禁止反向代理缓冲 SSE（云/隧道下进度才能实时推送）
   res.flushHeaders?.();
+  // 立刻塞一段填充注释，突破 Cloudflare/反代的缓冲阈值；再加心跳，让长间隔里也持续有数据流出，
+  // 否则经隧道时早期进度会被缓冲、前端看着“卡在分析底图”。
+  res.write(`:${" ".repeat(2048)}\n\n`);
+  const sseHeartbeat = setInterval(() => {
+    try { res.write(": ping\n\n"); } catch { /* ignore */ }
+  }, 15000);
+  res.on("close", () => clearInterval(sseHeartbeat));
 
   const startedAt = Date.now();
   const {
