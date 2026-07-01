@@ -685,37 +685,32 @@ async function imageResponseToDataUrl(response) {
 async function generateImage2Cover(openai, { sourceMode, sourceImages, imageDescription, plan, ratio }) {
   const prompt = buildImage2Prompt(plan, { sourceMode, imageDescription, ratio });
   const size = image2SizeForRatio(ratio);
-  // 单次请求超时设短于整体任务超时，挂死的请求快速中止后由 withConnectionRetry 重试，留出重试空间。
-  const timeoutMs = envNumber("IMAGE2_REQUEST_TIMEOUT_MS", 120000, { min: 30000, max: 300000 });
+  // 生图 = 一次直接调用 Image2，给足时间（Image2 要多久就多久），不提前截断、不重试，避免额外耗时。
+  const timeoutMs = envNumber("IMAGE2_REQUEST_TIMEOUT_MS", 300000, { min: 60000, max: 600000 });
   const quality = process.env.IMAGE2_QUALITY || "auto";
 
   if (sourceImages.length === 0) {
-    return withConnectionRetry(async () => {
-      const response = await openai.images.generate({
-        model: "gpt-image-2",
-        prompt,
-        size,
-        quality,
-        moderation: "auto",
-      }, requestOptions(timeoutMs));
-      return imageResponseToDataUrl(response);
-    }, { label: "Image2 文生图" });
-  }
-
-  return withConnectionRetry(async () => {
-    // 文件对象在每次尝试内重建，避免上一次失败时 multipart 流已被消费。
-    const imageFiles = await Promise.all(
-      sourceImages.map((sourceImage, index) => imageDataUrlToFile(sourceImage, `source-${index + 1}.png`)),
-    );
-    const response = await openai.images.edit({
+    const response = await openai.images.generate({
       model: "gpt-image-2",
-      image: imageFiles.length === 1 ? imageFiles[0] : imageFiles,
       prompt,
       size,
       quality,
+      moderation: "auto",
     }, requestOptions(timeoutMs));
     return imageResponseToDataUrl(response);
-  }, { label: "Image2 图生图" });
+  }
+
+  const imageFiles = await Promise.all(
+    sourceImages.map((sourceImage, index) => imageDataUrlToFile(sourceImage, `source-${index + 1}.png`)),
+  );
+  const response = await openai.images.edit({
+    model: "gpt-image-2",
+    image: imageFiles.length === 1 ? imageFiles[0] : imageFiles,
+    prompt,
+    size,
+    quality,
+  }, requestOptions(timeoutMs));
+  return imageResponseToDataUrl(response);
 }
 
 function imageExtensionForMime(mimeType) {
