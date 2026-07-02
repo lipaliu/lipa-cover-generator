@@ -687,7 +687,9 @@ export function App() {
   const renderCard = (cover: CoverResult) => {
     const aspect = ratioAspectCss(cover.ratio);
     const busy = regeneratingIds.includes(cover.id);
-    const canAct = !busy && (!!cover.image_url || !!cover.error) && !!plansById[cover.id];
+    // 整批还在生成时不显示单张操作，避免额外请求跟批次抢代理把其他张拖住。
+    const batchRunning = runState === "analyzing" || runState === "planning" || runState === "generating";
+    const canAct = !busy && !batchRunning && (!!cover.image_url || !!cover.error) && !!plansById[cover.id];
     return (
       <article key={cover.id} className={cn("result-card", busy && "is-loading")}>
         {busy ? (
