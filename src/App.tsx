@@ -208,6 +208,8 @@ export function App() {
   const [imageName, setImageName] = useState("");
   const [elementImages, setElementImages] = useState<Array<{ name: string; dataUrl: string }>>([]);
   const [imageDescription, setImageDescription] = useState("");
+  // 作者灵感（选填）：只控制"底图/场景怎么生"，直接交给大模型理解；花字排版不受影响。
+  const [inspiration, setInspiration] = useState("");
   const [detectedColor, setDetectedColor] = useState("#6F7C79");
   const [imageColors, setImageColors] = useState<string[]>([]);
   const [ratioSelection, setRatioSelection] = useState<RatioSelection>({
@@ -387,6 +389,7 @@ export function App() {
           count,
           sourceMode,
           imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
+          inspiration: sourceMode !== "describe" ? inspiration.trim() || undefined : undefined,
           elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
           ratios: selectedRatios.map(([ratio, cnt]) => ({ ratio, count: cnt })),
           slotEngines: slots.map((_, i) => slotEngines[i] ?? engine),
@@ -511,6 +514,7 @@ export function App() {
           image: img || undefined,
           elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
           imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
+          inspiration: sourceMode !== "describe" ? inspiration.trim() || undefined : undefined,
         }),
         signal: abortRef.current?.signal,
       });
@@ -579,6 +583,7 @@ export function App() {
     setImageName("");
     setElementImages([]);
     setImageDescription("");
+    setInspiration("");
     setTitle("");
     setSubtitle("");
     setKeywords("");
@@ -988,6 +993,25 @@ export function App() {
             )}
 
             {imageName && sourceMode === "base" && <p className="file-name">{imageName}</p>}
+
+            {/* 作者灵感（选填）：只在有底图的模式显示 */}
+            {sourceMode !== "describe" && (
+              <div className="inspire-zone">
+                <label className="inspire-label">
+                  作者灵感 · 想怎么生这张图？<span className="inspire-optional">选填</span>
+                </label>
+                <textarea
+                  value={inspiration}
+                  onChange={(e) => setInspiration(e.target.value)}
+                  placeholder={sourceMode === "elements"
+                    ? "留空 = 默认把素材拼贴排版。\n填了 = 交给 AI 理解，比如：让这两个人一起坐在饭桌前吃饭 / 一起对着镜头合拍。"
+                    : "留空 = 默认在底图上直接排版加字。\n填了 = 交给 AI 理解画面，比如：把人物放到海边日落的场景里。"}
+                  rows={3}
+                  maxLength={300}
+                />
+                <span className="inspire-hint">灵感只影响画面；花字排版仍按你的审美库来。</span>
+              </div>
+            )}
 
             {/* Ratio Selection */}
             <div className="ratio-section">

@@ -615,11 +615,22 @@ function buildLayoutInstruction(ratio, sourceMode) {
   return lines.length ? `\n${lines.join("\n")}\n` : "";
 }
 
+// 作者灵感 → 场景指令：只控制「画面/底图怎么合成」，不碰花字排版。留空则返回空串（默认玩法）。
+function buildSceneInstruction(inspiration) {
+  const idea = String(inspiration || "").trim();
+  if (!idea) return "";
+  return `
+SCENE / COMPOSITION (author's intent — controls the PHOTO/scene ONLY, not the typography):
+- Using the uploaded photo(s), create this scene: ${idea}
+- Photorealistically merge the subjects/people/objects from the uploaded image(s) into that scene, with consistent lighting, perspective and scale; keep faces and identities recognizable and unchanged.
+- The bold Chinese typography / 花字 / decorations specified below are laid on top afterwards as usual, and are independent of this scene description.`;
+}
+
 function buildImage2Prompt(plan, context) {
   const ratioLabel = context.ratio === "bilibili-safe" ? "16:9 (Bilibili safe-zone)" : context.ratio;
   return `${buildSourceInstruction(context)}
 Target aspect ratio: ${ratioLabel}.
-${buildLayoutInstruction(context.ratio, context.sourceMode)}
+${buildLayoutInstruction(context.ratio, context.sourceMode)}${buildSceneInstruction(context.inspiration)}
 ${plan.prompt}
 
 CONTENT SAFETY CONTEXT:
@@ -682,8 +693,8 @@ async function imageResponseToDataUrl(response) {
   throw new Error("Image API returned no image data.");
 }
 
-async function generateImage2Cover(openai, { sourceMode, sourceImages, imageDescription, plan, ratio }) {
-  const prompt = buildImage2Prompt(plan, { sourceMode, imageDescription, ratio });
+async function generateImage2Cover(openai, { sourceMode, sourceImages, imageDescription, inspiration, plan, ratio }) {
+  const prompt = buildImage2Prompt(plan, { sourceMode, imageDescription, ratio, inspiration });
   const size = image2SizeForRatio(ratio);
   // 生图 = 一次直接调用 Image2，给足时间（Image2 要多久就多久），不提前截断、不重试，避免额外耗时。
   const timeoutMs = envNumber("IMAGE2_REQUEST_TIMEOUT_MS", 300000, { min: 60000, max: 600000 });
@@ -872,11 +883,11 @@ function buildSeedancePrompt(plan, context) {
   const ratioLabel = context.ratio === "bilibili-safe" ? "16:9 (Bilibili safe-zone)" : context.ratio;
   return compactDreaminaPrompt(`${buildSourceInstruction(context)}
 Target aspect ratio: ${ratioLabel}.
-${buildLayoutInstruction(context.ratio, context.sourceMode)}
+${buildLayoutInstruction(context.ratio, context.sourceMode)}${buildSceneInstruction(context.inspiration)}
 ${plan.prompt}`);
 }
 
-async function generateSeedanceCover({ sourceMode, sourceImages, imageDescription, plan, ratio }) {
+async function generateSeedanceCover({ sourceMode, sourceImages, imageDescription, inspiration, plan, ratio }) {
   const tempDir = await mkdtemp(join(tmpdir(), "lipa-dreamina-"));
   const downloadDir = join(tempDir, "downloads");
   await mkdir(downloadDir, { recursive: true });
@@ -886,7 +897,7 @@ async function generateSeedanceCover({ sourceMode, sourceImages, imageDescriptio
       10,
       Math.min(180, Number(process.env.SEEDANCE_POLL_SECONDS || process.env.DREAMINA_POLL_SECONDS || 75)),
     );
-    const prompt = buildSeedancePrompt(plan, { sourceMode, imageDescription, ratio });
+    const prompt = buildSeedancePrompt(plan, { sourceMode, imageDescription, ratio, inspiration });
     const args = [sourceImages.length > 0 ? "image2image" : "text2image"];
 
     if (sourceImages.length > 0) {
@@ -935,7 +946,7 @@ async function generateSeedanceCover({ sourceMode, sourceImages, imageDescriptio
   }
 }
 
-async function generateSeedreamCover({ sourceMode, sourceImages, plan, ratio }) {
+async function generateSeedreamCover({ sourceMode, sourceImages, inspiration, plan, ratio }) {
   const apiKey = process.env.ARK_API_KEY;
   if (!apiKey) {
     throw new Error("缺少 ARK_API_KEY。请在 .env.local 配置火山方舟 API Key 后重启服务。");
@@ -943,7 +954,7 @@ async function generateSeedreamCover({ sourceMode, sourceImages, plan, ratio }) 
   const model = process.env.ARK_MODEL || "doubao-seedream-5-0-260128";
   const baseUrl = process.env.ARK_API_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
   // 用完整设计提示词（与 Image2 同款，不截断）——保证花字/排版/装饰指令完整传达。
-  const prompt = buildImage2Prompt(plan, { sourceMode, ratio });
+  const prompt = buildImage2Prompt(plan, { sourceMode, ratio, inspiration });
   const body = {
     model,
     prompt,
@@ -975,26 +986,26 @@ async function generateSeedreamCover({ sourceMode, sourceImages, plan, ratio }) 
   return `data:image/png;base64,${buf.toString("base64")}`;
 }
 
-async function generateByEngine({ openai, engine, sourceMode, sourceImages, imageDescription, plan, ratio }) {
+async function generateByEngine({ openai, engine, sourceMode, sourceImages, imageDescription, inspiration, plan, ratio }) {
   const timeoutMs = imageJobTimeoutMs(engine);
   if (engine === "image2") {
     if (!openai) throw new Error("OpenAI client is not configured.");
     return withTimeout(
-      generateImage2Cover(openai, { sourceMode, sourceImages, imageDescription, plan, ratio }),
+      generateImage2Cover(openai, { sourceMode, sourceImages, imageDescription, inspiration, plan, ratio }),
       timeoutMs,
       `${engineLabels[engine]} 单张生成`,
     );
   }
   if (engine === "seedance") {
     return withTimeout(
-      generateSeedanceCover({ sourceMode, sourceImages, imageDescription, plan, ratio }),
+      generateSeedanceCover({ sourceMode, sourceImages, imageDescription, inspiration, plan, ratio }),
       timeoutMs,
       `${engineLabels[engine]} 单张生成`,
     );
   }
   if (engine === "seedream") {
     return withTimeout(
-      generateSeedreamCover({ sourceMode, sourceImages, plan, ratio }),
+      generateSeedreamCover({ sourceMode, sourceImages, inspiration, plan, ratio }),
       timeoutMs,
       `${engineLabels[engine]} 单张生成`,
     );
@@ -1052,6 +1063,7 @@ app.post("/api/regenerate", async (req, res) => {
       image,
       elementImages = [],
       imageDescription = "",
+      inspiration = "",
     } = req.body || {};
     if (!plan || typeof plan !== "object" || plan.id == null) {
       return res.status(400).json({ error: "缺少方案数据（plan），无法重生这张封面。" });
@@ -1067,6 +1079,7 @@ app.post("/api/regenerate", async (req, res) => {
       sourceMode,
       sourceImages,
       imageDescription,
+      inspiration,
       plan,
       ratio,
     });
@@ -1132,6 +1145,7 @@ app.post("/api/generate", async (req, res) => {
     count: requestedCount,
     sourceMode: requestedSourceMode = "base",
     imageDescription = "",
+    inspiration = "",
     elementImages = [],
     ratios: requestedRatios = [],
     stylePreferences = null,
@@ -1262,6 +1276,7 @@ app.post("/api/generate", async (req, res) => {
           sourceMode,
           sourceImages,
           imageDescription,
+          inspiration,
           plan,
           ratio,
         });
