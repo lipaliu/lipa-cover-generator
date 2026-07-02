@@ -24,7 +24,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { deleteHistoryBatch, getHistory, saveHistoryBatch } from "./lib/history";
-import { downloadImageUrl, exportImageUrl, fileToDataUrl, formatTime, urlToDataUrl } from "./lib/image";
+import { downloadImageUrl, exportImageUrl, fileToDownscaledDataUrl, formatTime, urlToDataUrl } from "./lib/image";
 import type { CoverResult, CoverPlan, GenerateEvent, HistoryBatch, ImageEngine } from "./lib/types";
 import { LoginModal } from "./components/LoginModal";
 import { CreditsBadge } from "./components/CreditsBadge";
@@ -296,7 +296,7 @@ export function App() {
 
   /* ─── File Handling ─── */
   const handleFile = async (file: File) => {
-    const dataUrl = await fileToDataUrl(file);
+    const dataUrl = await fileToDownscaledDataUrl(file);
     setImagePreview(dataUrl);
     setImageName(file.name);
     try {
@@ -309,7 +309,7 @@ export function App() {
   const handleMultiFiles = async (files: FileList) => {
     const newElements: Array<{ name: string; dataUrl: string }> = [];
     for (let i = 0; i < Math.min(files.length, 6); i++) {
-      const dataUrl = await fileToDataUrl(files[i]);
+      const dataUrl = await fileToDownscaledDataUrl(files[i]);
       newElements.push({ name: files[i].name, dataUrl });
     }
     setElementImages((prev) => [...prev, ...newElements].slice(0, 6));
@@ -411,6 +411,16 @@ export function App() {
         setRunState("idle");
         return;
       }
+      if (response.status === 413) {
+        setErrorMessage("图片太大了，已自动压缩仍超限——请少传几张素材，或换小一点的图。");
+        setRunState("error");
+        return;
+      }
+      if (!response.ok) {
+        setErrorMessage(`生成没能开始（服务返回 ${response.status}）。请重试，或换张底图。`);
+        setRunState("error");
+        return;
+      }
 
       const collected: CoverResult[] = [];
       await readSseStream(response, (event) => {
@@ -504,7 +514,8 @@ export function App() {
         }),
         signal: abortRef.current?.signal,
       });
-      const data = (await response.json()) as CoverResult;
+      const data = (await response.json().catch(() => ({ error: "重生失败" }))) as CoverResult;
+      if (!response.ok && !data.error) data.error = "重生失败";
       setResults((prev) =>
         prev.map((c) =>
           c.id === cover.id

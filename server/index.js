@@ -261,7 +261,7 @@ function configureArk() {
 }
 configureArk();
 
-app.use(express.json({ limit: "35mb" }));
+app.use(express.json({ limit: "100mb" })); // 元素拼接多图上传，给足余量（前端已先压缩，正常远用不到）
 
 // 健康检查（云平台探活用，不经访问口令，必须放在口令中间件之前）。
 app.get("/healthz", (_req, res) => res.status(200).send("ok"));
