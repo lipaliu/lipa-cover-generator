@@ -1301,6 +1301,7 @@ app.post("/api/generate", async (req, res) => {
         return result;
       } catch (error) {
         completed += 1;
+        console.warn(`[generate] 封面 ${plan.id} 失败（${jobEngine}）：${error?.message || error}`);
         const result = {
           id: plan.id,
           combination: plan.combination,
