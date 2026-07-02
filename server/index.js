@@ -1159,6 +1159,10 @@ app.post("/api/generate", async (req, res) => {
   if (!Array.isArray(requestedRatios) || requestedRatios.length === 0) {
     ratioGroups = [{ ratio: "3:4", count: normalizeCount(requestedCount) }];
   }
+  // 固定生成顺序：先 3:4 → 16:9 → 4:3，其余排后面（方案/编号/生成先后都跟着此序）。
+  const RATIO_ORDER = ["3:4", "9:16", "16:9", "bilibili-safe", "4:3", "1:1"];
+  const ratioRank = (r) => { const i = RATIO_ORDER.indexOf(r); return i < 0 ? 99 : i; };
+  ratioGroups = [...ratioGroups].sort((a, b) => ratioRank(a.ratio) - ratioRank(b.ratio));
   const totalCount = ratioGroups.reduce((sum, item) => sum + item.count, 0);
 
   try {
