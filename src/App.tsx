@@ -230,6 +230,8 @@ export function App() {
   // 完整方案（含 prompt），用于单张重生时回传服务端；以及正在重生的封面 id。
   const [plansById, setPlansById] = useState<Record<number, CoverPlan>>({});
   const [regeneratingIds, setRegeneratingIds] = useState<number[]>([]);
+  // 哪张卡片正打开"出同款别的比例"选择器（按 cover.id）。
+  const [ratioPickerFor, setRatioPickerFor] = useState<number | null>(null);
   const [progress, setProgress] = useState(0);
   const [total, setTotal] = useState(4);
   const [message, setMessage] = useState("");
@@ -540,6 +542,52 @@ export function App() {
     }
   };
 
+  // 同款别的比例：用同一方案（样式不变），额外生成一张别的比例的图，作为新的一张加进结果。
+  const generateAnotherRatio = async (cover: CoverResult, newRatio: AspectRatio) => {
+    const plan = plansById[cover.id];
+    if (!plan) {
+      setDownloadStatus({ filename: "", message: "这张缺少方案数据，无法出同款别的比例。" });
+      return;
+    }
+    setRatioPickerFor(null);
+    const newId = results.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+    const useEngine: ImageEngine = cover.engine || engine;
+    setPlansById((prev) => ({ ...prev, [newId]: plan }));
+    setResults((prev) => [
+      ...prev,
+      { id: newId, combination: cover.combination, label: cover.label, ratio: newRatio, engine: useEngine },
+    ]);
+    setRegeneratingIds((prev) => [...prev, newId]);
+    try {
+      const img = await getImageDataUrl();
+      const token = getToken();
+      const response = await fetch("/api/regenerate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          plan,
+          ratio: newRatio,
+          engine: useEngine,
+          sourceMode,
+          image: img || undefined,
+          elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
+          imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
+          inspiration: sourceMode !== "describe" ? inspiration.trim() || undefined : undefined,
+        }),
+        signal: abortRef.current?.signal,
+      });
+      const data = (await response.json().catch(() => ({ error: "生成失败" }))) as CoverResult;
+      if (!response.ok && !data.error) data.error = "生成失败";
+      setResults((prev) => prev.map((c) => (c.id === newId ? { ...c, image_url: data.image_url, error: data.error } : c)));
+    } catch (error) {
+      setResults((prev) =>
+        prev.map((c) => (c.id === newId ? { ...c, error: error instanceof Error ? error.message : "生成失败" } : c)),
+      );
+    } finally {
+      setRegeneratingIds((prev) => prev.filter((id) => id !== newId));
+    }
+  };
+
   const downloadCover = async (cover: CoverResult) => {
     if (!cover.image_url) return;
     const filename = `lipa-cover-${String(cover.id).padStart(2, "0")}.png`;
@@ -682,6 +730,36 @@ export function App() {
                   换{engineShortLabel(opt.id)}
                 </button>
               ))}
+            {cover.image_url && (
+              <button
+                type="button"
+                className="result-act result-act-ratio"
+                onClick={() => setRatioPickerFor(ratioPickerFor === cover.id ? null : cover.id)}
+                title="用同款样式，出别的比例"
+              >
+                ＋比例
+              </button>
+            )}
+          </div>
+        )}
+        {canAct && cover.image_url && ratioPickerFor === cover.id && (
+          <div className="result-ratio-picker">
+            <span className="rrp-hint">出同款 · 选个比例：</span>
+            <div className="rrp-chips">
+              {ratioOptions
+                .filter((o) => o.id !== cover.ratio)
+                .map((o) => (
+                  <button
+                    key={o.id}
+                    type="button"
+                    className="result-act"
+                    onClick={() => generateAnotherRatio(cover, o.id)}
+                    title={`出一张同款的「${o.label}」`}
+                  >
+                    {o.label}
+                  </button>
+                ))}
+            </div>
           </div>
         )}
       </article>

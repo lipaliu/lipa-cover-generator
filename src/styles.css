@@ -2018,6 +2018,17 @@ h1, h2, h3, p, span, strong, small, label {
 .inspire-zone textarea::placeholder { color: var(--ink-tertiary); }
 .inspire-hint { font-size: 12px; color: var(--ink-tertiary); }
 
+/* —— 出同款别的比例 —— */
+.result-act-ratio { font-weight: 600; }
+.result-ratio-picker {
+  padding: 0 12px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.rrp-hint { font-size: 11px; color: var(--ink-tertiary); }
+.rrp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
 /* —— 头部品牌区：logo 铭牌 + 版权一行（上下排列） —— */
 .header-brand {
   flex-direction: column;
