@@ -13,7 +13,7 @@ services:
     autoDeploy: true          # push 到 GitHub 后自动重新部署
     envVars:
       - key: NODE_VERSION
-        value: "20"
+        value: "22"
       - key: FAST_DIRECT_MODE
         value: "1"
       # —— 下面这些是密钥/口令，请在 Render 网页后台手动填，不要写进仓库 ——
