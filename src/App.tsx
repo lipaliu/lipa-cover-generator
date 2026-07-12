@@ -21,6 +21,7 @@ import {
   RectangleVertical,
   SquareIcon,
   RotateCw,
+  LogOut,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { deleteHistoryBatch, getHistory, saveHistoryBatch } from "./lib/history";
@@ -796,6 +797,10 @@ export function App() {
           <button type="button" className={cn("nav-btn", showSettings && "is-active")} onClick={() => setShowSettings(!showSettings)}>
             <Settings2 size={18} />
             <span>设置</span>
+          </button>
+          <button type="button" className="nav-btn" title="退出登录" onClick={() => { window.location.href = "/access-logout"; }}>
+            <LogOut size={18} />
+            <span>退出</span>
           </button>
           {!isLocalLipa && (
             <CreditsBadge

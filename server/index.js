@@ -269,6 +269,12 @@ app.use(express.urlencoded({ extended: false })); // 登录页表单提交用
 // 健康检查（云平台探活用，不经访问口令，必须放在口令中间件之前）。
 app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 
+// 退出登录：清掉访问 Cookie 回到登录页（放在口令中间件之前，任何状态都可退）。
+app.get("/access-logout", (_req, res) => {
+  res.setHeader("Set-Cookie", "baka_access=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax");
+  return res.redirect("/");
+});
+
 // ─── 账户体系 ───
 // ACCESS_USER/ACCESS_PASSWORD = 管理员账户（无限额度，可看 /admin 后台）。
 // ACCESS_ACCOUNTS = 追加的体验账户，格式「用户名:密码:额度」，逗号或空格分隔，
