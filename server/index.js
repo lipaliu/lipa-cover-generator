@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, extname, join } from "node:path";
 import { promisify } from "node:util";
 import OpenAI, { toFile } from "openai";
+import sharp from "sharp";
 import { fetch as undiciFetch, FormData as UndiciFormData, ProxyAgent, Agent, setGlobalDispatcher } from "undici";
 import { buildPlanUserPrompt, fallbackPlans, skillPrompt } from "./prompts.js";
 import { generateCombinations, combinationToLabel } from "./design-matrix.js";
@@ -268,12 +269,73 @@ app.use(express.urlencoded({ extended: false })); // 登录页表单提交用
 // 健康检查（云平台探活用，不经访问口令，必须放在口令中间件之前）。
 app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 
-// 访问保护：设置了 ACCESS_PASSWORD 才启用。不用浏览器自带的 Basic 弹窗，
-// 而是同款糖果玻璃风格的登录页；登录成功写 30 天 Cookie。Basic 头仍兼容（脚本/curl 用）。
+// ─── 账户体系 ───
+// ACCESS_USER/ACCESS_PASSWORD = 管理员账户（无限额度，可看 /admin 后台）。
+// ACCESS_ACCOUNTS = 追加的体验账户，格式「用户名:密码:额度」，逗号或空格分隔，
+// 例：ACCESS_ACCOUNTS="guest:baka2026:2,team1:hello88:5"。额度=最多可成功生成的张数。
 const ACCESS_USER = process.env.ACCESS_USER || "";
 const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD || "";
+const accessAccounts = new Map(); // user -> { password, role: "admin"|"trial", quota }
 if (ACCESS_PASSWORD) {
-  const accessToken = createHash("sha256").update(`baka|${ACCESS_USER}|${ACCESS_PASSWORD}`).digest("hex");
+  accessAccounts.set(ACCESS_USER || "admin", { password: ACCESS_PASSWORD, role: "admin", quota: Infinity });
+}
+for (const entry of String(process.env.ACCESS_ACCOUNTS || "").split(/[\s,]+/u).filter(Boolean)) {
+  const [user, password, quotaRaw] = entry.split(":");
+  if (!user || !password || accessAccounts.has(user)) continue;
+  const isAdmin = quotaRaw === "admin";
+  accessAccounts.set(user, {
+    password,
+    role: isAdmin ? "admin" : "trial",
+    quota: isAdmin ? Infinity : Math.max(1, Number(quotaRaw) || 2),
+  });
+}
+
+// ─── 用量与生成记录（管理员在 /admin 可见）───
+// 存在 data/usage.json。注意：Render 免费档磁盘是临时的，每次重新部署会清零。
+const dataDir = join(__dirname, "..", "data");
+const usageFile = join(dataDir, "usage.json");
+let usageStore = {};
+try {
+  usageStore = JSON.parse(readFileSync(usageFile, "utf8"));
+} catch {
+  usageStore = {};
+}
+let usageSaveTimer = null;
+function scheduleUsageSave() {
+  clearTimeout(usageSaveTimer);
+  usageSaveTimer = setTimeout(async () => {
+    try {
+      await mkdir(dataDir, { recursive: true });
+      await writeFile(usageFile, JSON.stringify(usageStore));
+    } catch (error) {
+      console.warn("[Usage] 保存失败:", error?.message || error);
+    }
+  }, 500);
+}
+function usageOf(user) {
+  return usageStore[user]?.used || 0;
+}
+async function recordGeneration(user, { engine, ratio, title, imageUrl }) {
+  const entry = (usageStore[user] ||= { used: 0, records: [] });
+  entry.used += 1;
+  let thumb = "";
+  try {
+    const match = /^data:image\/\w+;base64,(.+)$/u.exec(String(imageUrl || ""));
+    if (match) {
+      const buffer = await sharp(Buffer.from(match[1], "base64")).resize({ width: 256 }).jpeg({ quality: 70 }).toBuffer();
+      thumb = `data:image/jpeg;base64,${buffer.toString("base64")}`;
+    }
+  } catch { /* 缩略图失败不影响计数 */ }
+  entry.records.unshift({ time: new Date().toISOString(), engine, ratio, title: String(title || "").slice(0, 60), thumb });
+  entry.records = entry.records.slice(0, 100);
+  scheduleUsageSave();
+}
+
+if (accessAccounts.size > 0) {
+  const accessSecret = createHash("sha256")
+    .update([...accessAccounts.entries()].map(([u, a]) => `${u}:${a.password}`).join("|"))
+    .digest("hex");
+  const signUser = (user) => createHash("sha256").update(`${accessSecret}|${user}`).digest("hex").slice(0, 40);
   const ACCESS_COOKIE = "baka_access";
 
   const loginPage = (showError) => `<!doctype html>
@@ -348,28 +410,47 @@ if (ACCESS_PASSWORD) {
 </body>
 </html>`;
 
-  const credentialsOk = (user, password) => (!ACCESS_USER || user === ACCESS_USER) && password === ACCESS_PASSWORD;
+  // 用户名+密码 → 账户对象（不匹配返回 null）
+  const resolveAccount = (user, password) => {
+    const account = accessAccounts.get(String(user || "").trim());
+    return account && account.password === String(password) ? { user: String(user).trim(), ...account } : null;
+  };
 
   app.use((req, res, next) => {
     // 登录页要显示 logo，放行
     if (req.path === "/logo.png" || req.path === "/favicon.ico") return next();
-    // 已带有效 Cookie
-    const cookies = String(req.headers.cookie || "");
-    if (cookies.split(/;\s*/u).includes(`${ACCESS_COOKIE}=${accessToken}`)) return next();
+    // 已带有效 Cookie（值 = 用户名.签名）
+    const cookies = String(req.headers.cookie || "").split(/;\s*/u);
+    for (const c of cookies) {
+      if (!c.startsWith(`${ACCESS_COOKIE}=`)) continue;
+      const value = c.slice(ACCESS_COOKIE.length + 1);
+      const dot = value.lastIndexOf(".");
+      if (dot <= 0) continue;
+      const user = decodeURIComponent(value.slice(0, dot));
+      if (value.slice(dot + 1) === signUser(user) && accessAccounts.has(user)) {
+        req.accessAccount = { user, ...accessAccounts.get(user) };
+        return next();
+      }
+    }
     // Basic 头兼容（curl/脚本）
     const header = req.headers.authorization || "";
     if (header.startsWith("Basic ")) {
       const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
       const idx = decoded.indexOf(":");
-      if (credentialsOk(decoded.slice(0, idx), decoded.slice(idx + 1))) return next();
+      const account = resolveAccount(decoded.slice(0, idx), decoded.slice(idx + 1));
+      if (account) {
+        req.accessAccount = account;
+        return next();
+      }
     }
     // 登录表单提交
     if (req.method === "POST" && req.path === "/access-login") {
       const { user = "", password = "" } = req.body || {};
-      if (credentialsOk(String(user).trim(), String(password))) {
+      const account = resolveAccount(user, password);
+      if (account) {
         res.setHeader(
           "Set-Cookie",
-          `${ACCESS_COOKIE}=${accessToken}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax`,
+          `${ACCESS_COOKIE}=${encodeURIComponent(account.user)}.${signUser(account.user)}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax`,
         );
         return res.redirect("/");
       }
@@ -379,7 +460,64 @@ if (ACCESS_PASSWORD) {
     if (req.path.startsWith("/api/")) return res.status(401).json({ error: "需要登录" });
     return res.status(401).type("html").send(loginPage(false));
   });
-  console.log(`[Access] 已启用登录保护（用户名:${ACCESS_USER || "任意"}，玻璃登录页 + 30 天 Cookie）。`);
+
+  // ─── 管理后台：只有管理员能看。各账户用量 + 生成记录（缩略图）───
+  const escapeHtml = (s) => String(s).replace(/[&<>"']/gu, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+  app.get("/admin", (req, res) => {
+    if (!req.accessAccount || req.accessAccount.role !== "admin") {
+      return res.status(403).send("仅管理员可访问 /admin");
+    }
+    const rows = [...accessAccounts.entries()].map(([user, a]) => {
+      const used = usageOf(user);
+      const quota = a.quota === Infinity ? "∞" : a.quota;
+      const last = usageStore[user]?.records?.[0]?.time;
+      return `<tr><td>${escapeHtml(user)}</td><td>${a.role === "admin" ? "管理员" : "体验"}</td><td>${used} / ${quota}</td><td>${last ? escapeHtml(new Date(last).toLocaleString("zh-CN", { hour12: false })) : "—"}</td></tr>`;
+    }).join("");
+    const cards = Object.entries(usageStore)
+      .flatMap(([user, entry]) => (entry.records || []).map((r) => ({ user, ...r })))
+      .sort((a, b) => (a.time < b.time ? 1 : -1))
+      .slice(0, 120)
+      .map((r) => `<figure class="shot">${r.thumb ? `<img src="${r.thumb}" alt="" />` : `<div class="noimg">无图</div>`}<figcaption><b>${escapeHtml(r.user)}</b> · ${escapeHtml(r.engine || "")} · ${escapeHtml(r.ratio || "")}<br/>${escapeHtml(r.title || "（无标题）")}<br/><small>${escapeHtml(new Date(r.time).toLocaleString("zh-CN", { hour12: false }))}</small></figcaption></figure>`)
+      .join("");
+    res.type("html").send(`<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>管理后台 · BAKABAKA</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, system-ui, "SF Pro Text", "PingFang SC", sans-serif; color: #241a3d; padding: 32px 4vw 60px;
+    min-height: 100vh;
+    background: radial-gradient(52% 46% at 14% 8%, rgba(167,139,250,.5) 0%, transparent 60%),
+      radial-gradient(50% 44% at 86% 6%, rgba(129,140,248,.45) 0%, transparent 60%),
+      radial-gradient(56% 50% at 88% 88%, rgba(147,197,253,.45) 0%, transparent 60%),
+      linear-gradient(155deg, #cabcf7 0%, #b3bcf4 45%, #a9c6f0 100%); }
+  h1 { font-size: 22px; margin-bottom: 4px; }
+  .sub { font-size: 13px; color: rgba(36,26,61,.6); margin-bottom: 24px; }
+  .glass { background: linear-gradient(160deg, rgba(255,255,255,.55), rgba(255,255,255,.3)); border: 1px solid rgba(255,255,255,.7);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,.9), 0 18px 50px rgba(80,50,160,.22); border-radius: 24px;
+    -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); padding: 22px 24px; margin-bottom: 26px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,.5); }
+  th { font-size: 12px; color: rgba(36,26,61,.55); font-weight: 600; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
+  .shot { background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.65); border-radius: 16px; overflow: hidden; }
+  .shot img { width: 100%; display: block; }
+  .noimg { width: 100%; aspect-ratio: 3/4; display: flex; align-items: center; justify-content: center; color: rgba(36,26,61,.4); font-size: 12px; }
+  figcaption { padding: 8px 10px; font-size: 11.5px; line-height: 1.5; color: rgba(36,26,61,.75); }
+  .empty { color: rgba(36,26,61,.5); font-size: 14px; }
+</style></head>
+<body>
+  <h1>巴卡巴卡 · 管理后台</h1>
+  <p class="sub">各账户用量与生成记录（记录保存在服务器，重新部署会清零）· <a href="/">返回生成器</a></p>
+  <div class="glass">
+    <table><thead><tr><th>账户</th><th>类型</th><th>已生成 / 额度</th><th>最近生成</th></tr></thead><tbody>${rows}</tbody></table>
+  </div>
+  <div class="glass">
+    ${cards ? `<div class="grid">${cards}</div>` : `<p class="empty">还没有生成记录。</p>`}
+  </div>
+</body></html>`);
+  });
+
+  console.log(`[Access] 登录保护已启用：${accessAccounts.size} 个账户（管理员 + 体验），玻璃登录页 + 30 天 Cookie。`);
 }
 
 // Initialize database connection (non-blocking, graceful if not configured)
@@ -1166,6 +1304,13 @@ app.post("/api/regenerate", async (req, res) => {
     const sourceMode = normalizeSourceMode(requestedSourceMode);
     const engine = resolveEngine(normalizeEngine(requestedEngineRaw));
     assertEngineAvailable(engine);
+    // 体验账户：单张重生 / 换模型 / 加比例 同样计入额度
+    if (req.accessAccount && req.accessAccount.role !== "admin") {
+      const remaining = req.accessAccount.quota - usageOf(req.accessAccount.user);
+      if (remaining <= 0) {
+        return res.json({ error: "体验额度已用完（每个体验账户限量），想继续用请联系管理员。" });
+      }
+    }
     const sourceImages = getSourceImages({ sourceMode, image, elementImages });
     const openai = createOpenAIClient();
     const imageUrl = await generateByEngine({
@@ -1178,6 +1323,9 @@ app.post("/api/regenerate", async (req, res) => {
       plan,
       ratio,
     });
+    if (req.accessAccount) {
+      recordGeneration(req.accessAccount.user, { engine, ratio, title: plan.label, imageUrl }).catch(() => {});
+    }
     return res.json({
       id: plan.id,
       combination: plan.combination,
@@ -1217,19 +1365,6 @@ app.post("/api/generate", async (req, res) => {
     req.creditsCost = 0;
   }
 
-  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
-  res.setHeader("Cache-Control", "no-cache, no-transform");
-  res.setHeader("Connection", "keep-alive");
-  res.setHeader("X-Accel-Buffering", "no"); // 禁止反向代理缓冲 SSE（云/隧道下进度才能实时推送）
-  res.flushHeaders?.();
-  // 立刻塞一段填充注释，突破 Cloudflare/反代的缓冲阈值；再加心跳，让长间隔里也持续有数据流出，
-  // 否则经隧道时早期进度会被缓冲、前端看着“卡在分析底图”。
-  res.write(`:${" ".repeat(2048)}\n\n`);
-  const sseHeartbeat = setInterval(() => {
-    try { res.write(": ping\n\n"); } catch { /* ignore */ }
-  }, 15000);
-  res.on("close", () => clearInterval(sseHeartbeat));
-
   const startedAt = Date.now();
   const {
     image,
@@ -1259,6 +1394,30 @@ app.post("/api/generate", async (req, res) => {
   const ratioRank = (r) => { const i = RATIO_ORDER.indexOf(r); return i < 0 ? 99 : i; };
   ratioGroups = [...ratioGroups].sort((a, b) => ratioRank(a.ratio) - ratioRank(b.ratio));
   const totalCount = ratioGroups.reduce((sum, item) => sum + item.count, 0);
+
+  // 体验账户额度检查（须在开 SSE 流之前，才能返回明确的拒绝信息）。
+  if (req.accessAccount && req.accessAccount.role !== "admin") {
+    const remaining = req.accessAccount.quota - usageOf(req.accessAccount.user);
+    if (remaining <= 0) {
+      return res.status(403).json({ error: "体验额度已用完（每个体验账户限量），想继续用请联系管理员。" });
+    }
+    if (totalCount > remaining) {
+      return res.status(403).json({ error: `体验额度只剩 ${remaining} 张，请把生成数量调到 ${remaining} 张以内。` });
+    }
+  }
+
+  res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+  res.setHeader("Cache-Control", "no-cache, no-transform");
+  res.setHeader("Connection", "keep-alive");
+  res.setHeader("X-Accel-Buffering", "no"); // 禁止反向代理缓冲 SSE（云/隧道下进度才能实时推送）
+  res.flushHeaders?.();
+  // 立刻塞一段填充注释，突破 Cloudflare/反代的缓冲阈值；再加心跳，让长间隔里也持续有数据流出，
+  // 否则经隧道时早期进度会被缓冲、前端看着“卡在分析底图”。
+  res.write(`:${" ".repeat(2048)}\n\n`);
+  const sseHeartbeat = setInterval(() => {
+    try { res.write(": ping\n\n"); } catch { /* ignore */ }
+  }, 15000);
+  res.on("close", () => clearInterval(sseHeartbeat));
 
   try {
     // 引擎可用性在下方按“实际用到的引擎集合”逐一校验（支持逐张混合引擎）。
@@ -1389,6 +1548,9 @@ app.post("/api/generate", async (req, res) => {
           ratio,
         };
         completed += 1;
+        if (req.accessAccount) {
+          recordGeneration(req.accessAccount.user, { engine: jobEngine, ratio, title, imageUrl }).catch(() => {});
+        }
         writeSse(res, {
           status: "generating",
           progress: completed,

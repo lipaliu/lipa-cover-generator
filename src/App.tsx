@@ -422,7 +422,9 @@ export function App() {
         return;
       }
       if (!response.ok) {
-        setErrorMessage(`生成没能开始（服务返回 ${response.status}）。请重试，或换张底图。`);
+        // 优先显示服务器给的原因（如体验额度不足）
+        const data = await response.json().catch(() => null);
+        setErrorMessage(data?.error || `生成没能开始（服务返回 ${response.status}）。请重试，或换张底图。`);
         setRunState("error");
         return;
       }
