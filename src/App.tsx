@@ -22,6 +22,7 @@ import {
   SquareIcon,
   RotateCw,
   LogOut,
+  ShieldCheck,
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { deleteHistoryBatch, getHistory, saveHistoryBatch } from "./lib/history";
@@ -211,6 +212,14 @@ export function App() {
   const [imageDescription, setImageDescription] = useState("");
   // 作者灵感（选填）：只控制"底图/场景怎么生"，直接交给大模型理解；花字排版不受影响。
   const [inspiration, setInspiration] = useState("");
+  // 当前登录账户是否是管理员（决定是否显示「管理后台」按钮）
+  const [isAdminAccount, setIsAdminAccount] = useState(false);
+  useEffect(() => {
+    fetch("/api/whoami")
+      .then((r) => r.json())
+      .then((d) => setIsAdminAccount(d?.role === "admin"))
+      .catch(() => {});
+  }, []);
   const [detectedColor, setDetectedColor] = useState("#6F7C79");
   const [imageColors, setImageColors] = useState<string[]>([]);
   const [ratioSelection, setRatioSelection] = useState<RatioSelection>({
@@ -798,6 +807,12 @@ export function App() {
             <Settings2 size={18} />
             <span>设置</span>
           </button>
+          {isAdminAccount && (
+            <button type="button" className="nav-btn nav-btn-history" title="账户管理与生成记录" onClick={() => { window.location.href = "/admin"; }}>
+              <ShieldCheck size={18} />
+              <span>管理后台</span>
+            </button>
+          )}
           <button type="button" className="nav-btn" title="退出登录" onClick={() => { window.location.href = "/access-logout"; }}>
             <LogOut size={18} />
             <span>退出</span>

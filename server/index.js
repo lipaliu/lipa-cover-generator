@@ -392,7 +392,7 @@ if (ACCESS_PASSWORD) {
   const signUser = (user) => createHash("sha256").update(`${accessSecret}|${user}`).digest("hex").slice(0, 40);
   const ACCESS_COOKIE = "baka_access";
 
-  const loginPage = (showError) => `<!doctype html>
+  const loginPage = (showError, nextPath = "/") => `<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
@@ -447,6 +447,7 @@ if (ACCESS_PASSWORD) {
 </head>
 <body>
   <form class="card" method="POST" action="/access-login">
+    <input type="hidden" name="next" value="${escapeHtml(nextPath)}" />
     <img class="logo" src="/logo.png" alt="巴卡巴卡 BAKABAKA" />
     <p class="slogan">自媒体封面之王 · King of Cover</p>
     <div class="field">
@@ -499,22 +500,35 @@ if (ACCESS_PASSWORD) {
         return next();
       }
     }
-    // 登录表单提交
+    // 登录表单提交（登录成功后跳回原本要去的页面，比如 /admin）
     if (req.method === "POST" && req.path === "/access-login") {
-      const { user = "", password = "" } = req.body || {};
+      const { user = "", password = "", next = "/" } = req.body || {};
+      const safeNext = /^\/(?!\/)/u.test(String(next)) ? String(next) : "/";
       const account = resolveAccount(user, password);
       if (account) {
         res.setHeader(
           "Set-Cookie",
           `${ACCESS_COOKIE}=${encodeURIComponent(account.user)}.${signUser(account.user)}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax`,
         );
-        return res.redirect("/");
+        return res.redirect(safeNext);
       }
-      return res.status(401).type("html").send(loginPage(true));
+      return res.status(401).type("html").send(loginPage(true, safeNext));
     }
-    // API 请求返回 JSON，页面请求给登录页
+    // API 请求返回 JSON，页面请求给登录页（记住原目标，登录后跳回）
     if (req.path.startsWith("/api/")) return res.status(401).json({ error: "需要登录" });
-    return res.status(401).type("html").send(loginPage(false));
+    return res.status(401).type("html").send(loginPage(false, req.path));
+  });
+
+  // 当前登录的是谁（前端用它决定要不要显示「管理后台」按钮）
+  app.get("/api/whoami", (req, res) => {
+    const a = req.accessAccount;
+    if (!a) return res.json({ user: null, role: "none" });
+    return res.json({
+      user: a.user,
+      role: a.role,
+      quota: a.quota === Infinity ? null : a.quota,
+      used: usageOf(a.user),
+    });
   });
 
   // ─── 管理后台：只有管理员能进。账户管理（增/删/改额度/重置用量）+ 生成记录（缩略图→原图）───
