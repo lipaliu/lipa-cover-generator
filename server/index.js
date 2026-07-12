@@ -600,7 +600,7 @@ if (ACCESS_PASSWORD) {
         <form method="POST" action="/admin/accounts/reset" class="inline"><input type="hidden" name="user" value="${escapeHtml(a.user)}" /><button class="mini">重置用量</button></form>
         <form method="POST" action="/admin/accounts/delete" class="inline" onsubmit="return confirm('删除账户 ${escapeHtml(a.user)}？记录也会清掉')"><input type="hidden" name="user" value="${escapeHtml(a.user)}" /><button class="mini danger">删除</button></form>`;
       const pass = a.role === "admin" ? "······" : escapeHtml(a.password);
-      return `<tr><td><b>${escapeHtml(a.user)}</b></td><td>${a.role === "admin" ? "管理员" : "体验"}</td><td>${pass}</td><td>${used} / ${quota}</td><td>${last ? escapeHtml(new Date(last).toLocaleString("zh-CN", { hour12: false })) : "—"}</td><td class="ops">${ops}</td></tr>`;
+      return `<tr><td><b>${escapeHtml(a.user)}</b></td><td>${a.role === "admin" ? "管理员" : "体验"}</td><td>${pass}</td><td>${used}</td><td>${a.role === "admin" ? "不限" : `${quota} 张/次`}</td><td>${last ? escapeHtml(new Date(last).toLocaleString("zh-CN", { hour12: false })) : "—"}</td><td class="ops">${ops}</td></tr>`;
     }).join("");
     const cards = Object.entries(usageStore)
       .flatMap(([user, entry]) => (entry.records || []).map((r) => ({ user, ...r })))
@@ -657,15 +657,15 @@ if (ACCESS_PASSWORD) {
   <p class="sub">账户管理与生成记录 · <a href="/">返回生成器</a> · <a href="/access-logout">退出登录</a></p>
   <div class="glass">
     <h2>账户</h2>
-    <table><thead><tr><th>账户</th><th>类型</th><th>密码</th><th>已生成 / 额度</th><th>最近生成</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table>
+    <table><thead><tr><th>账户</th><th>类型</th><th>密码</th><th>累计生成</th><th>单次上限</th><th>最近生成</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table>
     <div style="margin-top:16px">
       <form class="addform" method="POST" action="/admin/accounts">
         <input name="user" placeholder="用户名（字母数字）" required />
         <input name="password" placeholder="密码" required />
-        <input name="quota" type="number" min="1" max="999" value="2" title="额度（张）" />
+        <input name="quota" type="number" min="1" max="999" value="2" title="单次最多生成几张" />
         <button type="submit">添加 / 修改账户</button>
       </form>
-      <p class="hint">同名提交 = 修改密码/额度。体验账户只能生成 小红书 3:4，成功一张扣一张额度。免费服务器重启会清零计数与记录（要永久保存需升级付费磁盘）。</p>
+      <p class="hint">同名提交 = 修改密码/单次上限。体验账户只能生成 小红书 3:4，一次最多「单次上限」张，生成完可再来。累计生成与记录存在服务器磁盘，免费档重启/重新部署会清零（要永久保存需付费磁盘）。</p>
     </div>
   </div>
   <div class="glass">
@@ -1462,17 +1462,13 @@ app.post("/api/regenerate", async (req, res) => {
     const sourceMode = normalizeSourceMode(requestedSourceMode);
     const engine = resolveEngine(normalizeEngine(requestedEngineRaw));
     assertEngineAvailable(engine);
-    // 体验账户：单张重生 / 换模型 / 加比例 同样计入额度，且只能 3:4
+    // 体验账户：单张重生 / 换模型 一次一张（本身就受单次限制），但只能 3:4
     if (req.accessAccount && req.accessAccount.role !== "admin") {
       if (ratio !== "3:4") {
         return res.json({ error: "体验账户只能生成「小红书封面 3:4」。" });
       }
-      const remaining = req.accessAccount.quota - usageOf(req.accessAccount.user);
-      if (remaining <= 0) {
-        return res.json({ error: "体验额度已用完（每个体验账户限量），想继续用请联系管理员。" });
-      }
     }
-    // 预扣 1 张，失败在 catch 里退回
+    // 计 1 张统计，失败在 catch 里退回
     if (req.accessAccount) reserveQuota(req.accessAccount.user, 1);
     let imageUrl;
     try {
@@ -1565,20 +1561,18 @@ app.post("/api/generate", async (req, res) => {
   const totalCount = ratioGroups.reduce((sum, item) => sum + item.count, 0);
 
   // 体验账户限制（须在开 SSE 流之前，才能返回明确的拒绝信息）：
-  // ① 只能生成小红书 3:4；② 预扣额度（并发开多批也钻不了空子），失败的单张稍后退回。
+  // ① 只能生成小红书 3:4；② 单次最多 quota 张（生成完可以再来，但一次不能薅太多）。
+  // 单次上限不依赖服务器计数 → 免费服务器重启也不会失效。
   let reservedCount = 0;
   if (req.accessAccount && req.accessAccount.role !== "admin") {
     if (ratioGroups.some((g) => g.ratio !== "3:4")) {
       return res.status(403).json({ error: "体验账户只能生成「小红书封面 3:4」，请只勾选 3:4 这一个比例。" });
     }
-    const remaining = req.accessAccount.quota - usageOf(req.accessAccount.user);
-    if (remaining <= 0) {
-      return res.status(403).json({ error: "体验额度已用完（每个体验账户限量），想继续用请联系管理员。" });
-    }
-    if (totalCount > remaining) {
-      return res.status(403).json({ error: `体验额度只剩 ${remaining} 张，请把生成数量调到 ${remaining} 张以内。` });
+    if (totalCount > req.accessAccount.quota) {
+      return res.status(403).json({ error: `体验账户单次最多生成 ${req.accessAccount.quota} 张，请把数量调小，生成完可以再来。` });
     }
   }
+  // 计数仅作统计（管理后台展示累计生成量），不再作为拦截依据
   if (req.accessAccount) {
     reserveQuota(req.accessAccount.user, totalCount);
     reservedCount = totalCount;
