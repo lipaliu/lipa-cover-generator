@@ -1,0 +1,15 @@
+# 保持 Render 免费实例常醒：每 10 分钟 ping 一次 /healthz（免费档闲置 15 分钟会休眠，
+# 访客就得等 30-60 秒的“叫醒页”）。/healthz 不需要登录，开销几乎为零。
+name: Keep Render awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping bakabaka /healthz
+        run: curl -fsS --max-time 60 https://bakabaka.onrender.com/healthz || true
