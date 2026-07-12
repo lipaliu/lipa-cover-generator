@@ -39,8 +39,8 @@ const allEngineOptions: Array<{
   vendor: string;
   description: string;
 }> = [
-  { id: "image2", title: "Image2", vendor: "OpenAI", description: "GPT-Image-2，风格更灵活" },
-  { id: "seedream", title: "Seedream", vendor: "火山·豆包", description: "国内 API，可上线，图生图" },
+  { id: "image2", title: "Image2", vendor: "OpenAI", description: "设计师风格，精细，目前最好的生图模型" },
+  { id: "seedream", title: "Seedream", vendor: "火山·豆包", description: "快速，准确" },
   { id: "seedance", title: "SeeDance", vendor: "即梦", description: "复用本机即梦账号积分" },
 ];
 
