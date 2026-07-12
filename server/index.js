@@ -369,11 +369,11 @@ async function recordGeneration(user, { engine, ratio, title, imageUrl }) {
       const buffer = Buffer.from(match[2], "base64");
       const thumbBuffer = await sharp(buffer).resize({ width: 300 }).jpeg({ quality: 72 }).toBuffer();
       thumb = `data:image/jpeg;base64,${thumbBuffer.toString("base64")}`;
-      // 原图存盘，后台点缩略图可看大图
-      const ext = match[1] === "jpeg" ? "jpg" : match[1];
-      file = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      // 资料库存 1024px 高清预览 JPEG（约 200KB/张，5GB 可存 ~2.5 万张），不存印刷级原图。
+      const preview = await sharp(buffer).resize({ width: 1024, withoutEnlargement: true }).jpeg({ quality: 82 }).toBuffer();
+      file = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.jpg`;
       await mkdir(coversDir, { recursive: true });
-      await writeFile(join(coversDir, file), buffer);
+      await writeFile(join(coversDir, file), preview);
     }
   } catch { /* 缩略图/存盘失败不影响计数 */ }
   entry.records.unshift({ time: new Date().toISOString(), engine, ratio, title: String(title || "").slice(0, 60), thumb, file });
