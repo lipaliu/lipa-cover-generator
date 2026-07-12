@@ -276,30 +276,54 @@ app.get("/access-logout", (_req, res) => {
 });
 
 // ─── 账户体系 ───
-// ACCESS_USER/ACCESS_PASSWORD = 管理员账户（无限额度，可看 /admin 后台）。
-// ACCESS_ACCOUNTS = 追加的体验账户，格式「用户名:密码:额度」，逗号或空格分隔，
-// 例：ACCESS_ACCOUNTS="guest:baka2026:2,team1:hello88:5"。额度=最多可成功生成的张数。
+// ACCESS_USER/ACCESS_PASSWORD = 管理员账户（无限额度，可用 /admin 后台管理）。
+// 体验账户存 data/accounts.json，可在 /admin 网页上增删改；首次启动用 ACCESS_ACCOUNTS
+// 环境变量播种（格式「用户名:密码:额度」，逗号分隔）。登录名不分大小写。
 const ACCESS_USER = process.env.ACCESS_USER || "";
 const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD || "";
-const accessAccounts = new Map(); // 小写用户名 -> { password, role: "admin"|"trial", quota }。登录名不分大小写。
-if (ACCESS_PASSWORD) {
-  accessAccounts.set((ACCESS_USER || "admin").toLowerCase(), { password: ACCESS_PASSWORD, role: "admin", quota: Infinity });
+const ADMIN_KEY = (ACCESS_USER || "admin").toLowerCase();
+
+const dataDir = join(__dirname, "..", "data");
+const accountsFile = join(dataDir, "accounts.json");
+const coversDir = join(dataDir, "covers");
+
+let trialAccounts = null; // 小写用户名 -> { password, quota }
+try {
+  trialAccounts = JSON.parse(readFileSync(accountsFile, "utf8"));
+} catch {
+  trialAccounts = null;
 }
-for (const entry of String(process.env.ACCESS_ACCOUNTS || "").split(/[\s,]+/u).filter(Boolean)) {
-  const [user, password, quotaRaw] = entry.split(":");
-  const key = String(user || "").toLowerCase();
-  if (!key || !password || accessAccounts.has(key)) continue;
-  const isAdmin = quotaRaw === "admin";
-  accessAccounts.set(key, {
-    password,
-    role: isAdmin ? "admin" : "trial",
-    quota: isAdmin ? Infinity : Math.max(1, Number(quotaRaw) || 2),
-  });
+if (!trialAccounts || typeof trialAccounts !== "object") {
+  // 播种：从环境变量 ACCESS_ACCOUNTS 初始化
+  trialAccounts = {};
+  for (const entry of String(process.env.ACCESS_ACCOUNTS || "").split(/[\s,]+/u).filter(Boolean)) {
+    const [user, password, quotaRaw] = entry.split(":");
+    const key = String(user || "").toLowerCase();
+    if (!key || !password || key === ADMIN_KEY) continue;
+    trialAccounts[key] = { password, quota: Math.max(1, Number(quotaRaw) || 2) };
+  }
+}
+let accountsSaveTimer = null;
+function scheduleAccountsSave() {
+  clearTimeout(accountsSaveTimer);
+  accountsSaveTimer = setTimeout(async () => {
+    try {
+      await mkdir(dataDir, { recursive: true });
+      await writeFile(accountsFile, JSON.stringify(trialAccounts));
+    } catch (error) {
+      console.warn("[Accounts] 保存失败:", error?.message || error);
+    }
+  }, 300);
+}
+// 用户名 → 账户（含管理员）；不匹配返回 null
+function accountByKey(key) {
+  if (ACCESS_PASSWORD && key === ADMIN_KEY) return { user: key, role: "admin", quota: Infinity, password: ACCESS_PASSWORD };
+  const t = trialAccounts[key];
+  return t ? { user: key, role: "trial", quota: t.quota, password: t.password } : null;
 }
 
-// ─── 用量与生成记录（管理员在 /admin 可见）───
-// 存在 data/usage.json。注意：Render 免费档磁盘是临时的，每次重新部署会清零。
-const dataDir = join(__dirname, "..", "data");
+// ─── 用量与生成记录（/admin 可见、可管理）───
+// usage.json + covers/ 原图文件。注意：Render 免费档磁盘临时，重新部署会清零。
 const usageFile = join(dataDir, "usage.json");
 let usageStore = {};
 try {
@@ -322,26 +346,49 @@ function scheduleUsageSave() {
 function usageOf(user) {
   return usageStore[user]?.used || 0;
 }
+// 预扣式计数：请求开始就把额度扣掉（堵住并发同时开多批钻空子），失败的再退回。
+function reserveQuota(user, count) {
+  const entry = (usageStore[user] ||= { used: 0, records: [] });
+  entry.used += count;
+  scheduleUsageSave();
+}
+function releaseQuota(user, count = 1) {
+  const entry = usageStore[user];
+  if (entry) {
+    entry.used = Math.max(0, entry.used - count);
+    scheduleUsageSave();
+  }
+}
 async function recordGeneration(user, { engine, ratio, title, imageUrl }) {
   const entry = (usageStore[user] ||= { used: 0, records: [] });
-  entry.used += 1;
   let thumb = "";
+  let file = "";
   try {
-    const match = /^data:image\/\w+;base64,(.+)$/u.exec(String(imageUrl || ""));
+    const match = /^data:image\/(\w+);base64,(.+)$/u.exec(String(imageUrl || ""));
     if (match) {
-      const buffer = await sharp(Buffer.from(match[1], "base64")).resize({ width: 256 }).jpeg({ quality: 70 }).toBuffer();
-      thumb = `data:image/jpeg;base64,${buffer.toString("base64")}`;
+      const buffer = Buffer.from(match[2], "base64");
+      const thumbBuffer = await sharp(buffer).resize({ width: 300 }).jpeg({ quality: 72 }).toBuffer();
+      thumb = `data:image/jpeg;base64,${thumbBuffer.toString("base64")}`;
+      // 原图存盘，后台点缩略图可看大图
+      const ext = match[1] === "jpeg" ? "jpg" : match[1];
+      file = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+      await mkdir(coversDir, { recursive: true });
+      await writeFile(join(coversDir, file), buffer);
     }
-  } catch { /* 缩略图失败不影响计数 */ }
-  entry.records.unshift({ time: new Date().toISOString(), engine, ratio, title: String(title || "").slice(0, 60), thumb });
+  } catch { /* 缩略图/存盘失败不影响计数 */ }
+  entry.records.unshift({ time: new Date().toISOString(), engine, ratio, title: String(title || "").slice(0, 60), thumb, file });
+  // 超出上限的旧记录连原图文件一起清掉
+  const dropped = entry.records.slice(100);
   entry.records = entry.records.slice(0, 100);
+  for (const old of dropped) {
+    if (old.file) rm(join(coversDir, old.file), { force: true }).catch(() => {});
+  }
   scheduleUsageSave();
 }
 
-if (accessAccounts.size > 0) {
-  const accessSecret = createHash("sha256")
-    .update([...accessAccounts.entries()].map(([u, a]) => `${u}:${a.password}`).join("|"))
-    .digest("hex");
+if (ACCESS_PASSWORD) {
+  // 签名密钥只依赖管理员密码：增删体验账户不会把大家都登出
+  const accessSecret = createHash("sha256").update(`baka-access|${ACCESS_PASSWORD}`).digest("hex");
   const signUser = (user) => createHash("sha256").update(`${accessSecret}|${user}`).digest("hex").slice(0, 40);
   const ACCESS_COOKIE = "baka_access";
 
@@ -420,8 +467,8 @@ if (accessAccounts.size > 0) {
   // 用户名+密码 → 账户对象（不匹配返回 null）。用户名不分大小写；密码区分。
   const resolveAccount = (user, password) => {
     const key = String(user || "").trim().toLowerCase();
-    const account = accessAccounts.get(key);
-    return account && account.password === String(password) ? { user: key, ...account } : null;
+    const account = accountByKey(key);
+    return account && account.password === String(password) ? account : null;
   };
 
   app.use((req, res, next) => {
@@ -435,8 +482,9 @@ if (accessAccounts.size > 0) {
       const dot = value.lastIndexOf(".");
       if (dot <= 0) continue;
       const user = decodeURIComponent(value.slice(0, dot));
-      if (value.slice(dot + 1) === signUser(user) && accessAccounts.has(user)) {
-        req.accessAccount = { user, ...accessAccounts.get(user) };
+      const account = value.slice(dot + 1) === signUser(user) ? accountByKey(user) : null;
+      if (account) {
+        req.accessAccount = account;
         return next();
       }
     }
@@ -469,23 +517,86 @@ if (accessAccounts.size > 0) {
     return res.status(401).type("html").send(loginPage(false));
   });
 
-  // ─── 管理后台：只有管理员能看。各账户用量 + 生成记录（缩略图）───
+  // ─── 管理后台：只有管理员能进。账户管理（增/删/改额度/重置用量）+ 生成记录（缩略图→原图）───
   const escapeHtml = (s) => String(s).replace(/[&<>"']/gu, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
-  app.get("/admin", (req, res) => {
+  const requireAdmin = (req, res) => {
     if (!req.accessAccount || req.accessAccount.role !== "admin") {
-      return res.status(403).send("仅管理员可访问 /admin");
+      res.status(403).send("仅管理员可访问");
+      return false;
     }
-    const rows = [...accessAccounts.entries()].map(([user, a]) => {
-      const used = usageOf(user);
+    return true;
+  };
+
+  // 新增/修改体验账户
+  app.post("/admin/accounts", (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    const user = String(req.body?.user || "").trim().toLowerCase();
+    const password = String(req.body?.password || "").trim();
+    const quota = Math.max(1, Math.min(999, Number(req.body?.quota) || 2));
+    if (!/^[a-z0-9_-]{2,24}$/u.test(user)) return res.status(400).send("用户名只能是 2-24 位字母/数字/下划线/短横线");
+    if (user === ADMIN_KEY) return res.status(400).send("不能占用管理员用户名");
+    if (!password) return res.status(400).send("密码不能为空");
+    trialAccounts[user] = { password, quota };
+    scheduleAccountsSave();
+    return res.redirect("/admin");
+  });
+  // 删除体验账户（连用量记录与原图一起清）
+  app.post("/admin/accounts/delete", (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    const user = String(req.body?.user || "").trim().toLowerCase();
+    delete trialAccounts[user];
+    const records = usageStore[user]?.records || [];
+    for (const r of records) if (r.file) rm(join(coversDir, r.file), { force: true }).catch(() => {});
+    delete usageStore[user];
+    scheduleAccountsSave();
+    scheduleUsageSave();
+    return res.redirect("/admin");
+  });
+  // 重置某账户的已用张数（保留记录）
+  app.post("/admin/accounts/reset", (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    const user = String(req.body?.user || "").trim().toLowerCase();
+    if (usageStore[user]) {
+      usageStore[user].used = 0;
+      scheduleUsageSave();
+    }
+    return res.redirect("/admin");
+  });
+  // 看原图（管理员专用）
+  app.get("/admin/cover/:file", (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    const file = String(req.params.file || "");
+    if (!/^[\w.-]+$/u.test(file) || file.includes("..")) return res.status(400).send("bad name");
+    const filePath = join(coversDir, file);
+    if (!existsSync(filePath)) return res.status(404).send("这张的原图已被清理（重新部署会清空记录）");
+    return res.sendFile(filePath);
+  });
+
+  app.get("/admin", (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    const allAccounts = [
+      { user: ADMIN_KEY, role: "admin", quota: Infinity },
+      ...Object.entries(trialAccounts).map(([user, t]) => ({ user, role: "trial", quota: t.quota, password: t.password })),
+    ];
+    const rows = allAccounts.map((a) => {
+      const used = usageOf(a.user);
       const quota = a.quota === Infinity ? "∞" : a.quota;
-      const last = usageStore[user]?.records?.[0]?.time;
-      return `<tr><td>${escapeHtml(user)}</td><td>${a.role === "admin" ? "管理员" : "体验"}</td><td>${used} / ${quota}</td><td>${last ? escapeHtml(new Date(last).toLocaleString("zh-CN", { hour12: false })) : "—"}</td></tr>`;
+      const last = usageStore[a.user]?.records?.[0]?.time;
+      const ops = a.role === "admin" ? "—" : `
+        <form method="POST" action="/admin/accounts/reset" class="inline"><input type="hidden" name="user" value="${escapeHtml(a.user)}" /><button class="mini">重置用量</button></form>
+        <form method="POST" action="/admin/accounts/delete" class="inline" onsubmit="return confirm('删除账户 ${escapeHtml(a.user)}？记录也会清掉')"><input type="hidden" name="user" value="${escapeHtml(a.user)}" /><button class="mini danger">删除</button></form>`;
+      const pass = a.role === "admin" ? "······" : escapeHtml(a.password);
+      return `<tr><td><b>${escapeHtml(a.user)}</b></td><td>${a.role === "admin" ? "管理员" : "体验"}</td><td>${pass}</td><td>${used} / ${quota}</td><td>${last ? escapeHtml(new Date(last).toLocaleString("zh-CN", { hour12: false })) : "—"}</td><td class="ops">${ops}</td></tr>`;
     }).join("");
     const cards = Object.entries(usageStore)
       .flatMap(([user, entry]) => (entry.records || []).map((r) => ({ user, ...r })))
       .sort((a, b) => (a.time < b.time ? 1 : -1))
       .slice(0, 120)
-      .map((r) => `<figure class="shot">${r.thumb ? `<img src="${r.thumb}" alt="" />` : `<div class="noimg">无图</div>`}<figcaption><b>${escapeHtml(r.user)}</b> · ${escapeHtml(r.engine || "")} · ${escapeHtml(r.ratio || "")}<br/>${escapeHtml(r.title || "（无标题）")}<br/><small>${escapeHtml(new Date(r.time).toLocaleString("zh-CN", { hour12: false }))}</small></figcaption></figure>`)
+      .map((r) => {
+        const img = r.thumb ? `<img src="${r.thumb}" alt="" />` : `<div class="noimg">无图</div>`;
+        const body = r.file ? `<a href="/admin/cover/${encodeURIComponent(r.file)}" target="_blank" title="点开看原图">${img}</a>` : img;
+        return `<figure class="shot">${body}<figcaption><b>${escapeHtml(r.user)}</b> · ${escapeHtml(r.engine || "")} · ${escapeHtml(r.ratio || "")}<br/>${escapeHtml(r.title || "（无标题）")}<br/><small>${escapeHtml(new Date(r.time).toLocaleString("zh-CN", { hour12: false }))}</small></figcaption></figure>`;
+      })
       .join("");
     res.type("html").send(`<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -499,13 +610,27 @@ if (accessAccounts.size > 0) {
       radial-gradient(56% 50% at 88% 88%, rgba(147,197,253,.45) 0%, transparent 60%),
       linear-gradient(155deg, #cabcf7 0%, #b3bcf4 45%, #a9c6f0 100%); }
   h1 { font-size: 22px; margin-bottom: 4px; }
+  h2 { font-size: 15px; margin-bottom: 12px; }
   .sub { font-size: 13px; color: rgba(36,26,61,.6); margin-bottom: 24px; }
+  .sub a { color: #5b4bc4; }
   .glass { background: linear-gradient(160deg, rgba(255,255,255,.55), rgba(255,255,255,.3)); border: 1px solid rgba(255,255,255,.7);
     box-shadow: inset 0 1px 1px rgba(255,255,255,.9), 0 18px 50px rgba(80,50,160,.22); border-radius: 24px;
     -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); padding: 22px 24px; margin-bottom: 26px; }
   table { width: 100%; border-collapse: collapse; font-size: 14px; }
   th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,.5); }
   th { font-size: 12px; color: rgba(36,26,61,.55); font-weight: 600; }
+  .inline { display: inline-block; margin-right: 6px; }
+  .mini { font-size: 12px; padding: 5px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.75); cursor: pointer;
+    background: linear-gradient(160deg, rgba(255,255,255,.6), rgba(255,255,255,.35)); color: #241a3d; font-family: inherit; }
+  .mini.danger { color: #c02662; }
+  .mini:hover { filter: brightness(1.05); }
+  .addform { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .addform input { padding: 10px 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,.75); font-size: 14px;
+    background: linear-gradient(160deg, rgba(255,255,255,.6), rgba(255,255,255,.35)); color: #241a3d; outline: none; font-family: inherit; }
+  .addform input[name="user"] { width: 160px; } .addform input[name="password"] { width: 160px; } .addform input[name="quota"] { width: 90px; }
+  .addform button { padding: 10px 22px; border-radius: 999px; border: 1px solid rgba(255,255,255,.6); cursor: pointer; font-weight: 700; color: #fff;
+    background: linear-gradient(165deg, rgba(167,139,250,.95), rgba(124,105,246,.92)); font-family: inherit; }
+  .hint { font-size: 12px; color: rgba(36,26,61,.55); margin-top: 10px; }
   .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
   .shot { background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.65); border-radius: 16px; overflow: hidden; }
   .shot img { width: 100%; display: block; }
@@ -515,17 +640,28 @@ if (accessAccounts.size > 0) {
 </style></head>
 <body>
   <h1>巴卡巴卡 · 管理后台</h1>
-  <p class="sub">各账户用量与生成记录（记录保存在服务器，重新部署会清零）· <a href="/">返回生成器</a></p>
+  <p class="sub">账户管理与生成记录 · <a href="/">返回生成器</a> · <a href="/access-logout">退出登录</a></p>
   <div class="glass">
-    <table><thead><tr><th>账户</th><th>类型</th><th>已生成 / 额度</th><th>最近生成</th></tr></thead><tbody>${rows}</tbody></table>
+    <h2>账户</h2>
+    <table><thead><tr><th>账户</th><th>类型</th><th>密码</th><th>已生成 / 额度</th><th>最近生成</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table>
+    <div style="margin-top:16px">
+      <form class="addform" method="POST" action="/admin/accounts">
+        <input name="user" placeholder="用户名（字母数字）" required />
+        <input name="password" placeholder="密码" required />
+        <input name="quota" type="number" min="1" max="999" value="2" title="额度（张）" />
+        <button type="submit">添加 / 修改账户</button>
+      </form>
+      <p class="hint">同名提交 = 修改密码/额度。体验账户只能生成 小红书 3:4，成功一张扣一张额度。免费服务器重启会清零计数与记录（要永久保存需升级付费磁盘）。</p>
+    </div>
   </div>
   <div class="glass">
+    <h2>生成记录（点缩略图看原图）</h2>
     ${cards ? `<div class="grid">${cards}</div>` : `<p class="empty">还没有生成记录。</p>`}
   </div>
 </body></html>`);
   });
 
-  console.log(`[Access] 登录保护已启用：${accessAccounts.size} 个账户（管理员 + 体验），玻璃登录页 + 30 天 Cookie。`);
+  console.log(`[Access] 登录保护已启用：管理员 + ${Object.keys(trialAccounts).length} 个体验账户，/admin 可管理。`);
 }
 
 // Initialize database connection (non-blocking, graceful if not configured)
@@ -1312,25 +1448,36 @@ app.post("/api/regenerate", async (req, res) => {
     const sourceMode = normalizeSourceMode(requestedSourceMode);
     const engine = resolveEngine(normalizeEngine(requestedEngineRaw));
     assertEngineAvailable(engine);
-    // 体验账户：单张重生 / 换模型 / 加比例 同样计入额度
+    // 体验账户：单张重生 / 换模型 / 加比例 同样计入额度，且只能 3:4
     if (req.accessAccount && req.accessAccount.role !== "admin") {
+      if (ratio !== "3:4") {
+        return res.json({ error: "体验账户只能生成「小红书封面 3:4」。" });
+      }
       const remaining = req.accessAccount.quota - usageOf(req.accessAccount.user);
       if (remaining <= 0) {
         return res.json({ error: "体验额度已用完（每个体验账户限量），想继续用请联系管理员。" });
       }
     }
-    const sourceImages = getSourceImages({ sourceMode, image, elementImages });
-    const openai = createOpenAIClient();
-    const imageUrl = await generateByEngine({
-      openai,
-      engine,
-      sourceMode,
-      sourceImages,
-      imageDescription,
-      inspiration,
-      plan,
-      ratio,
-    });
+    // 预扣 1 张，失败在 catch 里退回
+    if (req.accessAccount) reserveQuota(req.accessAccount.user, 1);
+    let imageUrl;
+    try {
+      const sourceImages = getSourceImages({ sourceMode, image, elementImages });
+      const openai = createOpenAIClient();
+      imageUrl = await generateByEngine({
+        openai,
+        engine,
+        sourceMode,
+        sourceImages,
+        imageDescription,
+        inspiration,
+        plan,
+        ratio,
+      });
+    } catch (error) {
+      if (req.accessAccount) releaseQuota(req.accessAccount.user, 1);
+      throw error;
+    }
     if (req.accessAccount) {
       recordGeneration(req.accessAccount.user, { engine, ratio, title: plan.label, imageUrl }).catch(() => {});
     }
@@ -1403,8 +1550,13 @@ app.post("/api/generate", async (req, res) => {
   ratioGroups = [...ratioGroups].sort((a, b) => ratioRank(a.ratio) - ratioRank(b.ratio));
   const totalCount = ratioGroups.reduce((sum, item) => sum + item.count, 0);
 
-  // 体验账户额度检查（须在开 SSE 流之前，才能返回明确的拒绝信息）。
+  // 体验账户限制（须在开 SSE 流之前，才能返回明确的拒绝信息）：
+  // ① 只能生成小红书 3:4；② 预扣额度（并发开多批也钻不了空子），失败的单张稍后退回。
+  let reservedCount = 0;
   if (req.accessAccount && req.accessAccount.role !== "admin") {
+    if (ratioGroups.some((g) => g.ratio !== "3:4")) {
+      return res.status(403).json({ error: "体验账户只能生成「小红书封面 3:4」，请只勾选 3:4 这一个比例。" });
+    }
     const remaining = req.accessAccount.quota - usageOf(req.accessAccount.user);
     if (remaining <= 0) {
       return res.status(403).json({ error: "体验额度已用完（每个体验账户限量），想继续用请联系管理员。" });
@@ -1412,6 +1564,10 @@ app.post("/api/generate", async (req, res) => {
     if (totalCount > remaining) {
       return res.status(403).json({ error: `体验额度只剩 ${remaining} 张，请把生成数量调到 ${remaining} 张以内。` });
     }
+  }
+  if (req.accessAccount) {
+    reserveQuota(req.accessAccount.user, totalCount);
+    reservedCount = totalCount;
   }
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -1527,6 +1683,8 @@ app.post("/api/generate", async (req, res) => {
       engine,
       message: concurrency > 1 ? `开始生成，当前 ${concurrency} 张并行...` : "开始生成封面...",
     });
+    // 交给逐张 worker 后，额度由「失败退回」接管；预扣里没跑到的任务（方案不足）在结果后对账退回。
+    reservedCount = 0;
     const results = await mapWithConcurrency(jobs, concurrency, async ({ plan, ratio, engine: jobEngine }, jobIndex) => {
       writeSse(res, {
         status: "generating",
@@ -1570,6 +1728,7 @@ app.post("/api/generate", async (req, res) => {
         return result;
       } catch (error) {
         completed += 1;
+        if (req.accessAccount) releaseQuota(req.accessAccount.user, 1); // 失败的退回额度
         console.warn(`[generate] 封面 ${plan.id} 失败（${jobEngine}）：${error?.message || error}`);
         const result = {
           id: plan.id,
@@ -1593,6 +1752,10 @@ app.post("/api/generate", async (req, res) => {
     });
 
     results.sort((a, b) => a.id - b.id);
+    // 对账：预扣了 totalCount，但实际任务数可能更少（方案不足），差额退回。
+    if (req.accessAccount && results.length < totalCount) {
+      releaseQuota(req.accessAccount.user, totalCount - results.length);
+    }
 
     // ─── Deduct credits after successful generation ───
     const successCount = results.filter((r) => !r.error).length;
@@ -1633,10 +1796,10 @@ app.post("/api/generate", async (req, res) => {
     });
     res.end();
   } catch (error) {
-    // ─── Refund credits on total failure ───
-    if (req.creditsCost > 0 && req.user) {
-      // Don't deduct if generation completely failed
-      // (credits are only deducted on success above)
+    // 生成还没开始就挂了（校验/规划阶段）：把预扣的额度整体退回
+    if (req.accessAccount && reservedCount > 0) {
+      releaseQuota(req.accessAccount.user, reservedCount);
+      reservedCount = 0;
     }
 
     writeSse(res, {
