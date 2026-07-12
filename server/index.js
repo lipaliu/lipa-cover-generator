@@ -1,5 +1,6 @@
 import express from "express";
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
@@ -262,29 +263,123 @@ function configureArk() {
 configureArk();
 
 app.use(express.json({ limit: "100mb" })); // 元素拼接多图上传，给足余量（前端已先压缩，正常远用不到）
+app.use(express.urlencoded({ extended: false })); // 登录页表单提交用
 
 // 健康检查（云平台探活用，不经访问口令，必须放在口令中间件之前）。
 app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 
-// 简单访问口令（小范围分享用）。仅当设置了 ACCESS_PASSWORD 时启用，整站（前端+接口）都要口令。
-// 本地不设则不拦；隧道 / 云上把 ACCESS_PASSWORD 传进来即可保护。用户名随意，只校验密码。
+// 访问保护：设置了 ACCESS_PASSWORD 才启用。不用浏览器自带的 Basic 弹窗，
+// 而是同款糖果玻璃风格的登录页；登录成功写 30 天 Cookie。Basic 头仍兼容（脚本/curl 用）。
 const ACCESS_USER = process.env.ACCESS_USER || "";
 const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD || "";
 if (ACCESS_PASSWORD) {
+  const accessToken = createHash("sha256").update(`baka|${ACCESS_USER}|${ACCESS_PASSWORD}`).digest("hex");
+  const ACCESS_COOKIE = "baka_access";
+
+  const loginPage = (showError) => `<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>登录 · BAKABAKA 巴卡巴卡</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: -apple-system, system-ui, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+    background:
+      radial-gradient(52% 46% at 14% 8%, rgba(167, 139, 250, 0.55) 0%, transparent 60%),
+      radial-gradient(50% 44% at 86% 6%, rgba(129, 140, 248, 0.5) 0%, transparent 60%),
+      radial-gradient(56% 50% at 88% 88%, rgba(147, 197, 253, 0.5) 0%, transparent 60%),
+      radial-gradient(50% 46% at 10% 90%, rgba(196, 181, 253, 0.45) 0%, transparent 60%),
+      linear-gradient(155deg, #cabcf7 0%, #b3bcf4 45%, #a9c6f0 100%);
+    color: #241a3d; padding: 20px;
+  }
+  .card {
+    width: min(420px, 92vw); padding: 40px 36px 34px; border-radius: 30px; text-align: center;
+    background: linear-gradient(160deg, rgba(255,255,255,0.55), rgba(255,255,255,0.3));
+    border: 1px solid rgba(255,255,255,0.7);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.9), 0 24px 70px rgba(80,50,160,0.28);
+    -webkit-backdrop-filter: blur(26px) saturate(150%); backdrop-filter: blur(26px) saturate(150%);
+  }
+  .logo { width: min(230px, 70%); height: auto; margin: 0 auto 6px; display: block;
+    filter: drop-shadow(0 6px 22px rgba(120, 100, 220, 0.35)); }
+  .slogan { font-size: 13px; color: rgba(36,26,61,0.6); margin-bottom: 26px; letter-spacing: 0.02em; }
+  .field { margin-bottom: 14px; text-align: left; }
+  .field label { display: block; font-size: 12px; font-weight: 600; color: rgba(36,26,61,0.65); margin: 0 0 6px 4px; }
+  .field input {
+    width: 100%; padding: 13px 16px; font-size: 15px; color: #241a3d; border-radius: 16px;
+    background: linear-gradient(160deg, rgba(255,255,255,0.6), rgba(255,255,255,0.35));
+    border: 1px solid rgba(255,255,255,0.75);
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.8);
+    outline: none; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  }
+  .field input:focus { border-color: rgba(139, 112, 240, 0.65); box-shadow: inset 0 1px 1px rgba(255,255,255,0.8), 0 0 0 3px rgba(139,112,240,0.18); }
+  .err { font-size: 13px; color: #d63384; margin: 2px 0 12px; ${showError ? "" : "display:none;"} }
+  button {
+    width: 100%; padding: 14px; margin-top: 6px; font-size: 16px; font-weight: 700; color: #fff;
+    border: 1px solid rgba(255,255,255,0.6); border-radius: 999px; cursor: pointer;
+    background: linear-gradient(165deg, rgba(167,139,250,0.95), rgba(124,105,246,0.92));
+    box-shadow: inset 0 1px 1px rgba(255,255,255,0.55), 0 12px 30px rgba(110,90,230,0.4);
+    text-shadow: 0 1px 2px rgba(60,40,140,0.3);
+    transition: filter .2s ease, transform .2s ease;
+    font-family: inherit;
+  }
+  button:hover { filter: brightness(1.06); transform: translateY(-1px); }
+  .foot { margin-top: 22px; font-size: 11px; color: rgba(36,26,61,0.45); }
+</style>
+</head>
+<body>
+  <form class="card" method="POST" action="/access-login">
+    <img class="logo" src="/logo.png" alt="巴卡巴卡 BAKABAKA" />
+    <p class="slogan">自媒体封面之王 · King of Cover</p>
+    <div class="field">
+      <label>用户名</label>
+      <input name="user" type="text" autocomplete="username" autofocus />
+    </div>
+    <div class="field">
+      <label>密码</label>
+      <input name="password" type="password" autocomplete="current-password" />
+    </div>
+    <p class="err">用户名或密码不对，再试一次</p>
+    <button type="submit">进入 BAKABAKA</button>
+    <p class="foot">Copyright © 畅导吃枸杞</p>
+  </form>
+</body>
+</html>`;
+
+  const credentialsOk = (user, password) => (!ACCESS_USER || user === ACCESS_USER) && password === ACCESS_PASSWORD;
+
   app.use((req, res, next) => {
+    // 登录页要显示 logo，放行
+    if (req.path === "/logo.png" || req.path === "/favicon.ico") return next();
+    // 已带有效 Cookie
+    const cookies = String(req.headers.cookie || "");
+    if (cookies.split(/;\s*/u).includes(`${ACCESS_COOKIE}=${accessToken}`)) return next();
+    // Basic 头兼容（curl/脚本）
     const header = req.headers.authorization || "";
     if (header.startsWith("Basic ")) {
       const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
       const idx = decoded.indexOf(":");
-      const user = decoded.slice(0, idx);
-      const password = decoded.slice(idx + 1);
-      const userOk = !ACCESS_USER || user === ACCESS_USER; // 未设 ACCESS_USER 则不校验用户名
-      if (userOk && password === ACCESS_PASSWORD) return next();
+      if (credentialsOk(decoded.slice(0, idx), decoded.slice(idx + 1))) return next();
     }
-    res.set("WWW-Authenticate", 'Basic realm="BAKABAKA"');
-    return res.status(401).send("需要登录 / Login required.");
+    // 登录表单提交
+    if (req.method === "POST" && req.path === "/access-login") {
+      const { user = "", password = "" } = req.body || {};
+      if (credentialsOk(String(user).trim(), String(password))) {
+        res.setHeader(
+          "Set-Cookie",
+          `${ACCESS_COOKIE}=${accessToken}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax`,
+        );
+        return res.redirect("/");
+      }
+      return res.status(401).type("html").send(loginPage(true));
+    }
+    // API 请求返回 JSON，页面请求给登录页
+    if (req.path.startsWith("/api/")) return res.status(401).json({ error: "需要登录" });
+    return res.status(401).type("html").send(loginPage(false));
   });
-  console.log(`[Access] 已启用登录保护（用户名:${ACCESS_USER || "任意"}）。`);
+  console.log(`[Access] 已启用登录保护（用户名:${ACCESS_USER || "任意"}，玻璃登录页 + 30 天 Cookie）。`);
 }
 
 // Initialize database connection (non-blocking, graceful if not configured)
