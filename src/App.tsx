@@ -797,9 +797,7 @@ export function App() {
             <Settings2 size={18} />
             <span>设置</span>
           </button>
-          {isLocalLipa ? (
-            <span className="local-mode-badge">本地免费</span>
-          ) : (
+          {!isLocalLipa && (
             <CreditsBadge
               user={user}
               onLoginClick={() => setShowLogin(true)}

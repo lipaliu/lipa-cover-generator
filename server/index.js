@@ -275,15 +275,16 @@ app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 // 例：ACCESS_ACCOUNTS="guest:baka2026:2,team1:hello88:5"。额度=最多可成功生成的张数。
 const ACCESS_USER = process.env.ACCESS_USER || "";
 const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD || "";
-const accessAccounts = new Map(); // user -> { password, role: "admin"|"trial", quota }
+const accessAccounts = new Map(); // 小写用户名 -> { password, role: "admin"|"trial", quota }。登录名不分大小写。
 if (ACCESS_PASSWORD) {
-  accessAccounts.set(ACCESS_USER || "admin", { password: ACCESS_PASSWORD, role: "admin", quota: Infinity });
+  accessAccounts.set((ACCESS_USER || "admin").toLowerCase(), { password: ACCESS_PASSWORD, role: "admin", quota: Infinity });
 }
 for (const entry of String(process.env.ACCESS_ACCOUNTS || "").split(/[\s,]+/u).filter(Boolean)) {
   const [user, password, quotaRaw] = entry.split(":");
-  if (!user || !password || accessAccounts.has(user)) continue;
+  const key = String(user || "").toLowerCase();
+  if (!key || !password || accessAccounts.has(key)) continue;
   const isAdmin = quotaRaw === "admin";
-  accessAccounts.set(user, {
+  accessAccounts.set(key, {
     password,
     role: isAdmin ? "admin" : "trial",
     quota: isAdmin ? Infinity : Math.max(1, Number(quotaRaw) || 2),
@@ -410,10 +411,11 @@ if (accessAccounts.size > 0) {
 </body>
 </html>`;
 
-  // 用户名+密码 → 账户对象（不匹配返回 null）
+  // 用户名+密码 → 账户对象（不匹配返回 null）。用户名不分大小写；密码区分。
   const resolveAccount = (user, password) => {
-    const account = accessAccounts.get(String(user || "").trim());
-    return account && account.password === String(password) ? { user: String(user).trim(), ...account } : null;
+    const key = String(user || "").trim().toLowerCase();
+    const account = accessAccounts.get(key);
+    return account && account.password === String(password) ? { user: key, ...account } : null;
   };
 
   app.use((req, res, next) => {
