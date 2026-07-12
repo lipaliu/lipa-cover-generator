@@ -1488,6 +1488,18 @@ if (serveDist) {
   }
 }
 
+// Render 免费实例防休眠：闲置 15 分钟会被平台睡眠，访客得等 30-60s 的叫醒页。
+// Render 自动注入 RENDER_EXTERNAL_URL；醒着时每 8 分钟自 ping 一次 /healthz 制造流量，
+// 就永远不会因闲置入睡（GitHub Actions 的定时 ping 保留为兜底叫醒，它经常拖延到 1 小时一次）。
+const externalUrl = String(process.env.RENDER_EXTERNAL_URL || "").replace(/\/+$/u, "");
+if (externalUrl) {
+  const keepAlive = setInterval(() => {
+    fetch(`${externalUrl}/healthz`).catch(() => {});
+  }, 8 * 60 * 1000);
+  keepAlive.unref?.();
+  console.log(`[KeepAlive] 每 8 分钟自 ping ${externalUrl}/healthz，防止免费实例休眠。`);
+}
+
 // 监听地址：默认 0.0.0.0（云平台必须对外监听；本机/隧道也兼容，因为含 127.0.0.1）。
 const host = process.env.HOST || "0.0.0.0";
 app.listen(port, host, () => {
