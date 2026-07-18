@@ -185,7 +185,7 @@ export const moods = [
   { id: "G8", name: "自然有机", weight: 3, desc: "natural organic mood, earthy textures and botanical elements, grounded and authentic" },
   { id: "G9", name: "奢华精致", weight: 1, desc: "luxurious refined mood, rich materials gold accents, premium and exclusive feel" },
   { id: "G10", name: "幽默趣味", weight: 2, desc: "humorous playful mood, unexpected elements and fun details, lighthearted and engaging" },
-  { id: "G11", name: "文化编辑部", weight: 3, desc: "culture-review editorial mood: intellectual film / book / music commentary vibe, dim cozy study or cinema-still backdrop, elegant thin-weight typography with 1-2 sharp accent colors, understated but opinionated" },
+  { id: "G11", name: "电影节海报", weight: 3, desc: "film-festival poster / big-brand minimalist mood: quiet luxury editorial restraint, cinematic stills or dim study backdrop, elegant thin-weight serif/hairline typography with generous letter-spacing, only 1-2 sharp accent colors, understated but high-end — like an arthouse festival poster or a designer brand campaign" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -227,7 +227,7 @@ const keywordConstraints = [
   { keywords: ["文艺", "清新", "literary"], dimension: "G", options: ["G5", "G8"] },
   { keywords: ["复古", "retro", "vintage"], dimension: "G", options: ["G6"] },
   { keywords: ["科技", "未来", "future"], dimension: "G", options: ["G7"] },
-  { keywords: ["影评", "观影", "电影", "书评", "文学", "文化", "评论", "播客"], dimension: "G", options: ["G11", "G1", "G5"] },
+  { keywords: ["影评", "观影", "电影", "书评", "文学", "文化", "评论", "播客", "大牌", "极简", "电影节", "海报"], dimension: "G", options: ["G11", "G1", "G5"] },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
