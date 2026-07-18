@@ -11,7 +11,7 @@ import OpenAI, { toFile } from "openai";
 import sharp from "sharp";
 import { fetch as undiciFetch, FormData as UndiciFormData, ProxyAgent, Agent, setGlobalDispatcher } from "undici";
 import { buildPlanUserPrompt, fallbackPlans, skillPrompt } from "./prompts.js";
-import { generateCombinations, combinationToLabel } from "./design-matrix.js";
+import { generateCombinations, combinationToLabel, fontStyles, colorSchemes } from "./design-matrix.js";
 import { getPool } from "./db.js";
 import { optionalAuth, requireAuth, requireCredits, getCreditsCost } from "./middleware.js";
 import { deductCredits, refundCredits } from "./credits.js";
@@ -517,6 +517,14 @@ if (ACCESS_PASSWORD) {
     // API 请求返回 JSON，页面请求给登录页（记住原目标，登录后跳回）
     if (req.path.startsWith("/api/")) return res.status(401).json({ error: "需要登录" });
     return res.status(401).type("html").send(loginPage(false, req.path));
+  });
+
+  // 审美库里的可选项（字体/色彩风格），给前端「风格定制」下拉用；库丰富后自动跟着变
+  app.get("/api/style-options", (_req, res) => {
+    res.json({
+      fonts: fontStyles.filter((f) => f.weight > 0).map((f) => ({ id: f.id, name: f.name })),
+      colors: colorSchemes.filter((c) => c.weight > 0).map((c) => ({ id: c.id, name: c.name })),
+    });
   });
 
   // 当前登录的是谁（前端用它决定要不要显示「管理后台」按钮）
@@ -1604,6 +1612,18 @@ app.post("/api/generate", async (req, res) => {
       dominant_color: stylePreferences?.imageDominantColor || fallbackAnalysis.dominant_color,
     };
 
+    // 用户在界面锁定的 字体/色彩风格/字体颜色（都选填；未选 = 库内随机）
+    const styleLock = {};
+    if (stylePreferences?.fontId && fontStyles.some((f) => f.id === stylePreferences.fontId)) {
+      styleLock.A = stylePreferences.fontId;
+    }
+    if (stylePreferences?.colorSchemeId && colorSchemes.some((c) => c.id === stylePreferences.colorSchemeId)) {
+      styleLock.D = stylePreferences.colorSchemeId;
+    }
+    const lockedTextColor = /^#[0-9a-fA-F]{6}$/u.test(String(stylePreferences?.textColor || ""))
+      ? String(stylePreferences.textColor).toUpperCase()
+      : "";
+
     // ─── 分析与规划并行执行，避免串行等待两次 GPT-4o 调用 ───
     // 分析为“尽力而为”，不阻塞主流程；规划先用本地设计矩阵兜底，确保生图几乎立即开始。
     writeSse(res, {
@@ -1627,7 +1647,16 @@ app.post("/api/generate", async (req, res) => {
     // 按每个比例分别生成 plans，竖版启用安全矩阵过滤器。
     let plans = [];
     for (const group of ratioGroups) {
-      const groupPlans = fallbackPlans({ analysis, title, subtitle, count: group.count, keywords: planKeywords, ratio: group.ratio });
+      const groupPlans = fallbackPlans({
+        analysis,
+        title,
+        subtitle,
+        count: group.count,
+        keywords: planKeywords,
+        ratio: group.ratio,
+        styleLock,
+        textColor: lockedTextColor,
+      });
       plans.push(...groupPlans);
     }
 

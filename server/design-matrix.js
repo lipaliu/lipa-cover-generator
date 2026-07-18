@@ -355,7 +355,8 @@ function applyVerticalSafetyFilter(list, dimension) {
  * @param {string} [ratio] - 目标比例（可选），竖版时启用安全过滤
  * @returns {Array<Object>} 组合数组，每个元素包含各维度的选择
  */
-export function generateCombinations(count, keywords = "", ratio = "") {
+// locked: 用户在界面上锁定的维度，如 { A: "A4", D: "D8" }——锁定维度只用该选项，其余维度照常随机。
+export function generateCombinations(count, keywords = "", ratio = "", locked = {}) {
   const constraints = resolveConstraints(keywords);
   const isVertical = VERTICAL_RATIOS.has(ratio);
   const combinations = [];
@@ -372,9 +373,11 @@ export function generateCombinations(count, keywords = "", ratio = "") {
     return isVertical ? applyVerticalSafetyFilter(constrained, dim) : constrained;
   };
 
-  const shuffledA = weightedShuffle(filterByConstraint(fontStyles, "A"));
+  const lockedA = locked?.A ? fontStyles.find((s) => s.id === locked.A) : null;
+  const lockedD = locked?.D ? colorSchemes.find((s) => s.id === locked.D) : null;
+  const shuffledA = lockedA ? [lockedA] : weightedShuffle(filterByConstraint(fontStyles, "A"));
   const shuffledB = weightedShuffle(filterByConstraint(textLayouts, "B"));
-  const shuffledD = weightedShuffle(safeFilter(colorSchemes, "D"));
+  const shuffledD = lockedD ? [lockedD] : weightedShuffle(safeFilter(colorSchemes, "D"));
 
   // C / E / F / G 维度的候选池（受约束时取子集），加权随机选取
   const poolC = filterByConstraint(textEffects, "C");

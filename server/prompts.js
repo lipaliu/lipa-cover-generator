@@ -258,9 +258,9 @@ Rules:
 `;
 }
 
-export function fallbackPlans({ analysis, title, subtitle, count, keywords, ratio = "" }) {
-  // 使用设计矩阵生成多样化的 fallback 方案（竖版启用安全矩阵过滤器）
-  const combinations = generateCombinations(count, keywords, ratio);
+export function fallbackPlans({ analysis, title, subtitle, count, keywords, ratio = "", styleLock = {}, textColor = "" }) {
+  // 使用设计矩阵生成多样化的 fallback 方案（竖版启用安全矩阵过滤器；styleLock 锁定用户选定的字体/色彩维度）
+  const combinations = generateCombinations(count, keywords, ratio, styleLock);
   const isVertical = ["3:4", "9:16", "1:1"].includes(ratio);
 
   return combinations.map((combo, index) => {
@@ -290,7 +290,9 @@ ${directive}
 TEXT CONTENT:
 LINE 1 (Main title): "${title}"
 - Font: ${combo.a.desc}
-- Color: use colors from ${combo.d.name} scheme with ${combo.c.name} effect
+- Color: ${textColor
+        ? `EXACTLY ${textColor} — USER-LOCKED HARD REQUIREMENT for the main title text fill; add stroke/shadow/underlay from the ${combo.d.name} scheme only as needed for readability; do NOT change the title fill color`
+        : `use colors from ${combo.d.name} scheme with ${combo.c.name} effect`}
 - Size: MASSIVE - each character about 20-25% of frame width
 - Position: ${combo.b.desc}
 

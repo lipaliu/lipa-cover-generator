@@ -220,6 +220,19 @@ export function App() {
       .then((d) => setIsAdminAccount(d?.role === "admin"))
       .catch(() => {});
   }, []);
+
+  // 风格定制（都选填）：锁定字体 / 色彩风格 / 字体颜色；空 = 库内随机、AI 自选
+  const [styleOptions, setStyleOptions] = useState<{ fonts: Array<{ id: string; name: string }>; colors: Array<{ id: string; name: string }> }>({ fonts: [], colors: [] });
+  const [lockedFont, setLockedFont] = useState("");
+  const [lockedColorScheme, setLockedColorScheme] = useState("");
+  const [lockedTextColor, setLockedTextColor] = useState("");
+  useEffect(() => {
+    fetch("/api/style-options")
+      .then((r) => r.json())
+      .then((d) => setStyleOptions({ fonts: d?.fonts || [], colors: d?.colors || [] }))
+      .catch(() => {});
+  }, []);
+  const presetTextColors = ["#FFFFFF", "#000000", "#FFDE00", "#FF7A00", "#FF3B30", "#FF4FA3", "#34C759", "#00C7BE", "#0A84FF", "#B388FF", "#8B5A2B", "#C0C0C0"];
   const [detectedColor, setDetectedColor] = useState("#6F7C79");
   const [imageColors, setImageColors] = useState<string[]>([]);
   const [ratioSelection, setRatioSelection] = useState<RatioSelection>({
@@ -408,6 +421,9 @@ export function App() {
           stylePreferences: {
             imageDominantColor: detectedColor,
             imagePalette: imageColors,
+            fontId: lockedFont || undefined,
+            colorSchemeId: lockedColorScheme || undefined,
+            textColor: lockedTextColor || undefined,
           },
         }),
         signal: controller.signal,
@@ -644,6 +660,9 @@ export function App() {
     setElementImages([]);
     setImageDescription("");
     setInspiration("");
+    setLockedFont("");
+    setLockedColorScheme("");
+    setLockedTextColor("");
     setTitle("");
     setSubtitle("");
     setKeywords("");
@@ -1262,6 +1281,80 @@ export function App() {
               </div>
 
               <div className="style-controls">
+                <div className="style-custom">
+                  <div className="style-custom-head">
+                    <span style={{ fontWeight: 600 }}>风格定制</span>
+                    <span className="inspire-optional">选填 · 不选 = 库内随机多样</span>
+                  </div>
+                  <label className="style-select">
+                    <span>字体</span>
+                    <div className="select-wrap">
+                      <select value={lockedFont} onChange={(e) => setLockedFont(e.target.value)}>
+                        <option value="">🎲 随机（每张不同字体）</option>
+                        {styleOptions.fonts.map((f) => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={16} />
+                    </div>
+                  </label>
+                  <label className="style-select">
+                    <span>色彩风格</span>
+                    <div className="select-wrap">
+                      <select value={lockedColorScheme} onChange={(e) => setLockedColorScheme(e.target.value)}>
+                        <option value="">🎲 随机（每张不同配色）</option>
+                        {styleOptions.colors.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                      <ChevronDown size={16} />
+                    </div>
+                  </label>
+                  <div className="textcolor-block">
+                    <span className="textcolor-label">字体颜色（主标题）</span>
+                    <div className="textcolor-row">
+                      <button
+                        type="button"
+                        className={cn("tc-chip", !lockedTextColor && "is-on")}
+                        onClick={() => setLockedTextColor("")}
+                      >
+                        AI 自选
+                      </button>
+                      {presetTextColors.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          className={cn("tc-swatch", lockedTextColor === c && "is-on")}
+                          style={{ background: c }}
+                          title={c}
+                          onClick={() => setLockedTextColor(c)}
+                        />
+                      ))}
+                      {imageColors.slice(0, 4).map((c) => (
+                        <button
+                          key={`img-${c}`}
+                          type="button"
+                          className={cn("tc-swatch tc-from-image", lockedTextColor === c && "is-on")}
+                          style={{ background: c }}
+                          title={`底图取色 ${c}`}
+                          onClick={() => setLockedTextColor(c)}
+                        />
+                      ))}
+                      <label className="tc-custom" title="自定义颜色">
+                        <input
+                          type="color"
+                          value={lockedTextColor || "#FFDE00"}
+                          onChange={(e) => setLockedTextColor(e.target.value.toUpperCase())}
+                        />
+                        自定义
+                      </label>
+                    </div>
+                    {lockedTextColor && (
+                      <span className="tc-picked">已锁定 <i style={{ background: lockedTextColor }} /> {lockedTextColor}（所有封面主标题用这个颜色）</span>
+                    )}
+                  </div>
+                </div>
+
                 <label className="style-select">
                   <span>生成引擎</span>
                   <div className="select-wrap">
