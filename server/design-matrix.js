@@ -97,6 +97,7 @@ export const textEffects = [
   { id: "C13", name: "印章盖章", weight: 1, desc: "rubber stamp effect, text appears stamped with uneven ink distribution, official and bold" },
   { id: "C14", name: "撕纸边缘", weight: 3, desc: "torn paper edge effect, text on ripped paper piece revealing layer beneath, collage feel" },
   { id: "C15", name: "胶带粘贴", weight: 0, desc: "masking tape effect, text written on semi-transparent tape strips, DIY scrapbook aesthetic" },
+  { id: "C16", name: "关键词换色", weight: 3, desc: "inline keyword color-swap: within one title sentence, 1-2 key words switch to a contrasting accent color (bright yellow / green / magenta / red) while the rest stays white or black; loose letter-spacing across the line, editorial emphasis — signature of culture-review covers" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -149,6 +150,9 @@ export const decorations = [
   { id: "E18", name: "噪点纹理", weight: 2, desc: "noise grain texture overlay, film grain or paper texture, vintage tactile quality" },
   { id: "E19", name: "光线射线", weight: 2, desc: "light rays and sunburst, radiating lines from center or corner, dramatic emphasis" },
   { id: "E20", name: "气泡对话框", weight: 1, desc: "speech bubble and dialog box, comic-style text containers, conversational and fun" },
+  { id: "E21", name: "角落定位点", weight: 3, desc: "small solid color dots pinned near the four corners of the frame (blue / green / yellow / magenta), like print registration marks, quiet editorial framing device" },
+  { id: "E22", name: "海报环绕拼贴", weight: 3, desc: "mini movie posters / album covers / book covers floating around the main subject like an orbit of references, evidence-collage for review and recommendation content" },
+  { id: "E23", name: "引号书名号装饰", weight: 3, desc: "oversized CJK quote marks 「」 and title marks 《》 used as graphic design elements, often in a different accent color than the surrounding text" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -181,6 +185,7 @@ export const moods = [
   { id: "G8", name: "自然有机", weight: 3, desc: "natural organic mood, earthy textures and botanical elements, grounded and authentic" },
   { id: "G9", name: "奢华精致", weight: 1, desc: "luxurious refined mood, rich materials gold accents, premium and exclusive feel" },
   { id: "G10", name: "幽默趣味", weight: 2, desc: "humorous playful mood, unexpected elements and fun details, lighthearted and engaging" },
+  { id: "G11", name: "文化编辑部", weight: 3, desc: "culture-review editorial mood: intellectual film / book / music commentary vibe, dim cozy study or cinema-still backdrop, elegant thin-weight typography with 1-2 sharp accent colors, understated but opinionated" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -209,6 +214,10 @@ const keywordConstraints = [
 
   // E 维度约束
   { keywords: ["拼贴", "collage", "杂志", "magazine", "多图", "九宫格"], dimension: "E", options: ["E6", "E9", "E15"] },
+  { keywords: ["影评", "观影", "电影", "film", "movie", "cinema", "书评", "读书", "文学", "播客", "podcast", "歌单", "音乐"], dimension: "E", options: ["E21", "E22", "E23", "E15"] },
+
+  // C 维度约束
+  { keywords: ["影评", "观影", "电影", "书评", "文学", "文化", "评论"], dimension: "C", options: ["C16", "C1", "C7"] },
 
   // G 维度约束
   { keywords: ["高级", "premium", "冷淡"], dimension: "G", options: ["G1", "G9"] },
@@ -218,6 +227,7 @@ const keywordConstraints = [
   { keywords: ["文艺", "清新", "literary"], dimension: "G", options: ["G5", "G8"] },
   { keywords: ["复古", "retro", "vintage"], dimension: "G", options: ["G6"] },
   { keywords: ["科技", "未来", "future"], dimension: "G", options: ["G7"] },
+  { keywords: ["影评", "观影", "电影", "书评", "文学", "文化", "评论", "播客"], dimension: "G", options: ["G11", "G1", "G5"] },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
