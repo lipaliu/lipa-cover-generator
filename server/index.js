@@ -11,7 +11,7 @@ import OpenAI, { toFile } from "openai";
 import sharp from "sharp";
 import { fetch as undiciFetch, FormData as UndiciFormData, ProxyAgent, Agent, setGlobalDispatcher } from "undici";
 import { buildPlanUserPrompt, fallbackPlans, skillPrompt } from "./prompts.js";
-import { generateCombinations, combinationToLabel, fontStyles, colorSchemes } from "./design-matrix.js";
+import { generateCombinations, combinationToLabel, fontStyles, colorSchemes, moods } from "./design-matrix.js";
 import { getPool } from "./db.js";
 import { optionalAuth, requireAuth, requireCredits, getCreditsCost } from "./middleware.js";
 import { deductCredits, refundCredits } from "./credits.js";
@@ -524,6 +524,7 @@ if (ACCESS_PASSWORD) {
     res.json({
       fonts: fontStyles.filter((f) => f.weight > 0).map((f) => ({ id: f.id, name: f.name })),
       colors: colorSchemes.filter((c) => c.weight > 0).map((c) => ({ id: c.id, name: c.name })),
+      moods: moods.filter((m) => m.weight > 0).map((m) => ({ id: m.id, name: m.name })),
     });
   });
 
@@ -1619,6 +1620,9 @@ app.post("/api/generate", async (req, res) => {
     }
     if (stylePreferences?.colorSchemeId && colorSchemes.some((c) => c.id === stylePreferences.colorSchemeId)) {
       styleLock.D = stylePreferences.colorSchemeId;
+    }
+    if (stylePreferences?.moodId && moods.some((m) => m.id === stylePreferences.moodId)) {
+      styleLock.G = stylePreferences.moodId;
     }
     const lockedTextColor = /^#[0-9a-fA-F]{6}$/u.test(String(stylePreferences?.textColor || ""))
       ? String(stylePreferences.textColor).toUpperCase()

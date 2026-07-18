@@ -375,6 +375,7 @@ export function generateCombinations(count, keywords = "", ratio = "", locked = 
 
   const lockedA = locked?.A ? fontStyles.find((s) => s.id === locked.A) : null;
   const lockedD = locked?.D ? colorSchemes.find((s) => s.id === locked.D) : null;
+  const lockedG = locked?.G ? moods.find((s) => s.id === locked.G) : null;
   const shuffledA = lockedA ? [lockedA] : weightedShuffle(filterByConstraint(fontStyles, "A"));
   const shuffledB = weightedShuffle(filterByConstraint(textLayouts, "B"));
   const shuffledD = lockedD ? [lockedD] : weightedShuffle(safeFilter(colorSchemes, "D"));
@@ -383,7 +384,7 @@ export function generateCombinations(count, keywords = "", ratio = "", locked = 
   const poolC = filterByConstraint(textEffects, "C");
   const poolE = safeFilter(decorations, "E");
   const poolF = filterByConstraint(compositions, "F");
-  const poolG = safeFilter(moods, "G");
+  const poolG = lockedG ? [lockedG] : safeFilter(moods, "G");
 
   let aIndex = 0;
   let bIndex = 0;

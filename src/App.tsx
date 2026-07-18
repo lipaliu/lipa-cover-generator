@@ -48,6 +48,65 @@ const allEngineOptions: Array<{
 
 // 私有实例模式：本机访问，或构建时设了 VITE_LOCAL_MODE=1（如自用的公网隧道/私有部署，
 // 已有访问口令保护）。此模式下免登录、不计积分。
+/* ─── 风格定制的预览卡样式（美图/滤镜式，可视化选择）─── */
+// 字体预览：用系统近似字体渲染示例字，感受字形气质
+const FONT_PREVIEW: Record<string, { style: CSSProperties; sample?: string; dark?: boolean }> = {
+  A1: { style: { fontFamily: '"Xingkai SC","Kaiti SC",cursive', fontWeight: 900 } },
+  A2: { style: { fontFamily: '"Xingkai SC","Kaiti SC",cursive', fontWeight: 600 } },
+  A3: { style: { fontFamily: '"Songti SC","STSong",serif', fontWeight: 700 } },
+  A4: { style: { fontFamily: '"PingFang SC",sans-serif', fontWeight: 900 } },
+  A5: { style: { fontFamily: '"Yuanti SC","PingFang SC",sans-serif', fontWeight: 700 } },
+  A6: { style: { fontFamily: '"Hannotate SC","Kaiti SC",cursive', fontWeight: 500 } },
+  A7: { style: { fontFamily: 'Didot,"Times New Roman",serif', fontWeight: 700 }, sample: "Aa" },
+  A8: { style: { fontFamily: '"Avenir Next","Helvetica Neue",sans-serif', fontWeight: 800 }, sample: "Aa" },
+  A10: { style: { fontFamily: 'Luminari,fantasy', fontWeight: 700 }, sample: "Aa", dark: true },
+  A11: { style: { fontFamily: 'Copperplate,serif', fontWeight: 700, letterSpacing: 2 }, sample: "Aa" },
+  A12: { style: { fontFamily: '"PingFang SC",sans-serif', fontWeight: 200, letterSpacing: 4 } },
+  A13: { style: { fontFamily: '"PingFang SC",sans-serif', fontWeight: 900 } },
+  A14: { style: { fontFamily: '"PingFang SC",sans-serif', fontWeight: 700, color: "#7ff0ff", textShadow: "0 0 6px #22d3ee, 0 0 14px #a78bfa" }, dark: true },
+  A15: { style: { fontFamily: '"Xingkai SC","Kaiti SC",cursive', fontWeight: 900, fontStyle: "italic" } },
+  A16: { style: { fontFamily: '"Snell Roundhand","Hannotate SC",cursive', fontWeight: 600 }, sample: "Aa" },
+  A18: { style: { fontFamily: '"Songti SC",serif', fontWeight: 900, color: "#C0392B" } },
+  A19: { style: { fontFamily: '"Courier New",monospace', fontWeight: 700 }, sample: "Aa" },
+};
+// 色彩风格预览：三色条
+const PALETTE_PREVIEW: Record<string, string[]> = {
+  D1: ["#111111", "#FFFFFF", "#9ca3af"],
+  D2: ["#1A1A1A", "#D4AF37", "#8a6d1f"],
+  D3: ["#FFFFFF", "#C0C0C0", "#8e959c"],
+  D4: ["#A8998C", "#B5C4B1", "#C4A882"],
+  D5: ["#FF00FF", "#00FFFF", "#39FF14"],
+  D6: ["#8B6914", "#654321", "#2E4A1E"],
+  D7: ["#003366", "#0077B6", "#90E0EF"],
+  D8: ["#FF6B35", "#FFB347", "#FF1744"],
+  D9: ["#1B4332", "#40916C", "#95D5B2"],
+  D10: ["#7B2D8B", "#B388FF", "#E1BEE7"],
+  D11: ["#FF6B6B", "#4ECDC4", "#FFE66D"],
+  D12: ["#0d1b2a", "#415a77", "#a9bcd0"],
+  D13: ["#E63946", "#2A9D8F", "#F4A261"],
+  D14: ["#e5e7eb", "#1f2937", "#FF3B30"],
+  D15: ["#E8D5B7", "#C9956B", "#7d8c6f"],
+  D16: ["#FFDE00", "#FFF176", "#F57F17"],
+  D17: ["#FF6B6B", "#FFB4B4", "#FFFFFF"],
+  D18: ["#00D4FF", "#E3F2FD", "#0D47A1"],
+  D19: ["#6F4E37", "#C68642", "#F5DEB3"],
+  D20: ["#FFB7C5", "#FFF0F5", "#8B4513"],
+};
+// 整体风格预览：底色 + 示例字气质
+const MOOD_PREVIEW: Record<string, { bg: string; style: CSSProperties; sample?: string }> = {
+  G1: { bg: "linear-gradient(160deg,#f4f4f5,#d4d4d8)", style: { color: "#27272a", fontWeight: 300, letterSpacing: 3 } },
+  G2: { bg: "linear-gradient(160deg,#ffedd5,#fdba74)", style: { color: "#7c2d12", fontWeight: 700 } },
+  G3: { bg: "linear-gradient(135deg,#facc15,#fb7185)", style: { color: "#1e1b4b", fontWeight: 900 } },
+  G4: { bg: "linear-gradient(160deg,#18181b,#3f3f46)", style: { color: "#e4e4e7", fontWeight: 800 } },
+  G5: { bg: "linear-gradient(160deg,#ecfeff,#d9f99d)", style: { color: "#155e75", fontWeight: 400 } },
+  G6: { bg: "linear-gradient(160deg,#d9c8a3,#a3876a)", style: { color: "#4a2c17", fontFamily: '"Songti SC",serif', fontWeight: 700 } },
+  G7: { bg: "linear-gradient(160deg,#0f172a,#1d4ed8)", style: { color: "#67e8f9", fontWeight: 700 } },
+  G8: { bg: "linear-gradient(160deg,#dcfce7,#86efac)", style: { color: "#14532d", fontWeight: 500 } },
+  G9: { bg: "linear-gradient(160deg,#141414,#3b2f14)", style: { color: "#D4AF37", fontFamily: '"Songti SC",serif', fontWeight: 700 } },
+  G10: { bg: "linear-gradient(135deg,#fda4af,#fde047)", style: { color: "#831843", fontWeight: 800 } },
+  G11: { bg: "linear-gradient(160deg,#1c1917,#44403c)", style: { color: "#fafaf9", fontFamily: '"Songti SC",serif', fontWeight: 300, letterSpacing: 5 }, sample: "电影节" },
+};
+
 const isLocalLipa =
   import.meta.env.VITE_LOCAL_MODE === "1" ||
   (typeof window !== "undefined" &&
@@ -222,14 +281,15 @@ export function App() {
   }, []);
 
   // 风格定制（都选填）：锁定字体 / 色彩风格 / 字体颜色；空 = 库内随机、AI 自选
-  const [styleOptions, setStyleOptions] = useState<{ fonts: Array<{ id: string; name: string }>; colors: Array<{ id: string; name: string }> }>({ fonts: [], colors: [] });
+  const [styleOptions, setStyleOptions] = useState<{ fonts: Array<{ id: string; name: string }>; colors: Array<{ id: string; name: string }>; moods: Array<{ id: string; name: string }> }>({ fonts: [], colors: [], moods: [] });
   const [lockedFont, setLockedFont] = useState("");
   const [lockedColorScheme, setLockedColorScheme] = useState("");
+  const [lockedMood, setLockedMood] = useState("");
   const [lockedTextColor, setLockedTextColor] = useState("");
   useEffect(() => {
     fetch("/api/style-options")
       .then((r) => r.json())
-      .then((d) => setStyleOptions({ fonts: d?.fonts || [], colors: d?.colors || [] }))
+      .then((d) => setStyleOptions({ fonts: d?.fonts || [], colors: d?.colors || [], moods: d?.moods || [] }))
       .catch(() => {});
   }, []);
   const presetTextColors = ["#FFFFFF", "#000000", "#FFDE00", "#FF7A00", "#FF3B30", "#FF4FA3", "#34C759", "#00C7BE", "#0A84FF", "#B388FF", "#8B5A2B", "#C0C0C0"];
@@ -423,6 +483,7 @@ export function App() {
             imagePalette: imageColors,
             fontId: lockedFont || undefined,
             colorSchemeId: lockedColorScheme || undefined,
+            moodId: lockedMood || undefined,
             textColor: lockedTextColor || undefined,
           },
         }),
@@ -662,6 +723,7 @@ export function App() {
     setInspiration("");
     setLockedFont("");
     setLockedColorScheme("");
+    setLockedMood("");
     setLockedTextColor("");
     setTitle("");
     setSubtitle("");
@@ -1140,30 +1202,65 @@ export function App() {
                 <span style={{ fontWeight: 600 }}>风格定制</span>
                 <span className="inspire-optional">选填 · 不选 = 库内随机多样</span>
               </div>
-              <label className="style-select">
-                <span>字体</span>
-                <div className="select-wrap">
-                  <select value={lockedFont} onChange={(e) => setLockedFont(e.target.value)}>
-                    <option value="">🎲 随机（每张不同字体）</option>
-                    {styleOptions.fonts.map((f) => (
-                      <option key={f.id} value={f.id}>{f.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={16} />
+              {/* 整体风格：滤镜式预览卡 */}
+              <div className="pv-group">
+                <span className="pv-label">整体风格</span>
+                <div className="pv-row">
+                  <button type="button" className={cn("pv-card pv-random", !lockedMood && "is-on")} onClick={() => setLockedMood("")}>
+                    <span className="pv-sample">🎲</span>
+                    <span className="pv-name">随机</span>
+                  </button>
+                  {styleOptions.moods.map((m) => {
+                    const pv = MOOD_PREVIEW[m.id] || { bg: "rgba(255,255,255,0.5)", style: {} };
+                    return (
+                      <button key={m.id} type="button" className={cn("pv-card", lockedMood === m.id && "is-on")} style={{ background: pv.bg }} onClick={() => setLockedMood(m.id)}>
+                        <span className="pv-sample" style={pv.style}>{pv.sample || "标题"}</span>
+                        <span className="pv-name" style={{ color: (pv.style.color as string) || "#241a3d" }}>{m.name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-              </label>
-              <label className="style-select">
-                <span>色彩风格</span>
-                <div className="select-wrap">
-                  <select value={lockedColorScheme} onChange={(e) => setLockedColorScheme(e.target.value)}>
-                    <option value="">🎲 随机（每张不同配色）</option>
-                    {styleOptions.colors.map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
-                    ))}
-                  </select>
-                  <ChevronDown size={16} />
+              </div>
+              {/* 字体：示例字预览卡 */}
+              <div className="pv-group">
+                <span className="pv-label">字体</span>
+                <div className="pv-row">
+                  <button type="button" className={cn("pv-card pv-random", !lockedFont && "is-on")} onClick={() => setLockedFont("")}>
+                    <span className="pv-sample">🎲</span>
+                    <span className="pv-name">随机</span>
+                  </button>
+                  {styleOptions.fonts.map((f) => {
+                    const pv = FONT_PREVIEW[f.id] || { style: {} };
+                    return (
+                      <button key={f.id} type="button" className={cn("pv-card pv-font", pv.dark && "pv-dark", lockedFont === f.id && "is-on")} onClick={() => setLockedFont(f.id)}>
+                        <span className="pv-sample" style={pv.style}>{pv.sample || "标题"}</span>
+                        <span className="pv-name">{f.name}</span>
+                      </button>
+                    );
+                  })}
                 </div>
-              </label>
+              </div>
+              {/* 色彩风格：三色条预览卡 */}
+              <div className="pv-group">
+                <span className="pv-label">色彩风格</span>
+                <div className="pv-row">
+                  <button type="button" className={cn("pv-card pv-random", !lockedColorScheme && "is-on")} onClick={() => setLockedColorScheme("")}>
+                    <span className="pv-sample">🎲</span>
+                    <span className="pv-name">随机</span>
+                  </button>
+                  {styleOptions.colors.map((c) => {
+                    const pal = PALETTE_PREVIEW[c.id] || ["#ddd", "#aaa", "#888"];
+                    return (
+                      <button key={c.id} type="button" className={cn("pv-card pv-palette", lockedColorScheme === c.id && "is-on")} onClick={() => setLockedColorScheme(c.id)}>
+                        <span className="pv-swatches">
+                          {pal.map((hex, i) => (<i key={i} style={{ background: hex }} />))}
+                        </span>
+                        <span className="pv-name">{c.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               <div className="textcolor-block">
                 <span className="textcolor-label">字体颜色（主标题）</span>
                 <div className="textcolor-row">
