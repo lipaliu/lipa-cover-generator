@@ -533,6 +533,12 @@ if (ACCESS_PASSWORD) {
     });
   });
 
+  // 定价表（前端购买页读取；改价只需改 server/pricing.js）
+  app.get("/api/pricing", async (_req, res) => {
+    const { CREDIT_PACKS, SUBSCRIPTIONS, SIGNUP_BONUS_CREDITS } = await import("./pricing.js");
+    res.json({ packs: CREDIT_PACKS, subscriptions: SUBSCRIPTIONS, signupBonus: SIGNUP_BONUS_CREDITS });
+  });
+
   // 当前登录的是谁（前端用它决定要不要显示「管理后台」按钮）
   app.get("/api/whoami", (req, res) => {
     const a = req.accessAccount;
@@ -590,6 +596,47 @@ if (ACCESS_PASSWORD) {
     }
     return res.redirect("/admin");
   });
+  // ─── 会员管理（需配置数据库；无数据库时页面提示未启用）───
+  app.post("/admin/members/fulfill", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const { isDbAvailable } = await import("./db.js");
+      if (!isDbAvailable()) return res.status(400).send("未配置数据库，会员体系未启用");
+      const { findUserByPhone, fulfillOrder } = await import("./billing.js");
+      const user = await findUserByPhone(req.body?.phone);
+      if (!user) return res.status(404).send("没有这个手机号的用户（需对方先注册登录一次）");
+      const result = await fulfillOrder({
+        userId: user.id,
+        productId: String(req.body?.productId || ""),
+        channel: "manual",
+        tradeNo: String(req.body?.tradeNo || "").trim(),
+        operator: req.accessAccount.user,
+      });
+      if (!result.ok) return res.status(400).send(result.error || "开通失败");
+      return res.redirect("/admin#members");
+    } catch (error) {
+      console.error("[Admin] fulfill error:", error);
+      return res.status(500).send("开通失败：" + error.message);
+    }
+  });
+
+  app.post("/admin/members/adjust", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    try {
+      const { isDbAvailable } = await import("./db.js");
+      if (!isDbAvailable()) return res.status(400).send("未配置数据库，会员体系未启用");
+      const { findUserByPhone, adminAdjustCredits } = await import("./billing.js");
+      const user = await findUserByPhone(req.body?.phone);
+      if (!user) return res.status(404).send("没有这个手机号的用户");
+      const result = await adminAdjustCredits(user.id, req.body?.amount, String(req.body?.reason || ""), req.accessAccount.user);
+      if (!result.ok) return res.status(400).send(result.error || "调整失败");
+      return res.redirect("/admin#members");
+    } catch (error) {
+      console.error("[Admin] adjust error:", error);
+      return res.status(500).send("调整失败：" + error.message);
+    }
+  });
+
   // 看原图（管理员专用）
   app.get("/admin/cover/:file", (req, res) => {
     if (!requireAdmin(req, res)) return;
@@ -600,8 +647,61 @@ if (ACCESS_PASSWORD) {
     return res.sendFile(filePath);
   });
 
-  app.get("/admin", (req, res) => {
+  app.get("/admin", async (req, res) => {
     if (!requireAdmin(req, res)) return;
+    // 会员体系区块（需数据库；未配置则显示引导）
+    let membersHtml = "";
+    try {
+      const { isDbAvailable } = await import("./db.js");
+      const { CREDIT_PACKS, SUBSCRIPTIONS } = await import("./pricing.js");
+      const productOptions = [...SUBSCRIPTIONS, ...CREDIT_PACKS]
+        .map((p) => `<option value="${p.id}">${escapeHtml(p.name)} · ¥${(p.amountFen / 100).toFixed(0)}${p.credits ? ` · ${p.credits} 积分` : ""}</option>`)
+        .join("");
+      if (!isDbAvailable()) {
+        membersHtml = `<div class="glass" id="members"><h2>会员体系</h2>
+          <p class="empty">未配置数据库，会员/积分功能暂未启用。配置 MYSQL_HOST 与 MYSQL_DATABASE 后自动建表启用。</p></div>`;
+      } else {
+        const { listUsers, recentOrders } = await import("./billing.js");
+        const [members, orders] = await Promise.all([listUsers(100), recentOrders(50)]);
+        const fmt = (d) => (d ? escapeHtml(new Date(d).toLocaleString("zh-CN", { hour12: false })) : "—");
+        const memberRows = members.map((m) => {
+          const active = m.subscription_plan !== "free" && m.subscription_expires_at && new Date(m.subscription_expires_at) > new Date();
+          return `<tr><td>${escapeHtml(m.phone)}</td><td>${m.role === "admin" ? "管理员" : "用户"}</td><td><b>${m.credits}</b></td>
+            <td>${active ? `${escapeHtml(m.subscription_plan)} · 到期 ${fmt(m.subscription_expires_at)}` : "免费用户"}</td>
+            <td>${fmt(m.created_at)}</td></tr>`;
+        }).join("") || `<tr><td colspan="5" class="empty">还没有注册用户</td></tr>`;
+        const orderRows = orders.map((o) => `<tr><td>${fmt(o.created_at)}</td><td>${escapeHtml(o.phone)}</td><td>${escapeHtml(o.product_name)}</td>
+          <td>¥${(o.amount_fen / 100).toFixed(0)}</td><td>${o.credits || 0}</td><td>${escapeHtml(o.channel)}${o.operator ? " · " + escapeHtml(o.operator) : ""}</td></tr>`).join("")
+          || `<tr><td colspan="6" class="empty">还没有订单</td></tr>`;
+        membersHtml = `
+        <div class="glass" id="members">
+          <h2>会员 · 手动开通</h2>
+          <form class="addform" method="POST" action="/admin/members/fulfill">
+            <input name="phone" placeholder="用户手机号" required />
+            <select name="productId" style="padding:10px 14px;border-radius:14px;border:1px solid rgba(255,255,255,.75);font-family:inherit;font-size:14px;background:rgba(255,255,255,.5);color:#241a3d">${productOptions}</select>
+            <input name="tradeNo" placeholder="收款单号/备注（选填）" style="width:200px" />
+            <button type="submit">确认开通</button>
+          </form>
+          <p class="hint">用户扫码付款后，你在这里按手机号给他开通（会自动加积分/续会员并留下订单记录）。以后接了微信/支付宝，这一步就自动完成。</p>
+          <form class="addform" method="POST" action="/admin/members/adjust" style="margin-top:14px">
+            <input name="phone" placeholder="用户手机号" required />
+            <input name="amount" type="number" placeholder="积分±" required style="width:110px" />
+            <input name="reason" placeholder="原因（选填）" style="width:200px" />
+            <button type="submit">调整积分</button>
+          </form>
+        </div>
+        <div class="glass">
+          <h2>注册用户（最近 100）</h2>
+          <table><thead><tr><th>手机号</th><th>身份</th><th>积分</th><th>会员</th><th>注册时间</th></tr></thead><tbody>${memberRows}</tbody></table>
+        </div>
+        <div class="glass">
+          <h2>订单记录（最近 50）</h2>
+          <table><thead><tr><th>时间</th><th>手机号</th><th>套餐</th><th>金额</th><th>积分</th><th>渠道</th></tr></thead><tbody>${orderRows}</tbody></table>
+        </div>`;
+      }
+    } catch (error) {
+      membersHtml = `<div class="glass" id="members"><h2>会员体系</h2><p class="empty">加载失败：${escapeHtml(error.message)}</p></div>`;
+    }
     const allAccounts = [
       { user: ADMIN_KEY, role: "admin", quota: Infinity },
       ...Object.entries(trialAccounts).map(([user, t]) => ({ user, role: "trial", quota: t.quota, password: t.password })),
@@ -682,6 +782,7 @@ if (ACCESS_PASSWORD) {
       <p class="hint">同名提交 = 修改密码/单次上限。体验账户只能生成 小红书 3:4，一次最多「单次上限」张，生成完可再来。累计生成与记录存在服务器磁盘，免费档重启/重新部署会清零（要永久保存需付费磁盘）。</p>
     </div>
   </div>
+  ${membersHtml}
   <div class="glass">
     <h2>生成记录（点缩略图看原图）</h2>
     ${cards ? `<div class="grid">${cards}</div>` : `<p class="empty">还没有生成记录。</p>`}
@@ -694,6 +795,8 @@ if (ACCESS_PASSWORD) {
 
 // Initialize database connection (non-blocking, graceful if not configured)
 getPool();
+// 配了数据库就自动建表（幂等），省去手动执行 schema.sql
+import("./db.js").then(({ ensureSchema }) => ensureSchema()).catch(() => {});
 
 // Apply optional auth to all routes (sets req.user if token valid)
 app.use(optionalAuth);

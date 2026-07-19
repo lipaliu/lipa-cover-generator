@@ -58,6 +58,33 @@ export function isDbAvailable() {
 }
 
 /**
+ * 启动时自动建表（幂等）。读取 server/schema.sql 逐条执行，省去手动跑 SQL。
+ */
+export async function ensureSchema() {
+  const p = getPool();
+  if (!p) return false;
+  const { readFileSync } = await import("node:fs");
+  const { fileURLToPath } = await import("node:url");
+  const { dirname, join } = await import("node:path");
+  const here = dirname(fileURLToPath(import.meta.url));
+  try {
+    const sql = readFileSync(join(here, "schema.sql"), "utf8");
+    const statements = sql
+      .split(/;\s*[\r\n]/u)
+      .map((s) => s.replace(/^\s*--.*$/gmu, "").trim())
+      .filter(Boolean);
+    for (const statement of statements) {
+      await p.query(statement);
+    }
+    console.log(`[DB] Schema ready (${statements.length} statements).`);
+    return true;
+  } catch (error) {
+    console.error("[DB] ensureSchema failed:", error.message);
+    return false;
+  }
+}
+
+/**
  * Graceful shutdown.
  */
 export async function closeDb() {

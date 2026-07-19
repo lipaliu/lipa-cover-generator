@@ -10,10 +10,10 @@
 import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
 import { query, isDbAvailable } from "./db.js";
+import { SIGNUP_BONUS_CREDITS } from "./pricing.js";
 
 const JWT_SECRET = process.env.JWT_SECRET || "dev-secret-change-me-in-production";
 const JWT_EXPIRES_IN = "7d";
-const SIGNUP_BONUS_CREDITS = 15;
 const CODE_EXPIRY_MINUTES = 5;
 
 function getAdminPhones() {
