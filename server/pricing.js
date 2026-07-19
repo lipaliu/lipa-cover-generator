@@ -38,7 +38,7 @@ export const SUBSCRIPTIONS = [
   },
 ];
 
-export const SIGNUP_BONUS_CREDITS = 15; // 注册赠送（约 10 张，够试出效果）
+export const SIGNUP_BONUS_CREDITS = 12; // 注册赠送 = 正好 5 张（5-7 张档位 12 积分）
 
 export function findProduct(productId) {
   return (
