@@ -10,8 +10,8 @@ import { promisify } from "node:util";
 import OpenAI, { toFile } from "openai";
 import sharp from "sharp";
 import { fetch as undiciFetch, FormData as UndiciFormData, ProxyAgent, Agent, setGlobalDispatcher } from "undici";
-import { buildPlanUserPrompt, fallbackPlans, skillPrompt } from "./prompts.js";
-import { generateCombinations, combinationToLabel, fontStyles, colorSchemes, moods } from "./design-matrix.js";
+import { buildPlanUserPrompt, fallbackPlans, rebuildPlanFromKey, skillPrompt } from "./prompts.js";
+import { generateCombinations, combinationToLabel, fontStyles, textLayouts, textEffects, colorSchemes, decorations, compositions, moods } from "./design-matrix.js";
 import { getPool } from "./db.js";
 import { optionalAuth, requireAuth, requireCredits, getCreditsCost } from "./middleware.js";
 import { deductCredits, refundCredits } from "./credits.js";
@@ -521,10 +521,15 @@ if (ACCESS_PASSWORD) {
 
   // 审美库里的可选项（字体/色彩风格），给前端「风格定制」下拉用；库丰富后自动跟着变
   app.get("/api/style-options", (_req, res) => {
+    const pick = (list) => list.filter((o) => o.weight > 0).map((o) => ({ id: o.id, name: o.name }));
     res.json({
-      fonts: fontStyles.filter((f) => f.weight > 0).map((f) => ({ id: f.id, name: f.name })),
-      colors: colorSchemes.filter((c) => c.weight > 0).map((c) => ({ id: c.id, name: c.name })),
-      moods: moods.filter((m) => m.weight > 0).map((m) => ({ id: m.id, name: m.name })),
+      fonts: pick(fontStyles),
+      layouts: pick(textLayouts),
+      effects: pick(textEffects),
+      colors: pick(colorSchemes),
+      decorations: pick(decorations),
+      compositions: pick(compositions),
+      moods: pick(moods),
     });
   });
 
@@ -1457,7 +1462,8 @@ app.post("/api/regenerate", async (req, res) => {
   const requestedEngineRaw = req.body?.engine || "image2";
   try {
     const {
-      plan,
+      plan: requestedPlan,
+      rebuild,
       ratio = "3:4",
       sourceMode: requestedSourceMode = "base",
       image,
@@ -1465,6 +1471,20 @@ app.post("/api/regenerate", async (req, res) => {
       imageDescription = "",
       inspiration = "",
     } = req.body || {};
+    let plan = requestedPlan;
+    // 单张「换某一项」：按组合键重建方案（可替换一个维度 / 或只改字体颜色）
+    if (!plan && rebuild?.combination) {
+      plan = rebuildPlanFromKey({
+        combinationKey: rebuild.combination,
+        swap: rebuild.swap,
+        analysis: fallbackAnalysis,
+        title: String(rebuild.title || ""),
+        subtitle: String(rebuild.subtitle || ""),
+        ratio,
+        textColor: /^#[0-9a-fA-F]{6}$/u.test(String(rebuild.textColor || "")) ? String(rebuild.textColor).toUpperCase() : "",
+      });
+      if (plan) plan.id = Number(rebuild.id) || 1;
+    }
     if (!plan || typeof plan !== "object" || plan.id == null) {
       return res.status(400).json({ error: "缺少方案数据（plan），无法重生这张封面。" });
     }
@@ -1505,6 +1525,7 @@ app.post("/api/regenerate", async (req, res) => {
       combination: plan.combination,
       label: plan.label,
       description: plan.description,
+      prompt: plan.prompt, // 前端存下，后续「重生」沿用换过之后的方案
       image_url: imageUrl,
       engine,
       ratio,
@@ -1613,17 +1634,18 @@ app.post("/api/generate", async (req, res) => {
       dominant_color: stylePreferences?.imageDominantColor || fallbackAnalysis.dominant_color,
     };
 
-    // 用户在界面锁定的 字体/色彩风格/字体颜色（都选填；未选 = 库内随机）
+    // 用户在界面锁定的各维度（都选填；未选 = 库内随机）
     const styleLock = {};
-    if (stylePreferences?.fontId && fontStyles.some((f) => f.id === stylePreferences.fontId)) {
-      styleLock.A = stylePreferences.fontId;
-    }
-    if (stylePreferences?.colorSchemeId && colorSchemes.some((c) => c.id === stylePreferences.colorSchemeId)) {
-      styleLock.D = stylePreferences.colorSchemeId;
-    }
-    if (stylePreferences?.moodId && moods.some((m) => m.id === stylePreferences.moodId)) {
-      styleLock.G = stylePreferences.moodId;
-    }
+    const lockIf = (dim, list, id) => {
+      if (id && list.some((o) => o.id === id)) styleLock[dim] = id;
+    };
+    lockIf("A", fontStyles, stylePreferences?.fontId);
+    lockIf("B", textLayouts, stylePreferences?.layoutId);
+    lockIf("C", textEffects, stylePreferences?.effectId);
+    lockIf("D", colorSchemes, stylePreferences?.colorSchemeId);
+    lockIf("E", decorations, stylePreferences?.decorationId);
+    lockIf("F", compositions, stylePreferences?.compositionId);
+    lockIf("G", moods, stylePreferences?.moodId);
     const lockedTextColor = /^#[0-9a-fA-F]{6}$/u.test(String(stylePreferences?.textColor || ""))
       ? String(stylePreferences.textColor).toUpperCase()
       : "";

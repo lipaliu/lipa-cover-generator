@@ -374,16 +374,20 @@ export function generateCombinations(count, keywords = "", ratio = "", locked = 
   };
 
   const lockedA = locked?.A ? fontStyles.find((s) => s.id === locked.A) : null;
+  const lockedB = locked?.B ? textLayouts.find((s) => s.id === locked.B) : null;
+  const lockedC = locked?.C ? textEffects.find((s) => s.id === locked.C) : null;
   const lockedD = locked?.D ? colorSchemes.find((s) => s.id === locked.D) : null;
+  const lockedE = locked?.E ? decorations.find((s) => s.id === locked.E) : null;
+  const lockedF = locked?.F ? compositions.find((s) => s.id === locked.F) : null;
   const lockedG = locked?.G ? moods.find((s) => s.id === locked.G) : null;
   const shuffledA = lockedA ? [lockedA] : weightedShuffle(filterByConstraint(fontStyles, "A"));
-  const shuffledB = weightedShuffle(filterByConstraint(textLayouts, "B"));
+  const shuffledB = lockedB ? [lockedB] : weightedShuffle(filterByConstraint(textLayouts, "B"));
   const shuffledD = lockedD ? [lockedD] : weightedShuffle(safeFilter(colorSchemes, "D"));
 
   // C / E / F / G 维度的候选池（受约束时取子集），加权随机选取
-  const poolC = filterByConstraint(textEffects, "C");
-  const poolE = safeFilter(decorations, "E");
-  const poolF = filterByConstraint(compositions, "F");
+  const poolC = lockedC ? [lockedC] : filterByConstraint(textEffects, "C");
+  const poolE = lockedE ? [lockedE] : safeFilter(decorations, "E");
+  const poolF = lockedF ? [lockedF] : filterByConstraint(compositions, "F");
   const poolG = lockedG ? [lockedG] : safeFilter(moods, "G");
 
   let aIndex = 0;
@@ -448,6 +452,36 @@ export function generateCombinations(count, keywords = "", ratio = "", locked = 
  */
 export function combinationToLabel(combo) {
   return `${combo.a.name} / ${combo.d.name} / ${combo.b.name}`;
+}
+
+// 维度字母 → 选项数组（供按 id 查找 / 组合键还原）
+const DIMENSION_LISTS = {
+  A: () => fontStyles,
+  B: () => textLayouts,
+  C: () => textEffects,
+  D: () => colorSchemes,
+  E: () => decorations,
+  F: () => compositions,
+  G: () => moods,
+};
+
+export function dimensionOption(dim, id) {
+  const list = DIMENSION_LISTS[String(dim || "").toUpperCase()]?.();
+  return list?.find((o) => o.id === id) || null;
+}
+
+// 把组合键（如 "A4+B12+C16+D8+E21+F3+G11"）还原成完整组合对象；无效返回 null。
+export function comboFromKey(key) {
+  const combo = {};
+  for (const id of String(key || "").split("+")) {
+    const dim = id.trim().charAt(0).toUpperCase();
+    const opt = dimensionOption(dim, id.trim());
+    if (!opt) return null;
+    combo[dim.toLowerCase()] = opt;
+  }
+  if (!(combo.a && combo.b && combo.c && combo.d && combo.e && combo.f && combo.g)) return null;
+  combo.key = ["a", "b", "c", "d", "e", "f", "g"].map((k) => combo[k].id).join("+");
+  return combo;
 }
 
 /**

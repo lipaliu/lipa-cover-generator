@@ -92,6 +92,29 @@ const PALETTE_PREVIEW: Record<string, string[]> = {
   D19: ["#6F4E37", "#C68642", "#F5DEB3"],
   D20: ["#FFB7C5", "#FFF0F5", "#8B4513"],
 };
+// 文字效果预览：给示例字上效果
+const EFFECT_PREVIEW: Record<string, { style: CSSProperties; dark?: boolean }> = {
+  C1: { style: { color: "#241a3d", fontWeight: 800 } },
+  C2: { style: { color: "transparent", WebkitTextStroke: "2px #241a3d", fontWeight: 900 } },
+  C3: { style: { background: "linear-gradient(180deg,#f472b6,#60a5fa)", WebkitBackgroundClip: "text", color: "transparent", fontWeight: 900 } },
+  C4: { style: { color: "#fff", textShadow: "3px 3px 0 #7c69f6", fontWeight: 900 } },
+  C5: { style: { color: "#7ff0ff", textShadow: "0 0 8px #22d3ee, 0 0 16px #a78bfa", fontWeight: 800 }, dark: true },
+  C6: { style: { background: "rgba(255,255,255,0.6)", padding: "2px 9px", borderRadius: 6, fontWeight: 800, color: "#241a3d" } },
+  C7: { style: { background: "#241a3d", color: "#fff", padding: "2px 9px", borderRadius: 4, fontWeight: 800 } },
+  C8: { style: { color: "rgba(36,26,61,0.38)", fontWeight: 900 } },
+  C9: { style: { background: "linear-gradient(180deg,#fde68a,#b45309)", WebkitBackgroundClip: "text", color: "transparent", fontWeight: 900 } },
+  C10: { style: { color: "rgba(255,255,255,0.9)", textShadow: "0 2px 4px rgba(0,0,0,0.35)", fontWeight: 800 }, dark: true },
+  C11: { style: { fontFamily: '"Hannotate SC","Kaiti SC",cursive', textDecorationLine: "underline", textDecorationStyle: "wavy", textDecorationColor: "#f43f5e", fontWeight: 600, color: "#241a3d" } },
+  C12: { style: { background: "#fff", border: "2px solid #241a3d", padding: "1px 8px", borderRadius: 8, boxShadow: "2px 2px 0 rgba(0,0,0,0.25)", fontWeight: 800, color: "#241a3d" } },
+  C13: { style: { color: "#C0392B", border: "2px solid #C0392B", padding: "1px 7px", borderRadius: 4, transform: "rotate(-6deg)", fontWeight: 900 } },
+  C14: { style: { background: "#fff", padding: "2px 9px", clipPath: "polygon(0 10%, 100% 0, 95% 100%, 5% 90%)", fontWeight: 800, color: "#241a3d" } },
+};
+// 装饰预览：符号示意
+const DECOR_GLYPH: Record<string, string> = {
+  E1: "·", E2: "▭", E3: "▬", E4: "◦◦", E5: "◤", E6: "✂️", E7: "🏷️", E8: "📮", E9: "📄", E10: "▦",
+  E11: "◎", E12: "✨", E13: "〰️", E14: "➜", E15: "01", E16: "✏️", E17: "🌿", E18: "▒", E19: "☀️", E20: "💬",
+  E21: "⸬", E22: "🖼️", E23: "「」",
+};
 // 整体风格预览：底色 + 示例字气质
 const MOOD_PREVIEW: Record<string, { bg: string; style: CSSProperties; sample?: string }> = {
   G1: { bg: "linear-gradient(160deg,#f4f4f5,#d4d4d8)", style: { color: "#27272a", fontWeight: 300, letterSpacing: 3 } },
@@ -281,15 +304,23 @@ export function App() {
   }, []);
 
   // 风格定制（都选填）：锁定字体 / 色彩风格 / 字体颜色；空 = 库内随机、AI 自选
-  const [styleOptions, setStyleOptions] = useState<{ fonts: Array<{ id: string; name: string }>; colors: Array<{ id: string; name: string }>; moods: Array<{ id: string; name: string }> }>({ fonts: [], colors: [], moods: [] });
+  type StyleOpt = Array<{ id: string; name: string }>;
+  const [styleOptions, setStyleOptions] = useState<{ fonts: StyleOpt; layouts: StyleOpt; effects: StyleOpt; colors: StyleOpt; decorations: StyleOpt; compositions: StyleOpt; moods: StyleOpt }>({ fonts: [], layouts: [], effects: [], colors: [], decorations: [], compositions: [], moods: [] });
   const [lockedFont, setLockedFont] = useState("");
+  const [lockedLayout, setLockedLayout] = useState("");
+  const [lockedEffect, setLockedEffect] = useState("");
   const [lockedColorScheme, setLockedColorScheme] = useState("");
+  const [lockedDecoration, setLockedDecoration] = useState("");
+  const [lockedComposition, setLockedComposition] = useState("");
   const [lockedMood, setLockedMood] = useState("");
   const [lockedTextColor, setLockedTextColor] = useState("");
+  // 单张「换某一项」面板：哪张打开、选了哪个维度
+  const [swapCoverId, setSwapCoverId] = useState<number | null>(null);
+  const [swapDim, setSwapDim] = useState("");
   useEffect(() => {
     fetch("/api/style-options")
       .then((r) => r.json())
-      .then((d) => setStyleOptions({ fonts: d?.fonts || [], colors: d?.colors || [], moods: d?.moods || [] }))
+      .then((d) => setStyleOptions({ fonts: d?.fonts || [], layouts: d?.layouts || [], effects: d?.effects || [], colors: d?.colors || [], decorations: d?.decorations || [], compositions: d?.compositions || [], moods: d?.moods || [] }))
       .catch(() => {});
   }, []);
   const presetTextColors = ["#FFFFFF", "#000000", "#FFDE00", "#FF7A00", "#FF3B30", "#FF4FA3", "#34C759", "#00C7BE", "#0A84FF", "#B388FF", "#8B5A2B", "#C0C0C0"];
@@ -482,7 +513,11 @@ export function App() {
             imageDominantColor: detectedColor,
             imagePalette: imageColors,
             fontId: lockedFont || undefined,
+            layoutId: lockedLayout || undefined,
+            effectId: lockedEffect || undefined,
             colorSchemeId: lockedColorScheme || undefined,
+            decorationId: lockedDecoration || undefined,
+            compositionId: lockedComposition || undefined,
             moodId: lockedMood || undefined,
             textColor: lockedTextColor || undefined,
           },
@@ -677,6 +712,74 @@ export function App() {
     }
   };
 
+  // 单张「换某一项」：保持组合不变，只替换一个维度（或只换字体颜色），重生这一张。
+  const regenerateRebuild = async (cover: CoverResult, opts: { swap?: { dimension: string; optionId: string }; textColor?: string }) => {
+    if (!cover.combination || regeneratingIds.includes(cover.id)) return;
+    setSwapCoverId(null);
+    setSwapDim("");
+    setRegeneratingIds((prev) => [...prev, cover.id]);
+    setResults((prev) => prev.map((c) => (c.id === cover.id ? { ...c, image_url: undefined, error: undefined } : c)));
+    try {
+      const img = await getImageDataUrl();
+      const token = getToken();
+      const response = await fetch("/api/regenerate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify({
+          rebuild: {
+            combination: cover.combination,
+            swap: opts.swap,
+            textColor: opts.textColor ?? (lockedTextColor || undefined),
+            title: title.trim(),
+            subtitle: subtitle.trim(),
+            id: cover.id,
+          },
+          ratio: cover.ratio,
+          engine: cover.engine || engine,
+          sourceMode,
+          image: img || undefined,
+          elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
+          imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
+          inspiration: inspiration.trim() || undefined,
+        }),
+        signal: abortRef.current?.signal,
+      });
+      const data = (await response.json().catch(() => ({ error: "调整失败" }))) as CoverResult & { prompt?: string };
+      if (!response.ok && !data.error) data.error = "调整失败";
+      setResults((prev) =>
+        prev.map((c) =>
+          c.id === cover.id
+            ? { ...c, image_url: data.image_url, error: data.error, engine: data.engine || c.engine, combination: data.combination || c.combination, label: data.label || c.label }
+            : c,
+        ),
+      );
+      // 让后续「重生」沿用换过之后的方案
+      if (data.combination && data.prompt) {
+        setPlansById((prev) => ({ ...prev, [cover.id]: { id: cover.id, combination: data.combination, label: data.label || "", description: data.label || "", prompt: data.prompt } }));
+      }
+    } catch (error) {
+      setResults((prev) =>
+        prev.map((c) => (c.id === cover.id ? { ...c, error: error instanceof Error ? error.message : "调整失败" } : c)),
+      );
+    } finally {
+      setRegeneratingIds((prev) => prev.filter((id) => id !== cover.id));
+    }
+  };
+
+  // 维度字母 → 选项列表 / 中文名（单张调整面板用）
+  const dimOptionsOf = (dim: string): StyleOpt =>
+    dim === "A" ? styleOptions.fonts
+    : dim === "B" ? styleOptions.layouts
+    : dim === "C" ? styleOptions.effects
+    : dim === "D" ? styleOptions.colors
+    : dim === "E" ? styleOptions.decorations
+    : dim === "F" ? styleOptions.compositions
+    : styleOptions.moods;
+  const SWAP_DIMS: Array<{ d: string; n: string }> = [
+    { d: "G", n: "风格" }, { d: "A", n: "字体" }, { d: "B", n: "布局" }, { d: "C", n: "效果" },
+    { d: "D", n: "配色" }, { d: "E", n: "装饰" }, { d: "F", n: "构图" }, { d: "COLOR", n: "字色" },
+  ];
+
   const downloadCover = async (cover: CoverResult) => {
     if (!cover.image_url) return;
     const filename = `lipa-cover-${String(cover.id).padStart(2, "0")}.png`;
@@ -722,9 +825,15 @@ export function App() {
     setImageDescription("");
     setInspiration("");
     setLockedFont("");
+    setLockedLayout("");
+    setLockedEffect("");
     setLockedColorScheme("");
+    setLockedDecoration("");
+    setLockedComposition("");
     setLockedMood("");
     setLockedTextColor("");
+    setSwapCoverId(null);
+    setSwapDim("");
     setTitle("");
     setSubtitle("");
     setKeywords("");
@@ -834,6 +943,57 @@ export function App() {
               >
                 ＋比例
               </button>
+            )}
+            {cover.image_url && cover.combination && (
+              <button
+                type="button"
+                className="result-act result-act-ratio"
+                onClick={() => { setSwapCoverId(swapCoverId === cover.id ? null : cover.id); setSwapDim(""); }}
+                title="只换其中一项（字体/风格/配色/字色…），其余保持"
+              >
+                调整
+              </button>
+            )}
+          </div>
+        )}
+        {canAct && cover.image_url && swapCoverId === cover.id && (
+          <div className="result-ratio-picker">
+            <span className="rrp-hint">这张哪里想换？（其余保持不变）</span>
+            <div className="rrp-chips">
+              {SWAP_DIMS.map((sd) => (
+                <button key={sd.d} type="button" className={cn("result-act", swapDim === sd.d && "is-cur")} onClick={() => setSwapDim(swapDim === sd.d ? "" : sd.d)}>
+                  {sd.n}
+                </button>
+              ))}
+            </div>
+            {swapDim && swapDim !== "COLOR" && (
+              <div className="rrp-chips">
+                {dimOptionsOf(swapDim).map((o) => {
+                  const isCurrent = (cover.combination || "").split("+").includes(o.id);
+                  return (
+                    <button
+                      key={o.id}
+                      type="button"
+                      className={cn("result-act", isCurrent && "is-cur")}
+                      title={isCurrent ? "当前就是这个" : `换成「${o.name}」重生这张`}
+                      onClick={() => { if (!isCurrent) regenerateRebuild(cover, { swap: { dimension: swapDim, optionId: o.id } }); }}
+                    >
+                      {o.name}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {swapDim === "COLOR" && (
+              <div className="textcolor-row">
+                {presetTextColors.map((c) => (
+                  <button key={c} type="button" className="tc-swatch" style={{ background: c }} title={`主标题换成 ${c}`} onClick={() => regenerateRebuild(cover, { textColor: c })} />
+                ))}
+                <label className="tc-custom" title="自定义颜色">
+                  <input type="color" defaultValue="#FFDE00" onChange={(e) => regenerateRebuild(cover, { textColor: e.target.value.toUpperCase() })} />
+                  自定义
+                </label>
+              </div>
             )}
           </div>
         )}
@@ -1240,6 +1400,43 @@ export function App() {
                   })}
                 </div>
               </div>
+              {/* 文字布局：小示意图预览卡 */}
+              <div className="pv-group">
+                <span className="pv-label">文字布局</span>
+                <div className="pv-row">
+                  <button type="button" className={cn("pv-card pv-random", !lockedLayout && "is-on")} onClick={() => setLockedLayout("")}>
+                    <span className="pv-sample">🎲</span>
+                    <span className="pv-name">随机</span>
+                  </button>
+                  {styleOptions.layouts.map((l) => (
+                    <button key={l.id} type="button" className={cn("pv-card", lockedLayout === l.id && "is-on")} onClick={() => setLockedLayout(l.id)}>
+                      <span className={`pv-mini lay-${l.id}`} />
+                      <span className="pv-name">{l.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* 文字效果：示例字上效果 */}
+              <div className="pv-group">
+                <span className="pv-label">文字效果</span>
+                <div className="pv-row">
+                  <button type="button" className={cn("pv-card pv-random", !lockedEffect && "is-on")} onClick={() => setLockedEffect("")}>
+                    <span className="pv-sample">🎲</span>
+                    <span className="pv-name">随机</span>
+                  </button>
+                  {styleOptions.effects.map((ef) => {
+                    const pv = EFFECT_PREVIEW[ef.id] || { style: {} };
+                    return (
+                      <button key={ef.id} type="button" className={cn("pv-card pv-font", pv.dark && "pv-dark", lockedEffect === ef.id && "is-on")} onClick={() => setLockedEffect(ef.id)}>
+                        {ef.id === "C16"
+                          ? <span className="pv-sample" style={{ fontWeight: 800, color: "#241a3d" }}>标<i style={{ color: "#f59e0b", fontStyle: "normal" }}>题</i></span>
+                          : <span className="pv-sample" style={pv.style}>标题</span>}
+                        <span className="pv-name">{ef.name}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
               {/* 色彩风格：三色条预览卡 */}
               <div className="pv-group">
                 <span className="pv-label">色彩风格</span>
@@ -1259,6 +1456,38 @@ export function App() {
                       </button>
                     );
                   })}
+                </div>
+              </div>
+              {/* 装饰：符号示意 */}
+              <div className="pv-group">
+                <span className="pv-label">装饰元素</span>
+                <div className="pv-row">
+                  <button type="button" className={cn("pv-card pv-random", !lockedDecoration && "is-on")} onClick={() => setLockedDecoration("")}>
+                    <span className="pv-sample">🎲</span>
+                    <span className="pv-name">随机</span>
+                  </button>
+                  {styleOptions.decorations.map((de) => (
+                    <button key={de.id} type="button" className={cn("pv-card", lockedDecoration === de.id && "is-on")} onClick={() => setLockedDecoration(de.id)}>
+                      <span className="pv-sample">{DECOR_GLYPH[de.id] || "❖"}</span>
+                      <span className="pv-name">{de.name}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* 构图：小示意图 */}
+              <div className="pv-group">
+                <span className="pv-label">构图方式</span>
+                <div className="pv-row">
+                  <button type="button" className={cn("pv-card pv-random", !lockedComposition && "is-on")} onClick={() => setLockedComposition("")}>
+                    <span className="pv-sample">🎲</span>
+                    <span className="pv-name">随机</span>
+                  </button>
+                  {styleOptions.compositions.map((co) => (
+                    <button key={co.id} type="button" className={cn("pv-card", lockedComposition === co.id && "is-on")} onClick={() => setLockedComposition(co.id)}>
+                      <span className={`pv-mini comp-${co.id}`} />
+                      <span className="pv-name">{co.name}</span>
+                    </button>
+                  ))}
                 </div>
               </div>
               <div className="textcolor-block">
