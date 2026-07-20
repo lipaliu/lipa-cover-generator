@@ -101,19 +101,21 @@ export function requireCredits(req, res, next) {
  * 5-7 张 = 12 积分
  * 8-10 张 = 15 积分
  */
+// 积分单位：1 张封面 = 300 积分（数字够大气；1 积分 = ¥0.01）
+// 阶梯：张数越多每张越便宜（10 张 1500 分 = 每张 150 分，等于半价）
 function tierCost(count) {
   if (count <= 0) return 0;
-  if (count === 1) return 3;
-  if (count === 2) return 5;
-  if (count <= 4) return 8;
-  if (count <= 7) return 12;
-  return 15;
+  if (count === 1) return 300;
+  if (count === 2) return 500;
+  if (count <= 4) return 800;
+  if (count <= 7) return 1200;
+  return 1500;
 }
 
 export function getCreditsCost(imageCount) {
   const count = Math.max(1, Math.floor(Number(imageCount) || 1));
-  // 1-10 张按阶梯；超过 10 张（多比例场景）按每满 10 张叠加一个 15 分梯度 + 余数阶梯。
+  // 1-10 张按阶梯；超过 10 张（多比例场景）按每满 10 张叠加一个 1500 分梯度 + 余数阶梯。
   const fullTens = Math.floor(count / 10);
   const remainder = count % 10;
-  return fullTens * 15 + tierCost(remainder);
+  return fullTens * 1500 + tierCost(remainder);
 }
