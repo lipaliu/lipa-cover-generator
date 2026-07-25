@@ -1585,6 +1585,7 @@ app.post("/api/regenerate", async (req, res) => {
         subtitle: String(rebuild.subtitle || ""),
         ratio,
         textColor: /^#[0-9a-fA-F]{6}$/u.test(String(rebuild.textColor || "")) ? String(rebuild.textColor).toUpperCase() : "",
+        smartScene: rebuild.smartScene === true,
       });
       if (plan) plan.id = Number(rebuild.id) || 1;
     }
@@ -1752,6 +1753,8 @@ app.post("/api/generate", async (req, res) => {
     const lockedTextColor = /^#[0-9a-fA-F]{6}$/u.test(String(stylePreferences?.textColor || ""))
       ? String(stylePreferences.textColor).toUpperCase()
       : "";
+    // 「读懂标题去配场景」独立开关：任何风格都可搭，开了才抠图配场景、放开像素保护。
+    const smartScene = stylePreferences?.smartScene === true;
 
     // ─── 分析与规划并行执行，避免串行等待两次 GPT-4o 调用 ───
     // 分析为“尽力而为”，不阻塞主流程；规划先用本地设计矩阵兜底，确保生图几乎立即开始。
@@ -1785,6 +1788,7 @@ app.post("/api/generate", async (req, res) => {
         ratio: group.ratio,
         styleLock,
         textColor: lockedTextColor,
+        smartScene,
       });
       plans.push(...groupPlans);
     }

@@ -295,6 +295,8 @@ export function App() {
   const [imageDescription, setImageDescription] = useState("");
   // 作者灵感（选填）：只控制"底图/场景怎么生"，直接交给大模型理解；花字排版不受影响。
   const [inspiration, setInspiration] = useState("");
+  // 读懂标题去配场景（独立开关，任何风格都可搭）：开了才抠图主体 + 按标题含义合成匹配场景。
+  const [smartScene, setSmartScene] = useState(false);
   // 当前登录账户是否是管理员（决定是否显示「管理后台」按钮）
   const [isAdminAccount, setIsAdminAccount] = useState(false);
   useEffect(() => {
@@ -521,6 +523,7 @@ export function App() {
             compositionId: lockedComposition || undefined,
             moodId: lockedMood || undefined,
             textColor: lockedTextColor || undefined,
+            smartScene: smartScene || undefined,
           },
         }),
         signal: controller.signal,
@@ -733,6 +736,7 @@ export function App() {
             textColor: opts.textColor ?? (lockedTextColor || undefined),
             title: title.trim(),
             subtitle: subtitle.trim(),
+            smartScene: smartScene || undefined,
             id: cover.id,
           },
           ratio: cover.ratio,
@@ -1355,6 +1359,22 @@ export function App() {
                 maxLength={300}
               />
               <span className="inspire-hint">灵感只影响画面；花字排版仍按你的审美库来。</span>
+              {/* 读懂标题去配场景：独立开关，任何风格都可搭 */}
+              <button
+                type="button"
+                className={cn("scene-toggle", smartScene && "is-on")}
+                onClick={() => setSmartScene((v) => !v)}
+              >
+                <span className={cn("scene-switch", smartScene && "is-on")} aria-hidden>
+                  <span className="scene-knob" />
+                </span>
+                <span className="scene-text">
+                  <span className="scene-title">读懂标题、配上匹配的场景</span>
+                  <span className="scene-desc">
+                    开启后：把人物抠出来，按标题含义合成戏剧化场景（金融→钞票K线、奥运→火炬奖牌、国家→国旗…）。适用任何风格。
+                  </span>
+                </span>
+              </button>
             </div>
 
             {/* 风格定制（选填）：开头就锁定 字体 / 色彩风格 / 字体颜色 */}
