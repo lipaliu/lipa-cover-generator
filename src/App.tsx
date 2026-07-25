@@ -128,6 +128,7 @@ const MOOD_PREVIEW: Record<string, { bg: string; style: CSSProperties; sample?: 
   G9: { bg: "linear-gradient(160deg,#141414,#3b2f14)", style: { color: "#D4AF37", fontFamily: '"Songti SC",serif', fontWeight: 700 } },
   G10: { bg: "linear-gradient(135deg,#fda4af,#fde047)", style: { color: "#831843", fontWeight: 800 } },
   G11: { bg: "linear-gradient(160deg,#1c1917,#44403c)", style: { color: "#fafaf9", fontFamily: '"Songti SC",serif', fontWeight: 300, letterSpacing: 5 }, sample: "电影节" },
+  G12: { bg: "linear-gradient(160deg,#111827,#7f1d1d)", style: { color: "#facc15", fontWeight: 900, WebkitTextStroke: "1px #fff" }, sample: "小Lin" },
 };
 
 const isLocalLipa =

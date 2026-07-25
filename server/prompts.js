@@ -264,6 +264,22 @@ export function planFromCombo(combo, { analysis, title, subtitle, ratio = "", te
   const label = combinationToLabel(combo);
   const directive = combinationToDesignDirective(combo);
 
+  // 「小Lin」风格（G12）：抠图主体 + 按标题含义合成戏剧化匹配场景 + 方正粗黑标题 + 关键词描金 + 顶部英文。
+  // 这是唯一「要读懂标题含义」的风格，覆盖下方通用规则。
+  const isLin = combo.g.id === "G12";
+  const linDirective = isLin
+    ? `
+=== SIGNATURE STYLE "小Lin" (news / finance / macro explainer cover — THIS SECTION OVERRIDES the generic rules & the "don't interpret the title" rule below) ===
+1) CUT OUT THE SUBJECT: cleanly cut the person out of the uploaded photo, REMOVE their original background entirely, keep their face and pose exactly. Place them as a foreground figure — usually lower-center or to one side, roughly waist-up, slightly overlapping the bottom edge.
+2) TOPIC-MATCHED DRAMATIC SCENE (the signature — for THIS style you SHOULD read what the title MEANS): behind and around the cut-out subject, composite a dramatic collage of 2–5 REAL photographic props / figures / scenes that directly match the title's subject. Mapping examples: finance/economy → stacks of cash, rising/falling candlestick charts, gold & silver bars, bank facade, city skyline; a specific country → its national flag + relevant leaders/citizens; trade war / negotiation → the two sides' flags + representative figures facing off; tech / AI → chips, server racks, robots, glowing circuits, company logos; Olympics / sport → torch, doves, stadium, medals, football; drug prices → pills + price tags; pension → a crowd of elderly faces; a brand → that brand's logo & products. Subject + background must read as ONE coherent dramatic scene, complementary to the headline.
+3) TITLE: HUGE, SQUARE, ultra-bold blocky Chinese (Heiti / condensed black), top ~40% of the frame, instantly readable at a glance — the exact typeface matters far less than being square, solid, clean and legible. Thick WHITE or BLACK stroke + subtle drop shadow so it pops off the busy background.
+4) KEYWORD COLOR-SWAP: make 1–2 KEY words of the title a bright metallic GOLD / YELLOW while the rest stays white; add a bright ?! / ？ / ！！ mark or 「」 quotes for drama when it fits.
+5) ENGLISH ACCENT: a small bold English translation of the title (serif or condensed) across the very TOP edge.
+6) Optional: one small rounded yellow tag for a sub-phrase (完整版 / 为什么？/ 期数 (1)(2)(下)).
+7) Overall: punchy, dramatic, premium news-explainer energy; professionally composed, never cluttered. The background scene should feel matched to the topic so the whole cover looks 相辅相成.
+`
+    : "";
+
   // 竖版追加像素级保护指令
   const verticalPixelRule = isVertical
     ? `\n- PIXEL PRESERVATION (CRITICAL): The ONLY pixels you may change are those directly under the text characters and minimal decorations. ALL other pixels MUST remain byte-for-byte identical to the source photo. Do NOT apply any color grading, filters, overlays, lighting changes, vignettes, grain, or atmosphere effects to the background.`
@@ -283,7 +299,7 @@ PHOTO ANALYSIS:
 - Available space for text: ${analysis.empty_space || "use the clearest negative space"}
 
 ${directive}
-
+${linDirective}
 TEXT CONTENT:
 LINE 1 (Main title): "${title}"
 - Font: ${combo.a.desc}
@@ -316,9 +332,11 @@ RULES:
 - Text must feel integrated into the photo, not floating.
 - Main title huge and readable.
 - PLACEMENT: put text in the clearest EMPTY space (top band / bottom band / side away from the subject). NEVER cover the person's face or crowd the head; if the layout would overlap the face, shift the text into open space.
-- The title is just TEXT to typeset, NOT a design brief. Do NOT read into or react to what the words MEAN — titles are often clickbait and are an unreliable guide to design. The visual style and EVERY decoration come ONLY from the assigned aesthetic combination, and would be exactly the same regardless of the title's topic.
-- Preserve original photo exactly.
-- Only add typography and decorations.${verticalPixelRule}
+${isLin
+        ? `- For this "小Lin" cover you SHOULD interpret the title's topic to choose the matching background scene (see the SIGNATURE STYLE section above). The subject is CUT OUT and re-composited, so you may replace the original background — the pixel-preservation rule does NOT apply to this style.`
+        : `- The title is just TEXT to typeset, NOT a design brief. Do NOT read into or react to what the words MEAN — titles are often clickbait and are an unreliable guide to design. The visual style and EVERY decoration come ONLY from the assigned aesthetic combination, and would be exactly the same regardless of the title's topic.
+- Preserve original photo exactly.`}
+- Only add typography and decorations.${isLin ? "" : verticalPixelRule}
 - STRICTLY follow all 7 dimensions of the assigned design matrix combination.`,
   };
 }

@@ -186,6 +186,7 @@ export const moods = [
   { id: "G9", name: "奢华精致", weight: 1, desc: "luxurious refined mood, rich materials gold accents, premium and exclusive feel" },
   { id: "G10", name: "幽默趣味", weight: 2, desc: "humorous playful mood, unexpected elements and fun details, lighthearted and engaging" },
   { id: "G11", name: "电影节海报", weight: 3, desc: "film-festival poster / big-brand minimalist mood: quiet luxury editorial restraint, cinematic stills or dim study backdrop, elegant thin-weight serif/hairline typography with generous letter-spacing, only 1-2 sharp accent colors, understated but high-end — like an arthouse festival poster or a designer brand campaign" },
+  { id: "G12", name: "小Lin", weight: 3, desc: "'小Lin' news / finance / macro explainer cover mood: the host is CUT OUT from her photo and set as the foreground figure, with a dramatic topic-matched scene collaged behind her; huge square ultra-bold Heiti title that reads at a glance, 1-2 key words swapped to gold; a small bold English translation across the top. Punchy, dramatic, premium news-explainer energy. (This is the one mood where the background elements SHOULD react to what the title means.)" },
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -385,10 +386,27 @@ export function generateCombinations(count, keywords = "", ratio = "", locked = 
   const shuffledD = lockedD ? [lockedD] : weightedShuffle(safeFilter(colorSchemes, "D"));
 
   // C / E / F / G 维度的候选池（受约束时取子集），加权随机选取
-  const poolC = lockedC ? [lockedC] : filterByConstraint(textEffects, "C");
-  const poolE = lockedE ? [lockedE] : safeFilter(decorations, "E");
+  let poolC = lockedC ? [lockedC] : filterByConstraint(textEffects, "C");
+  let poolE = lockedE ? [lockedE] : safeFilter(decorations, "E");
   const poolF = lockedF ? [lockedF] : filterByConstraint(compositions, "F");
   const poolG = lockedG ? [lockedG] : safeFilter(moods, "G");
+
+  // 「小Lin」风格：偏向方正粗黑字体 + 关键词换色/描边 + 海报环绕/角标装饰（未被用户显式锁定时）。
+  const linActive = locked?.G === "G12";
+  if (linActive) {
+    if (!lockedA) {
+      const linFonts = fontStyles.filter((s) => ["A4", "A13", "A8"].includes(s.id));
+      if (linFonts.length) shuffledA.splice(0, shuffledA.length, ...weightedShuffle(linFonts));
+    }
+    if (!lockedC) {
+      const c = textEffects.filter((s) => ["C16", "C2", "C7"].includes(s.id));
+      if (c.length) poolC = c;
+    }
+    if (!lockedE) {
+      const e = decorations.filter((s) => ["E22", "E21", "E23", "E15"].includes(s.id));
+      if (e.length) poolE = e;
+    }
+  }
 
   let aIndex = 0;
   let bIndex = 0;
