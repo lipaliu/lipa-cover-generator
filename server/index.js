@@ -89,7 +89,10 @@ function imageFetchTimeoutMs() {
 
 function imageJobTimeoutMs(engine) {
   const prefix = engine === "seedance" ? "SEEDANCE" : engine === "seedream" ? "SEEDREAM" : "IMAGE2";
-  const fallback = engine === "seedance" ? 150000 : 180000;
+  // Seedream 5.0 Pro 单张实测 60~110s，且会随负载/大尺寸(16:9/4:3)波动更久；180s 太紧会被
+  // 批量里靠后的那张卡在超时边缘（实测第 3 张 181s 差点被砍）。给它 300s 余量，避免「直接选
+  // Seedream 批量生成时靠后几张静默失败 → 看着没出图」。Image2/SeeDance 维持原值。
+  const fallback = engine === "seedance" ? 150000 : engine === "seedream" ? 300000 : 180000;
   return envNumber([`${prefix}_JOB_TIMEOUT_MS`, "IMAGE_JOB_TIMEOUT_MS"], fallback, {
     min: 30000,
     max: 600000,
@@ -947,6 +950,11 @@ function image2SizeForRatio(ratio) {
 }
 
 // Seedream 要求输出 >= 约 369 万像素（2K 起步），按比例给合规尺寸。
+// 火山 Seedream 单张有像素上限（实测硬上限 4,624,220px；超了直接报
+// "image area must be at most 4624220 pixels" → 该比例永远出不来）。
+// 原来的 16:9 / 9:16 / bilibili（2880x1620 = 4,665,600px）就是超了，所以「直接选 Seedream
+// 生成 16:9」永远失败、静默消失。这里统一按上限夹一刀：保持比例、按面积等比缩到安全值内。
+const SEEDREAM_MAX_AREA = 4500000; // 留足余量（硬上限 ~4.62M；四舍五入后仍稳稳低于）
 function seedreamSizeForRatio(ratio) {
   const sizes = {
     "16:9": "2880x1620",
@@ -956,7 +964,14 @@ function seedreamSizeForRatio(ratio) {
     "9:16": "1620x2880",
     "bilibili-safe": "2880x1620", // B站：16:9 输出
   };
-  return sizes[ratio] || "1728x2304";
+  const raw = sizes[ratio] || "1728x2304";
+  const [w, h] = raw.split("x").map(Number);
+  const area = w * h;
+  if (!area || area <= SEEDREAM_MAX_AREA) return raw;
+  const scale = Math.sqrt(SEEDREAM_MAX_AREA / area);
+  const cw = Math.max(8, Math.round((w * scale) / 8) * 8); // 对齐到 8 像素，模型更稳
+  const ch = Math.max(8, Math.round((h * scale) / 8) * 8);
+  return `${cw}x${ch}`;
 }
 
 function getSourceImages({ sourceMode, image, elementImages }) {
