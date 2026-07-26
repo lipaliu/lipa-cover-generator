@@ -1740,19 +1740,29 @@ app.post("/api/generate", async (req, res) => {
 
     // 用户在界面锁定的各维度（都选填；未选 = 库内随机）
     const styleLock = {};
-    const lockIf = (dim, list, id) => {
-      if (id && list.some((o) => o.id === id)) styleLock[dim] = id;
+    // 多选：前端每个维度传 id 数组（也兼容旧的单值）。只保留库里存在的 id；空 = 不锁。
+    const lockIf = (dim, list, ids) => {
+      const arr = (Array.isArray(ids) ? ids : ids ? [ids] : []).filter((id) => list.some((o) => o.id === id));
+      if (arr.length) styleLock[dim] = arr;
     };
-    lockIf("A", fontStyles, stylePreferences?.fontId);
-    lockIf("B", textLayouts, stylePreferences?.layoutId);
-    lockIf("C", textEffects, stylePreferences?.effectId);
-    lockIf("D", colorSchemes, stylePreferences?.colorSchemeId);
-    lockIf("E", decorations, stylePreferences?.decorationId);
-    lockIf("F", compositions, stylePreferences?.compositionId);
-    lockIf("G", moods, stylePreferences?.moodId);
-    const lockedTextColor = /^#[0-9a-fA-F]{6}$/u.test(String(stylePreferences?.textColor || ""))
-      ? String(stylePreferences.textColor).toUpperCase()
-      : "";
+    lockIf("A", fontStyles, stylePreferences?.fontIds ?? stylePreferences?.fontId);
+    lockIf("B", textLayouts, stylePreferences?.layoutIds ?? stylePreferences?.layoutId);
+    lockIf("C", textEffects, stylePreferences?.effectIds ?? stylePreferences?.effectId);
+    lockIf("D", colorSchemes, stylePreferences?.colorSchemeIds ?? stylePreferences?.colorSchemeId);
+    lockIf("E", decorations, stylePreferences?.decorationIds ?? stylePreferences?.decorationId);
+    lockIf("F", compositions, stylePreferences?.compositionIds ?? stylePreferences?.compositionId);
+    lockIf("G", moods, stylePreferences?.moodIds ?? stylePreferences?.moodId);
+    // 字色多选：一组合法 hex，交给 fallbackPlans 每张随机取一个（兼容旧的单值 textColor）。
+    const rawColors = Array.isArray(stylePreferences?.textColors)
+      ? stylePreferences.textColors
+      : stylePreferences?.textColor
+      ? [stylePreferences.textColor]
+      : [];
+    const lockedTextColors = [...new Set(
+      rawColors
+        .map((c) => String(c || "").toUpperCase())
+        .filter((c) => /^#[0-9A-F]{6}$/u.test(c)),
+    )];
     // 「读懂标题去配场景」独立开关：任何风格都可搭，开了才抠图配场景、放开像素保护。
     const smartScene = stylePreferences?.smartScene === true;
 
@@ -1787,7 +1797,7 @@ app.post("/api/generate", async (req, res) => {
         keywords: planKeywords,
         ratio: group.ratio,
         styleLock,
-        textColor: lockedTextColor,
+        textColors: lockedTextColors,
         smartScene,
       });
       plans.push(...groupPlans);

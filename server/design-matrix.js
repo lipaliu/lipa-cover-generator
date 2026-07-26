@@ -374,35 +374,44 @@ export function generateCombinations(count, keywords = "", ratio = "", locked = 
     return isVertical ? applyVerticalSafetyFilter(constrained, dim) : constrained;
   };
 
-  const lockedA = locked?.A ? fontStyles.find((s) => s.id === locked.A) : null;
-  const lockedB = locked?.B ? textLayouts.find((s) => s.id === locked.B) : null;
-  const lockedC = locked?.C ? textEffects.find((s) => s.id === locked.C) : null;
-  const lockedD = locked?.D ? colorSchemes.find((s) => s.id === locked.D) : null;
-  const lockedE = locked?.E ? decorations.find((s) => s.id === locked.E) : null;
-  const lockedF = locked?.F ? compositions.find((s) => s.id === locked.F) : null;
-  const lockedG = locked?.G ? moods.find((s) => s.id === locked.G) : null;
-  const shuffledA = lockedA ? [lockedA] : weightedShuffle(filterByConstraint(fontStyles, "A"));
-  const shuffledB = lockedB ? [lockedB] : weightedShuffle(filterByConstraint(textLayouts, "B"));
-  const shuffledD = lockedD ? [lockedD] : weightedShuffle(safeFilter(colorSchemes, "D"));
+  // 多选：locked[dim] 可以是单个 id（字符串）或 id 数组。选了多个 = 只在这几个里随机。
+  const asIds = (v) => (Array.isArray(v) ? v.filter(Boolean) : v ? [v] : []);
+  const lockedSubset = (list, dim) => {
+    const ids = asIds(locked?.[dim]);
+    if (!ids.length) return null; // 未锁定 → 用整库
+    const sel = list.filter((s) => ids.includes(s.id));
+    return sel.length ? sel : null;
+  };
+  const lockedAList = lockedSubset(fontStyles, "A");
+  const lockedBList = lockedSubset(textLayouts, "B");
+  const lockedCList = lockedSubset(textEffects, "C");
+  const lockedDList = lockedSubset(colorSchemes, "D");
+  const lockedEList = lockedSubset(decorations, "E");
+  const lockedFList = lockedSubset(compositions, "F");
+  const lockedGList = lockedSubset(moods, "G");
+  const shuffledA = lockedAList ? weightedShuffle(lockedAList) : weightedShuffle(filterByConstraint(fontStyles, "A"));
+  const shuffledB = lockedBList ? weightedShuffle(lockedBList) : weightedShuffle(filterByConstraint(textLayouts, "B"));
+  const shuffledD = lockedDList ? weightedShuffle(lockedDList) : weightedShuffle(safeFilter(colorSchemes, "D"));
 
   // C / E / F / G 维度的候选池（受约束时取子集），加权随机选取
-  let poolC = lockedC ? [lockedC] : filterByConstraint(textEffects, "C");
-  let poolE = lockedE ? [lockedE] : safeFilter(decorations, "E");
-  const poolF = lockedF ? [lockedF] : filterByConstraint(compositions, "F");
-  const poolG = lockedG ? [lockedG] : safeFilter(moods, "G");
+  let poolC = lockedCList || filterByConstraint(textEffects, "C");
+  let poolE = lockedEList || safeFilter(decorations, "E");
+  const poolF = lockedFList || filterByConstraint(compositions, "F");
+  const poolG = lockedGList || safeFilter(moods, "G");
 
-  // 「小Lin」风格：偏向方正粗黑字体 + 关键词换色/描边 + 海报环绕/角标装饰（未被用户显式锁定时）。
-  const linActive = locked?.G === "G12";
+  // 「小Lin」风格：偏向方正粗黑字体 + 关键词换色/描边 + 海报环绕/角标装饰（仅当情绪被单独锁成 G12、且相关维度未被用户显式锁定时）。
+  const gIds = asIds(locked?.G);
+  const linActive = gIds.length === 1 && gIds[0] === "G12";
   if (linActive) {
-    if (!lockedA) {
+    if (!lockedAList) {
       const linFonts = fontStyles.filter((s) => ["A4", "A13", "A8"].includes(s.id));
       if (linFonts.length) shuffledA.splice(0, shuffledA.length, ...weightedShuffle(linFonts));
     }
-    if (!lockedC) {
+    if (!lockedCList) {
       const c = textEffects.filter((s) => ["C16", "C2", "C7"].includes(s.id));
       if (c.length) poolC = c;
     }
-    if (!lockedE) {
+    if (!lockedEList) {
       const e = decorations.filter((s) => ["E22", "E21", "E23", "E15"].includes(s.id));
       if (e.length) poolE = e;
     }

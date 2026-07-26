@@ -309,14 +309,20 @@ export function App() {
   // 风格定制（都选填）：锁定字体 / 色彩风格 / 字体颜色；空 = 库内随机、AI 自选
   type StyleOpt = Array<{ id: string; name: string }>;
   const [styleOptions, setStyleOptions] = useState<{ fonts: StyleOpt; layouts: StyleOpt; effects: StyleOpt; colors: StyleOpt; decorations: StyleOpt; compositions: StyleOpt; moods: StyleOpt }>({ fonts: [], layouts: [], effects: [], colors: [], decorations: [], compositions: [], moods: [] });
-  const [lockedFont, setLockedFont] = useState("");
-  const [lockedLayout, setLockedLayout] = useState("");
-  const [lockedEffect, setLockedEffect] = useState("");
-  const [lockedColorScheme, setLockedColorScheme] = useState("");
-  const [lockedDecoration, setLockedDecoration] = useState("");
-  const [lockedComposition, setLockedComposition] = useState("");
-  const [lockedMood, setLockedMood] = useState("");
-  const [lockedTextColor, setLockedTextColor] = useState("");
+  // 风格定制全部改为「多选」：每个维度是一组 id，选了多个 = 每张封面在这几个里随机取一个；空 = 库内随机。
+  const [lockedFont, setLockedFont] = useState<string[]>([]);
+  const [lockedLayout, setLockedLayout] = useState<string[]>([]);
+  const [lockedEffect, setLockedEffect] = useState<string[]>([]);
+  const [lockedColorScheme, setLockedColorScheme] = useState<string[]>([]);
+  const [lockedDecoration, setLockedDecoration] = useState<string[]>([]);
+  const [lockedComposition, setLockedComposition] = useState<string[]>([]);
+  const [lockedMood, setLockedMood] = useState<string[]>([]);
+  const [lockedTextColor, setLockedTextColor] = useState<string[]>([]);
+  // 多选切换：点一次加入、再点一次移除。
+  const toggleFrom = (setter: React.Dispatch<React.SetStateAction<string[]>>) => (id: string) =>
+    setter((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  // 字体颜色自定义选色器的当前值（点「加入」才写进 lockedTextColor，避免拖动时狂加色）
+  const [customColor, setCustomColor] = useState("#FFDE00");
   // 单张「换某一项」面板：哪张打开、选了哪个维度
   const [swapCoverId, setSwapCoverId] = useState<number | null>(null);
   const [swapDim, setSwapDim] = useState("");
@@ -515,14 +521,14 @@ export function App() {
           stylePreferences: {
             imageDominantColor: detectedColor,
             imagePalette: imageColors,
-            fontId: lockedFont || undefined,
-            layoutId: lockedLayout || undefined,
-            effectId: lockedEffect || undefined,
-            colorSchemeId: lockedColorScheme || undefined,
-            decorationId: lockedDecoration || undefined,
-            compositionId: lockedComposition || undefined,
-            moodId: lockedMood || undefined,
-            textColor: lockedTextColor || undefined,
+            fontIds: lockedFont.length ? lockedFont : undefined,
+            layoutIds: lockedLayout.length ? lockedLayout : undefined,
+            effectIds: lockedEffect.length ? lockedEffect : undefined,
+            colorSchemeIds: lockedColorScheme.length ? lockedColorScheme : undefined,
+            decorationIds: lockedDecoration.length ? lockedDecoration : undefined,
+            compositionIds: lockedComposition.length ? lockedComposition : undefined,
+            moodIds: lockedMood.length ? lockedMood : undefined,
+            textColors: lockedTextColor.length ? lockedTextColor : undefined,
             smartScene: smartScene || undefined,
           },
         }),
@@ -733,7 +739,7 @@ export function App() {
           rebuild: {
             combination: cover.combination,
             swap: opts.swap,
-            textColor: opts.textColor ?? (lockedTextColor || undefined),
+            textColor: opts.textColor ?? (lockedTextColor.length ? lockedTextColor[Math.floor(Math.random() * lockedTextColor.length)] : undefined),
             title: title.trim(),
             subtitle: subtitle.trim(),
             smartScene: smartScene || undefined,
@@ -829,14 +835,14 @@ export function App() {
     setElementImages([]);
     setImageDescription("");
     setInspiration("");
-    setLockedFont("");
-    setLockedLayout("");
-    setLockedEffect("");
-    setLockedColorScheme("");
-    setLockedDecoration("");
-    setLockedComposition("");
-    setLockedMood("");
-    setLockedTextColor("");
+    setLockedFont([]);
+    setLockedLayout([]);
+    setLockedEffect([]);
+    setLockedColorScheme([]);
+    setLockedDecoration([]);
+    setLockedComposition([]);
+    setLockedMood([]);
+    setLockedTextColor([]);
     setSwapCoverId(null);
     setSwapDim("");
     setTitle("");
@@ -1383,18 +1389,18 @@ export function App() {
                 <span style={{ fontWeight: 600 }}>风格定制</span>
                 <span className="inspire-optional">选填 · 不选 = 库内随机多样</span>
               </div>
-              {/* 整体风格：滤镜式预览卡 */}
+              {/* 整体风格：滤镜式预览卡（多选） */}
               <div className="pv-group">
-                <span className="pv-label">整体风格</span>
+                <span className="pv-label">整体风格<span className="pv-multi">可多选 · 随机搭配</span></span>
                 <div className="pv-row">
-                  <button type="button" className={cn("pv-card pv-random", !lockedMood && "is-on")} onClick={() => setLockedMood("")}>
+                  <button type="button" className={cn("pv-card pv-random", !lockedMood.length && "is-on")} onClick={() => setLockedMood([])}>
                     <span className="pv-sample">🎲</span>
                     <span className="pv-name">随机</span>
                   </button>
                   {styleOptions.moods.map((m) => {
                     const pv = MOOD_PREVIEW[m.id] || { bg: "rgba(255,255,255,0.5)", style: {} };
                     return (
-                      <button key={m.id} type="button" className={cn("pv-card", lockedMood === m.id && "is-on")} style={{ background: pv.bg }} onClick={() => setLockedMood(m.id)}>
+                      <button key={m.id} type="button" className={cn("pv-card", lockedMood.includes(m.id) && "is-on")} style={{ background: pv.bg }} onClick={() => toggleFrom(setLockedMood)(m.id)}>
                         <span className="pv-sample" style={pv.style}>{pv.sample || "标题"}</span>
                         <span className="pv-name" style={{ color: (pv.style.color as string) || "#241a3d" }}>{m.name}</span>
                       </button>
@@ -1402,18 +1408,18 @@ export function App() {
                   })}
                 </div>
               </div>
-              {/* 字体：示例字预览卡 */}
+              {/* 字体：示例字预览卡（多选） */}
               <div className="pv-group">
-                <span className="pv-label">字体</span>
+                <span className="pv-label">字体<span className="pv-multi">可多选 · 随机搭配</span></span>
                 <div className="pv-row">
-                  <button type="button" className={cn("pv-card pv-random", !lockedFont && "is-on")} onClick={() => setLockedFont("")}>
+                  <button type="button" className={cn("pv-card pv-random", !lockedFont.length && "is-on")} onClick={() => setLockedFont([])}>
                     <span className="pv-sample">🎲</span>
                     <span className="pv-name">随机</span>
                   </button>
                   {styleOptions.fonts.map((f) => {
                     const pv = FONT_PREVIEW[f.id] || { style: {} };
                     return (
-                      <button key={f.id} type="button" className={cn("pv-card pv-font", pv.dark && "pv-dark", lockedFont === f.id && "is-on")} onClick={() => setLockedFont(f.id)}>
+                      <button key={f.id} type="button" className={cn("pv-card pv-font", pv.dark && "pv-dark", lockedFont.includes(f.id) && "is-on")} onClick={() => toggleFrom(setLockedFont)(f.id)}>
                         <span className="pv-sample" style={pv.style}>{pv.sample || "标题"}</span>
                         <span className="pv-name">{f.name}</span>
                       </button>
@@ -1421,34 +1427,34 @@ export function App() {
                   })}
                 </div>
               </div>
-              {/* 文字布局：小示意图预览卡 */}
+              {/* 文字布局：小示意图预览卡（多选） */}
               <div className="pv-group">
-                <span className="pv-label">文字布局</span>
+                <span className="pv-label">文字布局<span className="pv-multi">可多选 · 随机搭配</span></span>
                 <div className="pv-row">
-                  <button type="button" className={cn("pv-card pv-random", !lockedLayout && "is-on")} onClick={() => setLockedLayout("")}>
+                  <button type="button" className={cn("pv-card pv-random", !lockedLayout.length && "is-on")} onClick={() => setLockedLayout([])}>
                     <span className="pv-sample">🎲</span>
                     <span className="pv-name">随机</span>
                   </button>
                   {styleOptions.layouts.map((l) => (
-                    <button key={l.id} type="button" className={cn("pv-card", lockedLayout === l.id && "is-on")} onClick={() => setLockedLayout(l.id)}>
+                    <button key={l.id} type="button" className={cn("pv-card", lockedLayout.includes(l.id) && "is-on")} onClick={() => toggleFrom(setLockedLayout)(l.id)}>
                       <span className={`pv-mini lay-${l.id}`} />
                       <span className="pv-name">{l.name}</span>
                     </button>
                   ))}
                 </div>
               </div>
-              {/* 文字效果：示例字上效果 */}
+              {/* 文字效果：示例字上效果（多选） */}
               <div className="pv-group">
-                <span className="pv-label">文字效果</span>
+                <span className="pv-label">文字效果<span className="pv-multi">可多选 · 随机搭配</span></span>
                 <div className="pv-row">
-                  <button type="button" className={cn("pv-card pv-random", !lockedEffect && "is-on")} onClick={() => setLockedEffect("")}>
+                  <button type="button" className={cn("pv-card pv-random", !lockedEffect.length && "is-on")} onClick={() => setLockedEffect([])}>
                     <span className="pv-sample">🎲</span>
                     <span className="pv-name">随机</span>
                   </button>
                   {styleOptions.effects.map((ef) => {
                     const pv = EFFECT_PREVIEW[ef.id] || { style: {} };
                     return (
-                      <button key={ef.id} type="button" className={cn("pv-card pv-font", pv.dark && "pv-dark", lockedEffect === ef.id && "is-on")} onClick={() => setLockedEffect(ef.id)}>
+                      <button key={ef.id} type="button" className={cn("pv-card pv-font", pv.dark && "pv-dark", lockedEffect.includes(ef.id) && "is-on")} onClick={() => toggleFrom(setLockedEffect)(ef.id)}>
                         {ef.id === "C16"
                           ? <span className="pv-sample" style={{ fontWeight: 800, color: "#241a3d" }}>标<i style={{ color: "#f59e0b", fontStyle: "normal" }}>题</i></span>
                           : <span className="pv-sample" style={pv.style}>标题</span>}
@@ -1458,18 +1464,18 @@ export function App() {
                   })}
                 </div>
               </div>
-              {/* 色彩风格：三色条预览卡 */}
+              {/* 色彩风格：三色条预览卡（多选） */}
               <div className="pv-group">
-                <span className="pv-label">色彩风格</span>
+                <span className="pv-label">色彩风格<span className="pv-multi">可多选 · 随机搭配</span></span>
                 <div className="pv-row">
-                  <button type="button" className={cn("pv-card pv-random", !lockedColorScheme && "is-on")} onClick={() => setLockedColorScheme("")}>
+                  <button type="button" className={cn("pv-card pv-random", !lockedColorScheme.length && "is-on")} onClick={() => setLockedColorScheme([])}>
                     <span className="pv-sample">🎲</span>
                     <span className="pv-name">随机</span>
                   </button>
                   {styleOptions.colors.map((c) => {
                     const pal = PALETTE_PREVIEW[c.id] || ["#ddd", "#aaa", "#888"];
                     return (
-                      <button key={c.id} type="button" className={cn("pv-card pv-palette", lockedColorScheme === c.id && "is-on")} onClick={() => setLockedColorScheme(c.id)}>
+                      <button key={c.id} type="button" className={cn("pv-card pv-palette", lockedColorScheme.includes(c.id) && "is-on")} onClick={() => toggleFrom(setLockedColorScheme)(c.id)}>
                         <span className="pv-swatches">
                           {pal.map((hex, i) => (<i key={i} style={{ background: hex }} />))}
                         </span>
@@ -1479,32 +1485,32 @@ export function App() {
                   })}
                 </div>
               </div>
-              {/* 装饰：符号示意 */}
+              {/* 装饰：符号示意（多选） */}
               <div className="pv-group">
-                <span className="pv-label">装饰元素</span>
+                <span className="pv-label">装饰元素<span className="pv-multi">可多选 · 随机搭配</span></span>
                 <div className="pv-row">
-                  <button type="button" className={cn("pv-card pv-random", !lockedDecoration && "is-on")} onClick={() => setLockedDecoration("")}>
+                  <button type="button" className={cn("pv-card pv-random", !lockedDecoration.length && "is-on")} onClick={() => setLockedDecoration([])}>
                     <span className="pv-sample">🎲</span>
                     <span className="pv-name">随机</span>
                   </button>
                   {styleOptions.decorations.map((de) => (
-                    <button key={de.id} type="button" className={cn("pv-card", lockedDecoration === de.id && "is-on")} onClick={() => setLockedDecoration(de.id)}>
+                    <button key={de.id} type="button" className={cn("pv-card", lockedDecoration.includes(de.id) && "is-on")} onClick={() => toggleFrom(setLockedDecoration)(de.id)}>
                       <span className="pv-sample">{DECOR_GLYPH[de.id] || "❖"}</span>
                       <span className="pv-name">{de.name}</span>
                     </button>
                   ))}
                 </div>
               </div>
-              {/* 构图：小示意图 */}
+              {/* 构图：小示意图（多选） */}
               <div className="pv-group">
-                <span className="pv-label">构图方式</span>
+                <span className="pv-label">构图方式<span className="pv-multi">可多选 · 随机搭配</span></span>
                 <div className="pv-row">
-                  <button type="button" className={cn("pv-card pv-random", !lockedComposition && "is-on")} onClick={() => setLockedComposition("")}>
+                  <button type="button" className={cn("pv-card pv-random", !lockedComposition.length && "is-on")} onClick={() => setLockedComposition([])}>
                     <span className="pv-sample">🎲</span>
                     <span className="pv-name">随机</span>
                   </button>
                   {styleOptions.compositions.map((co) => (
-                    <button key={co.id} type="button" className={cn("pv-card", lockedComposition === co.id && "is-on")} onClick={() => setLockedComposition(co.id)}>
+                    <button key={co.id} type="button" className={cn("pv-card", lockedComposition.includes(co.id) && "is-on")} onClick={() => toggleFrom(setLockedComposition)(co.id)}>
                       <span className={`pv-mini comp-${co.id}`} />
                       <span className="pv-name">{co.name}</span>
                     </button>
@@ -1512,12 +1518,12 @@ export function App() {
                 </div>
               </div>
               <div className="textcolor-block">
-                <span className="textcolor-label">字体颜色（主标题）</span>
+                <span className="textcolor-label">字体颜色（主标题）<span className="pv-multi">可多选 · 每张随机取一个</span></span>
                 <div className="textcolor-row">
                   <button
                     type="button"
-                    className={cn("tc-chip", !lockedTextColor && "is-on")}
-                    onClick={() => setLockedTextColor("")}
+                    className={cn("tc-chip", !lockedTextColor.length && "is-on")}
+                    onClick={() => setLockedTextColor([])}
                   >
                     AI 自选
                   </button>
@@ -1525,33 +1531,53 @@ export function App() {
                     <button
                       key={c}
                       type="button"
-                      className={cn("tc-swatch", lockedTextColor === c && "is-on")}
+                      className={cn("tc-swatch", lockedTextColor.includes(c) && "is-on")}
                       style={{ background: c }}
                       title={c}
-                      onClick={() => setLockedTextColor(c)}
+                      onClick={() => toggleFrom(setLockedTextColor)(c)}
                     />
                   ))}
                   {imageColors.slice(0, 4).map((c) => (
                     <button
                       key={`img-${c}`}
                       type="button"
-                      className={cn("tc-swatch tc-from-image", lockedTextColor === c && "is-on")}
+                      className={cn("tc-swatch tc-from-image", lockedTextColor.includes(c) && "is-on")}
                       style={{ background: c }}
                       title={`底图取色 ${c}`}
-                      onClick={() => setLockedTextColor(c)}
+                      onClick={() => toggleFrom(setLockedTextColor)(c)}
                     />
                   ))}
                   <label className="tc-custom" title="自定义颜色">
                     <input
                       type="color"
-                      value={lockedTextColor || "#FFDE00"}
-                      onChange={(e) => setLockedTextColor(e.target.value.toUpperCase())}
+                      value={customColor}
+                      onChange={(e) => setCustomColor(e.target.value.toUpperCase())}
                     />
                     自定义
                   </label>
+                  <button
+                    type="button"
+                    className="tc-add"
+                    onClick={() => setLockedTextColor((prev) => (prev.includes(customColor) ? prev : [...prev, customColor]))}
+                  >
+                    ＋加入
+                  </button>
                 </div>
-                {lockedTextColor && (
-                  <span className="tc-picked">已锁定 <i style={{ background: lockedTextColor }} /> {lockedTextColor}（所有封面主标题用这个颜色）</span>
+                {lockedTextColor.length > 0 && (
+                  <div className="tc-picked">
+                    <span className="tc-picked-lead">已选 {lockedTextColor.length} 个（每张封面随机取一个）：</span>
+                    {lockedTextColor.map((c) => (
+                      <button
+                        key={`sel-${c}`}
+                        type="button"
+                        className="tc-picked-chip"
+                        title="点击移除"
+                        onClick={() => toggleFrom(setLockedTextColor)(c)}
+                      >
+                        <i style={{ background: c }} /> {c} ✕
+                      </button>
+                    ))}
+                  </div>
                 )}
               </div>
             </div>

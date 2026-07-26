@@ -349,10 +349,13 @@ ${smartScene
   };
 }
 
-export function fallbackPlans({ analysis, title, subtitle, count, keywords, ratio = "", styleLock = {}, textColor = "", smartScene = false }) {
+export function fallbackPlans({ analysis, title, subtitle, count, keywords, ratio = "", styleLock = {}, textColor = "", textColors = [], smartScene = false }) {
   // 设计矩阵生成多样化组合（竖版安全过滤；styleLock 锁定用户在界面选定的维度）
   const combinations = generateCombinations(count, keywords, ratio, styleLock);
-  return combinations.map((combo, index) => planFromCombo(combo, { analysis, title, subtitle, ratio, textColor, id: index + 1, smartScene }));
+  // 字色多选：选了多个就每张随机取一个；只选一个 = 全部用它；没选 = 交给配色方案（textColor 兼容旧的单值）。
+  const colorPool = Array.isArray(textColors) && textColors.length ? textColors : textColor ? [textColor] : [];
+  const pickColor = () => (colorPool.length ? colorPool[Math.floor(Math.random() * colorPool.length)] : "");
+  return combinations.map((combo, index) => planFromCombo(combo, { analysis, title, subtitle, ratio, textColor: pickColor(), id: index + 1, smartScene }));
 }
 
 // 按组合键重建单个方案，可替换其中一个维度（单张「换字体/换风格/换配色/换字色」用）。
