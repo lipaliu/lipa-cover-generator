@@ -353,6 +353,16 @@ export function App() {
   // 完整方案（含 prompt），用于单张重生时回传服务端；以及正在重生的封面 id。
   const [plansById, setPlansById] = useState<Record<number, CoverPlan>>({});
   const [regeneratingIds, setRegeneratingIds] = useState<number[]>([]);
+  // 单张编辑（重生/换模型/调整/＋比例）都「另存为新的一张」，原图保留。新卡片 id 从一个很高的
+  // 基数递增，避免和批量里服务端分配的小 id（1..N）撞车——尤其现在批量还在跑就能改早出的那张。
+  const VARIANT_ID_BASE = 100000;
+  const variantIdRef = useRef(VARIANT_ID_BASE);
+  const nextVariantId = () => (variantIdRef.current += 1);
+  // 删除某一张（连它的方案一起清掉）。
+  const removeCover = (id: number) => {
+    setResults((prev) => prev.filter((c) => c.id !== id));
+    setPlansById((prev) => { const n = { ...prev }; delete n[id]; return n; });
+  };
   // 哪张卡片正打开"出同款别的比例"选择器（按 cover.id）。
   const [ratioPickerFor, setRatioPickerFor] = useState<number | null>(null);
   const [progress, setProgress] = useState(0);
@@ -586,7 +596,11 @@ export function App() {
         if (event.status === "done") {
           // 只保留成功出图的：失败/未返回的直接不显示（少一张就少一张，不弹错误原因）。
           const final = (event.results || collected).filter((r) => r.image_url);
-          setResults(final);
+          // 但要保住用户在批量还没跑完时就动手编辑出的「新变体」卡片（id 从 VARIANT_ID_BASE 起）。
+          setResults((prev) => {
+            const variants = prev.filter((r) => r.id >= VARIANT_ID_BASE);
+            return [...final, ...variants].sort((a, b) => a.id - b.id);
+          });
           setProgress(event.total || count);
           setRunState("done");
           if (final.length > 0) {
@@ -625,17 +639,21 @@ export function App() {
     setRunState("idle");
   };
 
-  // 单张重生：用同一引擎或换一个引擎，重新生成某一张封面。
+  // 单张重生：用同一引擎或换一个引擎，另生成一张（原图保留，新的一张追加在后面）。
   const regenerateCover = async (cover: CoverResult, newEngine?: ImageEngine) => {
-    if (regeneratingIds.includes(cover.id)) return;
     const plan = plansById[cover.id];
     if (!plan) {
       setDownloadStatus({ filename: "", message: "这张缺少方案数据（可能来自历史记录），请整批重新生成后再单张重生。" });
       return;
     }
     const useEngine: ImageEngine = newEngine || cover.engine || engine;
-    setRegeneratingIds((prev) => [...prev, cover.id]);
-    setResults((prev) => prev.map((c) => (c.id === cover.id ? { ...c, image_url: undefined, error: undefined } : c)));
+    const newId = nextVariantId();
+    setPlansById((prev) => ({ ...prev, [newId]: plan }));
+    setResults((prev) => [
+      ...prev,
+      { id: newId, combination: cover.combination, label: cover.label, ratio: cover.ratio, engine: useEngine },
+    ]);
+    setRegeneratingIds((prev) => [...prev, newId]);
     try {
       const img = await getImageDataUrl();
       const token = getToken();
@@ -658,7 +676,7 @@ export function App() {
       if (!response.ok && !data.error) data.error = "重生失败";
       setResults((prev) =>
         prev.map((c) =>
-          c.id === cover.id
+          c.id === newId
             ? { ...c, image_url: data.image_url, error: data.error, engine: data.engine || useEngine }
             : c,
         ),
@@ -666,13 +684,13 @@ export function App() {
     } catch (error) {
       setResults((prev) =>
         prev.map((c) =>
-          c.id === cover.id
-            ? { ...c, image_url: undefined, error: error instanceof Error ? error.message : "重生失败" }
+          c.id === newId
+            ? { ...c, error: error instanceof Error ? error.message : "重生失败" }
             : c,
         ),
       );
     } finally {
-      setRegeneratingIds((prev) => prev.filter((id) => id !== cover.id));
+      setRegeneratingIds((prev) => prev.filter((id) => id !== newId));
     }
   };
 
@@ -684,7 +702,7 @@ export function App() {
       return;
     }
     setRatioPickerFor(null);
-    const newId = results.reduce((m, r) => Math.max(m, r.id), 0) + 1;
+    const newId = nextVariantId();
     const useEngine: ImageEngine = cover.engine || engine;
     setPlansById((prev) => ({ ...prev, [newId]: plan }));
     setResults((prev) => [
@@ -722,13 +740,18 @@ export function App() {
     }
   };
 
-  // 单张「换某一项」：保持组合不变，只替换一个维度（或只换字体颜色），重生这一张。
+  // 单张「换某一项」：保持组合不变，只替换一个维度（或只换字体颜色），另出一张（原图保留）。
   const regenerateRebuild = async (cover: CoverResult, opts: { swap?: { dimension: string; optionId: string }; textColor?: string }) => {
-    if (!cover.combination || regeneratingIds.includes(cover.id)) return;
+    if (!cover.combination) return;
     setSwapCoverId(null);
     setSwapDim("");
-    setRegeneratingIds((prev) => [...prev, cover.id]);
-    setResults((prev) => prev.map((c) => (c.id === cover.id ? { ...c, image_url: undefined, error: undefined } : c)));
+    const newId = nextVariantId();
+    const useEngine: ImageEngine = cover.engine || engine;
+    setResults((prev) => [
+      ...prev,
+      { id: newId, combination: cover.combination, label: cover.label, ratio: cover.ratio, engine: useEngine },
+    ]);
+    setRegeneratingIds((prev) => [...prev, newId]);
     try {
       const img = await getImageDataUrl();
       const token = getToken();
@@ -743,10 +766,10 @@ export function App() {
             title: title.trim(),
             subtitle: subtitle.trim(),
             smartScene: smartScene || undefined,
-            id: cover.id,
+            id: newId,
           },
           ratio: cover.ratio,
-          engine: cover.engine || engine,
+          engine: useEngine,
           sourceMode,
           image: img || undefined,
           elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
@@ -759,21 +782,21 @@ export function App() {
       if (!response.ok && !data.error) data.error = "调整失败";
       setResults((prev) =>
         prev.map((c) =>
-          c.id === cover.id
-            ? { ...c, image_url: data.image_url, error: data.error, engine: data.engine || c.engine, combination: data.combination || c.combination, label: data.label || c.label }
+          c.id === newId
+            ? { ...c, image_url: data.image_url, error: data.error, engine: data.engine || useEngine, combination: data.combination || c.combination, label: data.label || c.label }
             : c,
         ),
       );
-      // 让后续「重生」沿用换过之后的方案
+      // 新的一张沿用换过之后的方案，方便对它继续「重生 / 再调整」
       if (data.combination && data.prompt) {
-        setPlansById((prev) => ({ ...prev, [cover.id]: { id: cover.id, combination: data.combination, label: data.label || "", description: data.label || "", prompt: data.prompt } }));
+        setPlansById((prev) => ({ ...prev, [newId]: { id: newId, combination: data.combination, label: data.label || "", description: data.label || "", prompt: data.prompt } }));
       }
     } catch (error) {
       setResults((prev) =>
-        prev.map((c) => (c.id === cover.id ? { ...c, error: error instanceof Error ? error.message : "调整失败" } : c)),
+        prev.map((c) => (c.id === newId ? { ...c, error: error instanceof Error ? error.message : "调整失败" } : c)),
       );
     } finally {
-      setRegeneratingIds((prev) => prev.filter((id) => id !== cover.id));
+      setRegeneratingIds((prev) => prev.filter((id) => id !== newId));
     }
   };
 
@@ -900,9 +923,8 @@ export function App() {
   const renderCard = (cover: CoverResult) => {
     const aspect = ratioAspectCss(cover.ratio);
     const busy = regeneratingIds.includes(cover.id);
-    // 整批还在生成时不显示单张操作，避免额外请求跟批次抢代理把其他张拖住。
-    const batchRunning = runState === "analyzing" || runState === "planning" || runState === "generating";
-    const canAct = !busy && !batchRunning && (!!cover.image_url || !!cover.error) && !!plansById[cover.id];
+    // 一张出图就能马上对它操作——哪怕整批还没跑完（编辑都是「另存为新的一张」，不影响还在生成的）。
+    const canAct = !busy && (!!cover.image_url || !!cover.error) && !!plansById[cover.id];
     return (
       <article key={cover.id} className={cn("result-card", busy && "is-loading")}>
         {busy ? (
@@ -960,11 +982,19 @@ export function App() {
                 type="button"
                 className="result-act result-act-ratio"
                 onClick={() => { setSwapCoverId(swapCoverId === cover.id ? null : cover.id); setSwapDim(""); }}
-                title="只换其中一项（字体/风格/配色/字色…），其余保持"
+                title="只换其中一项（字体/风格/配色/字色…），其余保持，另出一张"
               >
                 调整
               </button>
             )}
+            <button
+              type="button"
+              className="result-act result-act-del"
+              onClick={() => removeCover(cover.id)}
+              title="删除这张"
+            >
+              <Trash2 size={13} /> 删除
+            </button>
           </div>
         )}
         {canAct && cover.image_url && swapCoverId === cover.id && (

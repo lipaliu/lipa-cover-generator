@@ -1977,6 +1977,14 @@ h1, h2, h3, p, span, strong, small, label {
 .result-act:hover { filter: brightness(1.06); transform: translateY(-1px); }
 .result-act:active { transform: translateY(0); }
 .result-act-engine { font-weight: 500; color: var(--ink-secondary); }
+.result-act-del {
+  margin-left: auto; /* 推到最右，和生成类操作分开 */
+  font-weight: 500;
+  color: #b3402f;
+  background: linear-gradient(160deg, rgba(255, 236, 232, 0.72), rgba(255, 225, 219, 0.42));
+  border-color: rgba(179, 64, 47, 0.35);
+}
+.result-act-del:hover { filter: none; background: linear-gradient(160deg, rgba(255, 224, 218, 0.9), rgba(255, 208, 200, 0.6)); }
 
 /* —— 作者灵感 输入框 —— */
 .inspire-zone {
