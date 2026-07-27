@@ -853,7 +853,7 @@ async function imageUrlToBuffer(imageUrl) {
 function normalizeCount(value) {
   const count = Math.floor(Number(value));
   if (!Number.isFinite(count)) return 4;
-  return Math.max(1, Math.min(10, count));
+  return Math.max(1, Math.min(8, count));
 }
 
 function normalizeEngine(value) {
@@ -903,7 +903,7 @@ function normalizeSourceMode(value) {
 // 总张数安全上限（防止滥用 / 资源耗尽）：5 种比例 × 10 张 = 50。
 const MAX_TOTAL_COUNT = envNumber("MAX_TOTAL_COUNT", 50, { min: 1, max: 200 });
 
-// 每个比例各自独立 1-10 张，互不占用名额；总数为各比例之和，受 MAX_TOTAL_COUNT 封顶。
+// 每个比例各自独立 1-8 张，互不占用名额；总数为各比例之和，受 MAX_TOTAL_COUNT 封顶。
 function normalizeRatios(ratios) {
   const requestedRatios = Array.isArray(ratios) ? ratios : [];
   const normalized = [];
@@ -1082,12 +1082,20 @@ async function planCovers(openai, { analysis, title, subtitle, keywords, count, 
   });
 }
 
-function buildSourceInstruction({ sourceMode, imageDescription }) {
+function buildSourceInstruction({ sourceMode, imageDescription, sourceCount }) {
   if (sourceMode === "describe") {
     return `Source mode: text-only generation. Create the cover scene from this description: ${imageDescription}.`;
   }
   if (sourceMode === "elements") {
-    return "Source mode: multiple material references. Combine the uploaded elements into one coherent social cover; keep recognizable product, people, material, color, and texture features when useful.";
+    const n = Number(sourceCount) || 0;
+    if (n >= 2) {
+      // 元素模式的硬约束：给了几张就必须用几张——每张抠图、全部融进同一张，不许只用其中一张。
+      return `Source mode: ${n} MATERIAL REFERENCE IMAGES were uploaded. This is a HARD compositing brief, NOT a pick-one:
+- You MUST use ALL ${n} uploaded images. CUT OUT the main subject/object from EACH image (clean-edge cut-out) and composite ALL ${n} of them together into ONE single cover. Never drop one or use only a single image.
+- Read the semantic relationship between these ${n} subjects and FUSE them into one coherent, intentional scene where they interact and complement each other — a genuinely combined composition with real chemistry, not separate stickers floating apart.
+- Keep each subject recognizable (its key shape, face/identity, colors, material, texture), while unifying lighting, perspective, scale and color grade so the whole frame reads as one shot.`;
+    }
+    return "Source mode: material reference. Use the uploaded material as the main subject of the cover; keep its recognizable product/person/material/color/texture features.";
   }
   return "Source mode: base image editing. Preserve the uploaded base image as the visual foundation and add typography/decorations on top.";
 }
@@ -1102,7 +1110,8 @@ function buildLayoutInstruction(ratio, sourceMode) {
 
   // 竖构图（含方形）：原图本身就是竖/方构图，无需扩图。严格遵循 Skill 排版叠字，
   // 保留原图与原始环境，绝不做高概念/电影感背景替换（高概念仅用于横版扩图区域）。
-  if (isVertical) {
+  // 仅对「上传底图」生效——元素融合/文字描述没有单张原图可保留，硬套会逼模型只用一张、不敢合成。
+  if (isVertical && sourceMode === "base") {
     lines.push(
       "NATIVE VERTICAL CANVAS (CRITICAL):",
       "- The source photo is already vertical and fits this canvas. Do NOT outpaint, do NOT extend, and do NOT replace or rebuild the background.",
@@ -1217,7 +1226,7 @@ async function imageResponseToDataUrl(response) {
 }
 
 async function generateImage2Cover(openai, { sourceMode, sourceImages, imageDescription, inspiration, plan, ratio }) {
-  const prompt = buildImage2Prompt(plan, { sourceMode, imageDescription, ratio, inspiration });
+  const prompt = buildImage2Prompt(plan, { sourceMode, imageDescription, ratio, inspiration, sourceCount: sourceImages.length });
   const size = image2SizeForRatio(ratio);
   // 生图 = 一次直接调用 Image2，给足时间（Image2 要多久就多久），不提前截断、不重试，避免额外耗时。
   const timeoutMs = envNumber("IMAGE2_REQUEST_TIMEOUT_MS", 300000, { min: 60000, max: 600000 });
@@ -1420,7 +1429,7 @@ async function generateSeedanceCover({ sourceMode, sourceImages, imageDescriptio
       10,
       Math.min(180, Number(process.env.SEEDANCE_POLL_SECONDS || process.env.DREAMINA_POLL_SECONDS || 75)),
     );
-    const prompt = buildSeedancePrompt(plan, { sourceMode, imageDescription, ratio, inspiration });
+    const prompt = buildSeedancePrompt(plan, { sourceMode, imageDescription, ratio, inspiration, sourceCount: sourceImages.length });
     const args = [sourceImages.length > 0 ? "image2image" : "text2image"];
 
     if (sourceImages.length > 0) {
@@ -1477,7 +1486,7 @@ async function generateSeedreamCover({ sourceMode, sourceImages, inspiration, pl
   const model = process.env.ARK_MODEL || "doubao-seedream-5-0-260128";
   const baseUrl = process.env.ARK_API_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
   // 用完整设计提示词（与 Image2 同款，不截断）——保证花字/排版/装饰指令完整传达。
-  const prompt = buildImage2Prompt(plan, { sourceMode, ratio, inspiration });
+  const prompt = buildImage2Prompt(plan, { sourceMode, ratio, inspiration, sourceCount: sourceImages.length });
   const body = {
     model,
     prompt,
@@ -1485,9 +1494,10 @@ async function generateSeedreamCover({ sourceMode, sourceImages, inspiration, pl
     response_format: "url",
     watermark: false,
   };
-  // 图生图：把底图作为输入（base64 data URL）。当前取首图，多参考图后续可扩展。
+  // 图生图：把底图作为输入（base64 data URL）。元素模式给几张就传几张——实测 ARK 接受 image 数组，
+  // 多参考图会全部作为参考（配合 prompt 里的「必须全用+抠图融合」硬约束）。
   if (sourceImages.length > 0) {
-    body.image = sourceImages[0];
+    body.image = sourceImages.length === 1 ? sourceImages[0] : sourceImages;
   }
   const fetchOpts = arkDispatcher ? { dispatcher: arkDispatcher } : {};
   const response = await undiciFetch(`${baseUrl}/images/generations`, {

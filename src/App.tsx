@@ -165,7 +165,7 @@ const ratioOptions: Array<{
   { id: "1:1", label: "方形 1:1", desc: "通用方形", w: 1, h: 1, icon: "square" },
 ];
 
-type RatioSelection = Record<AspectRatio, number>; // 0 = not selected, 1-10 = count
+type RatioSelection = Record<AspectRatio, number>; // 0 = not selected, 1-8 = count
 
 type Step = 1 | 2 | 3 | 4;
 type RunState = "idle" | "analyzing" | "planning" | "generating" | "done" | "error";
@@ -384,7 +384,7 @@ export function App() {
   const [history, setHistory] = useState<HistoryBatch[]>([]);
 
   const totalCount = Object.values(ratioSelection).reduce((sum, v) => sum + v, 0);
-  // 每个比例各自最多 10 张，总数为各比例之和（不再被截断到 10）。
+  // 每个比例各自最多 8 张，总数为各比例之和。
   const requestedCount = totalCount;
   const selectedRatios = Object.entries(ratioSelection).filter(([, v]) => v > 0) as [AspectRatio, number][];
   // 展开成与后端一致顺序的封面槽位（每个比例按数量展开）。
@@ -426,8 +426,8 @@ export function App() {
   const adjustRatioCount = (id: AspectRatio, delta: number) => {
     setRatioSelection((prev) => ({
       ...prev,
-      // 每个比例各自 0-10 张，互不影响。
-      [id]: Math.max(0, Math.min(10, prev[id] + delta)),
+      // 每个比例各自 0-8 张，互不影响。
+      [id]: Math.max(0, Math.min(8, prev[id] + delta)),
     }));
   };
 
@@ -881,7 +881,7 @@ export function App() {
     setSubtitle(batch.subtitle);
     setKeywords(batch.keywords || "");
     setEngine(normalizeStoredEngine(batch.engine));
-    setRatioSelection({ "16:9": 0, "4:3": 0, "1:1": 0, "3:4": Math.min(10, batch.count), "9:16": 0, "bilibili-safe": 0 });
+    setRatioSelection({ "16:9": 0, "4:3": 0, "1:1": 0, "3:4": Math.min(8, batch.count), "9:16": 0, "bilibili-safe": 0 });
     setTotal(batch.count);
     setImagePreview(batch.baseImage);
     setImageName("历史底图");
