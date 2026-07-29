@@ -308,7 +308,11 @@ if (!trialAccounts || typeof trialAccounts !== "object") {
       const [user, password, quotaRaw] = entry.split(":");
       const key = String(user || "").toLowerCase();
       if (!key || !password || key === ADMIN_KEY) continue;
-      trialAccounts[key] = { password, quota: Math.max(1, Number(quotaRaw) || 2) };
+      // quota 写 "admin"（或 max/全部）= 全权限管理员账户：额度无限、不限比例、可进 /admin 后台。
+      const isAdmin = /^(admin|max|全部|全权|全)$/iu.test(String(quotaRaw || "").trim());
+      trialAccounts[key] = isAdmin
+        ? { password, quota: Infinity, admin: true }
+        : { password, quota: Math.max(1, Number(quotaRaw) || 2) };
     }
   };
   seedFrom(process.env.ACCESS_ACCOUNTS);
@@ -330,7 +334,9 @@ function scheduleAccountsSave() {
 function accountByKey(key) {
   if (ACCESS_PASSWORD && key === ADMIN_KEY) return { user: key, role: "admin", quota: Infinity, password: ACCESS_PASSWORD };
   const t = trialAccounts[key];
-  return t ? { user: key, role: "trial", quota: t.quota, password: t.password } : null;
+  if (!t) return null;
+  if (t.admin) return { user: key, role: "admin", quota: Infinity, password: t.password };
+  return { user: key, role: "trial", quota: t.quota, password: t.password };
 }
 
 // ─── 用量与生成记录（/admin 可见、可管理）───
@@ -1568,16 +1574,23 @@ async function generateByEngine({ openai, engine, sourceMode, sourceImages, imag
     throw new Error(`${engineLabels[engine] || engine} is not implemented.`);
   };
 
-  // 成功的封面一次就出、零额外耗时。只有真的失败、且是临时性错误（限流/网络/超时）的那一张，
-  // 才在短暂缓冲后重试一次——把「批量里偶发失败被静默丢掉」的那几张尽量救回来。
-  try {
-    return await runOnce();
-  } catch (error) {
-    if (!isTransientError(error)) throw error;
-    console.warn(`[Retry] ${engine} 单张临时性失败，1 秒后重试一次：${String(error?.message || error).slice(0, 160)}`);
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    return await runOnce();
+  // 成功的封面一次就出、零额外耗时。只有真的失败、且是临时性错误（限流/网络/超时）的那张才重试，
+  // 且用递增退避把重试错开，避免几张同时撞同一个"抖动窗口"（Seedream 是 Oregon→北京 跨境链路，
+  // 批量时最容易一批一起失败，所以多给两次机会）。安全审核/额度/密钥这类不重试。
+  const maxAttempts = engine === "seedream" ? 3 : 2;
+  let lastError;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      return await runOnce();
+    } catch (error) {
+      lastError = error;
+      if (!isTransientError(error) || attempt === maxAttempts) throw error;
+      const backoff = attempt * 1200; // 1.2s、2.4s… 错开重试
+      console.warn(`[Retry] ${engine} 第 ${attempt}/${maxAttempts} 次临时性失败，${backoff}ms 后重试：${String(error?.message || error).slice(0, 160)}`);
+      await new Promise((resolve) => setTimeout(resolve, backoff));
+    }
   }
+  throw lastError;
 }
 
 app.post("/api/export-cover", async (req, res) => {
