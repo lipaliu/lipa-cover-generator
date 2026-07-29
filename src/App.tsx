@@ -23,8 +23,10 @@ import {
   RotateCw,
   LogOut,
   ShieldCheck,
+  Home,
+  Heart,
 } from "lucide-react";
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { deleteHistoryBatch, getHistory, saveHistoryBatch } from "./lib/history";
 import { downloadImageUrl, exportImageUrl, fileToDownscaledDataUrl, formatTime, urlToDataUrl } from "./lib/image";
 import type { CoverResult, CoverPlan, GenerateEvent, HistoryBatch, ImageEngine } from "./lib/types";
@@ -279,6 +281,56 @@ export function App() {
   const [step, setStep] = useState<Step>(1);
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showFavorites, setShowFavorites] = useState(false);
+
+  // 收藏夹：本机持久化（localStorage）。每个收藏存缩略图 + 它的风格组合，用来在收藏夹里回看，
+  // 并统计「你最常收藏的字体/配色/排版…」，自动把这些选项在风格定制里往前排。
+  type FavItem = { favId: string; coverId: number; combination: string; label: string; ratio?: string; engine?: string; thumb: string; textColor?: string; ts: number };
+  const [favorites, setFavorites] = useState<FavItem[]>(() => {
+    try { return JSON.parse(localStorage.getItem("baka_favs") || "[]"); } catch { return []; }
+  });
+  const persistFavs = (next: FavItem[]) => {
+    setFavorites(next);
+    try { localStorage.setItem("baka_favs", JSON.stringify(next)); } catch { /* 满了就算了 */ }
+  };
+  // 把整图压成 ~240px 缩略图存起来（localStorage 有限，不能存原图）。
+  const makeThumb = (dataUrl: string, max = 240): Promise<string> => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, max / Math.max(img.width, img.height));
+      const canvas = document.createElement("canvas");
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return resolve(dataUrl);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      try { resolve(canvas.toDataURL("image/jpeg", 0.72)); } catch { resolve(dataUrl); }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+  const isFavorited = (coverId: number) => favorites.some((f) => f.coverId === coverId);
+  const toggleFavorite = async (cover: CoverResult) => {
+    if (isFavorited(cover.id)) {
+      persistFavs(favorites.filter((f) => f.coverId !== cover.id));
+      return;
+    }
+    if (!cover.image_url || !cover.combination) return;
+    const thumb = await makeThumb(cover.image_url);
+    persistFavs([
+      { favId: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, coverId: cover.id, combination: cover.combination, label: cover.label, ratio: cover.ratio, engine: cover.engine, thumb, ts: Date.now() },
+      ...favorites,
+    ]);
+  };
+  // 从收藏里统计每个风格选项(id)被选中的次数 → 用来自动往前排。
+  const styleTally = useMemo(() => {
+    const t: Record<string, number> = {};
+    for (const f of favorites) for (const id of String(f.combination || "").split("+")) if (id) t[id] = (t[id] || 0) + 1;
+    return t;
+  }, [favorites]);
+  // 按收藏热度给某维度的选项排序（热门在前，其余保持原顺序）。
+  const rankByFav = <T extends { id: string }>(opts: T[]): T[] =>
+    [...opts].sort((a, b) => (styleTally[b.id] || 0) - (styleTally[a.id] || 0));
 
   // Auth state
   const [user, setUser] = useState<UserInfo | null>(null);
@@ -922,6 +974,14 @@ export function App() {
   const prevStep = () => {
     if (step > 1) setStep((step - 1) as Step);
   };
+  // 回主页：任意步骤都能一键回到第一步并滚到顶部（不清空已生成的结果）。
+  const goHome = () => {
+    setStep(1);
+    setShowHistory(false);
+    setShowSettings(false);
+    setShowFavorites(false);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
 
   const stepLabels = [
     { num: 1, label: "底图", icon: <ImagePlus size={18} /> },
@@ -955,6 +1015,16 @@ export function App() {
             <LoaderCircle className="spin" size={28} />
             <small>生成中...</small>
           </div>
+        )}
+        {cover.image_url && (
+          <button
+            type="button"
+            className={cn("fav-btn", isFavorited(cover.id) && "is-fav")}
+            title={isFavorited(cover.id) ? "取消收藏" : "收藏这张（会记住你喜欢的风格，下次自动往前排）"}
+            onClick={() => toggleFavorite(cover)}
+          >
+            <Heart size={17} />
+          </button>
         )}
         <footer className="result-meta">
           <span>{cover.ratio ? `${cover.ratio} · ${cover.label}` : cover.label}</span>
@@ -1086,15 +1156,23 @@ export function App() {
       {/* Header */}
       <header className="site-header">
         <div className="header-brand">
-          <span className="brand-plate">
+          <button type="button" className="brand-plate brand-home" title="回主页" onClick={goHome}>
             <img src="/logo.png" alt="巴卡巴卡 BAKABAKA" className="brand-logo" />
-          </span>
+          </button>
           <small className="brand-copyright">Copyright © 畅导吃枸杞</small>
         </div>
         <nav className="header-nav">
+          <button type="button" className="nav-btn" title="回到第一步" onClick={goHome}>
+            <Home size={18} />
+            <span>首页</span>
+          </button>
           <button type="button" className={cn("nav-btn", "nav-btn-history", showHistory && "is-active")} onClick={() => setShowHistory(!showHistory)}>
             <History size={18} />
             <span>我的作品{history.length > 0 ? `（${history.length}）` : ""}</span>
+          </button>
+          <button type="button" className={cn("nav-btn", showFavorites && "is-active")} title="收藏夹" onClick={() => setShowFavorites(!showFavorites)}>
+            <Heart size={18} />
+            <span>收藏夹{favorites.length > 0 ? `（${favorites.length}）` : ""}</span>
           </button>
           <button type="button" className={cn("nav-btn", showSettings && "is-active")} onClick={() => setShowSettings(!showSettings)}>
             <Settings2 size={18} />
@@ -1157,6 +1235,55 @@ export function App() {
           )}
         </div>
       )}
+
+      {showFavorites && (() => {
+        const nameById: Record<string, string> = {};
+        for (const list of [styleOptions.moods, styleOptions.fonts, styleOptions.layouts, styleOptions.effects, styleOptions.colors, styleOptions.decorations, styleOptions.compositions]) {
+          for (const o of list) nameById[o.id] = o.name;
+        }
+        const topStyles = Object.entries(styleTally)
+          .filter(([id]) => nameById[id])
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 8)
+          .map(([id, count]) => ({ id, name: nameById[id], count }));
+        return (
+          <div className="overlay-panel">
+            <div className="overlay-header">
+              <h2>收藏夹{favorites.length > 0 ? `（${favorites.length}）` : ""}</h2>
+              <button type="button" onClick={() => setShowFavorites(false)} className="close-btn">&times;</button>
+            </div>
+            {favorites.length === 0 ? (
+              <div className="empty-state">
+                <Heart size={32} />
+                <p>还没有收藏</p>
+                <small>觉得哪张好，点封面右上角的 ♡，它的风格会被记住、下次自动往前排</small>
+              </div>
+            ) : (
+              <>
+                {topStyles.length > 0 && (
+                  <div className="fav-summary">
+                    <span className="fav-summary-title">你最常用的风格（已自动排到「风格定制」最前面）</span>
+                    <div className="fav-summary-chips">
+                      {topStyles.map((s) => (
+                        <span key={s.id} className="fav-chip">{s.name} <i>×{s.count}</i></span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="fav-grid">
+                  {favorites.map((f) => (
+                    <div className="fav-cell" key={f.favId}>
+                      <img src={f.thumb} alt={f.label} />
+                      <button type="button" className="fav-remove" title="移出收藏" onClick={() => persistFavs(favorites.filter((x) => x.favId !== f.favId))}>&times;</button>
+                      <span className="fav-cell-label">{f.label}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Settings Overlay */}
       {showSettings && (
@@ -1438,7 +1565,7 @@ export function App() {
                     <span className="pv-sample">🎲</span>
                     <span className="pv-name">随机</span>
                   </button>
-                  {styleOptions.moods.map((m) => {
+                  {rankByFav(styleOptions.moods).map((m) => {
                     const pv = MOOD_PREVIEW[m.id] || { bg: "rgba(255,255,255,0.5)", style: {} };
                     return (
                       <button key={m.id} type="button" className={cn("pv-card", lockedMood.includes(m.id) && "is-on")} style={{ background: pv.bg }} onClick={() => toggleFrom(setLockedMood)(m.id)}>
@@ -1457,7 +1584,7 @@ export function App() {
                     <span className="pv-sample">🎲</span>
                     <span className="pv-name">随机</span>
                   </button>
-                  {styleOptions.fonts.map((f) => {
+                  {rankByFav(styleOptions.fonts).map((f) => {
                     const pv = FONT_PREVIEW[f.id] || { style: {} };
                     return (
                       <button key={f.id} type="button" className={cn("pv-card pv-font", pv.dark && "pv-dark", lockedFont.includes(f.id) && "is-on")} onClick={() => toggleFrom(setLockedFont)(f.id)}>
@@ -1476,7 +1603,7 @@ export function App() {
                     <span className="pv-sample">🎲</span>
                     <span className="pv-name">随机</span>
                   </button>
-                  {styleOptions.layouts.map((l) => (
+                  {rankByFav(styleOptions.layouts).map((l) => (
                     <button key={l.id} type="button" className={cn("pv-card", lockedLayout.includes(l.id) && "is-on")} onClick={() => toggleFrom(setLockedLayout)(l.id)}>
                       <span className={`pv-mini lay-${l.id}`} />
                       <span className="pv-name">{l.name}</span>
@@ -1492,7 +1619,7 @@ export function App() {
                     <span className="pv-sample">🎲</span>
                     <span className="pv-name">随机</span>
                   </button>
-                  {styleOptions.effects.map((ef) => {
+                  {rankByFav(styleOptions.effects).map((ef) => {
                     const pv = EFFECT_PREVIEW[ef.id] || { style: {} };
                     return (
                       <button key={ef.id} type="button" className={cn("pv-card pv-font", pv.dark && "pv-dark", lockedEffect.includes(ef.id) && "is-on")} onClick={() => toggleFrom(setLockedEffect)(ef.id)}>
@@ -1513,7 +1640,7 @@ export function App() {
                     <span className="pv-sample">🎲</span>
                     <span className="pv-name">随机</span>
                   </button>
-                  {styleOptions.colors.map((c) => {
+                  {rankByFav(styleOptions.colors).map((c) => {
                     const pal = PALETTE_PREVIEW[c.id] || ["#ddd", "#aaa", "#888"];
                     return (
                       <button key={c.id} type="button" className={cn("pv-card pv-palette", lockedColorScheme.includes(c.id) && "is-on")} onClick={() => toggleFrom(setLockedColorScheme)(c.id)}>
@@ -1534,7 +1661,7 @@ export function App() {
                     <span className="pv-sample">🎲</span>
                     <span className="pv-name">随机</span>
                   </button>
-                  {styleOptions.decorations.map((de) => (
+                  {rankByFav(styleOptions.decorations).map((de) => (
                     <button key={de.id} type="button" className={cn("pv-card", lockedDecoration.includes(de.id) && "is-on")} onClick={() => toggleFrom(setLockedDecoration)(de.id)}>
                       <span className="pv-sample">{DECOR_GLYPH[de.id] || "❖"}</span>
                       <span className="pv-name">{de.name}</span>
@@ -1550,7 +1677,7 @@ export function App() {
                     <span className="pv-sample">🎲</span>
                     <span className="pv-name">随机</span>
                   </button>
-                  {styleOptions.compositions.map((co) => (
+                  {rankByFav(styleOptions.compositions).map((co) => (
                     <button key={co.id} type="button" className={cn("pv-card", lockedComposition.includes(co.id) && "is-on")} onClick={() => toggleFrom(setLockedComposition)(co.id)}>
                       <span className={`pv-mini comp-${co.id}`} />
                       <span className="pv-name">{co.name}</span>
