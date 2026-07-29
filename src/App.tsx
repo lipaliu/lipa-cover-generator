@@ -363,6 +363,23 @@ export function App() {
     setResults((prev) => prev.filter((c) => c.id !== id));
     setPlansById((prev) => { const n = { ...prev }; delete n[id]; return n; });
   };
+  // 新出的一张插在「它的来源那张」紧后面（而不是甩到网格最底下、看着像没反应）。
+  const insertAfter = (arr: CoverResult[], sourceId: number, item: CoverResult) => {
+    const i = arr.findIndex((c) => c.id === sourceId);
+    return i < 0 ? [...arr, item] : [...arr.slice(0, i + 1), item, ...arr.slice(i + 1)];
+  };
+  // 新卡片高亮 + 滚动到可视区，确保「点了就看得到」。
+  const [flashId, setFlashId] = useState<number | null>(null);
+  const flashNewCover = (id: number) => {
+    setFlashId(id);
+    window.setTimeout(() => setFlashId((cur) => (cur === id ? null : cur)), 1800);
+  };
+  // 新卡片一出现就滚动到可视区（点了"调整/重生/＋比例"立刻能看到那张，而不是甩到网格底部看不见）。
+  useEffect(() => {
+    if (flashId == null) return;
+    const el = document.querySelector(`[data-cover-id="${flashId}"]`);
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [flashId]);
   // 哪张卡片正打开"出同款别的比例"选择器（按 cover.id）。
   const [ratioPickerFor, setRatioPickerFor] = useState<number | null>(null);
   const [progress, setProgress] = useState(0);
@@ -649,11 +666,9 @@ export function App() {
     const useEngine: ImageEngine = newEngine || cover.engine || engine;
     const newId = nextVariantId();
     setPlansById((prev) => ({ ...prev, [newId]: plan }));
-    setResults((prev) => [
-      ...prev,
-      { id: newId, combination: cover.combination, label: cover.label, ratio: cover.ratio, engine: useEngine },
-    ]);
+    setResults((prev) => insertAfter(prev, cover.id, { id: newId, combination: cover.combination, label: cover.label, ratio: cover.ratio, engine: useEngine }));
     setRegeneratingIds((prev) => [...prev, newId]);
+    flashNewCover(newId);
     try {
       const img = await getImageDataUrl();
       const token = getToken();
@@ -705,11 +720,9 @@ export function App() {
     const newId = nextVariantId();
     const useEngine: ImageEngine = cover.engine || engine;
     setPlansById((prev) => ({ ...prev, [newId]: plan }));
-    setResults((prev) => [
-      ...prev,
-      { id: newId, combination: cover.combination, label: cover.label, ratio: newRatio, engine: useEngine },
-    ]);
+    setResults((prev) => insertAfter(prev, cover.id, { id: newId, combination: cover.combination, label: cover.label, ratio: newRatio, engine: useEngine }));
     setRegeneratingIds((prev) => [...prev, newId]);
+    flashNewCover(newId);
     try {
       const img = await getImageDataUrl();
       const token = getToken();
@@ -747,11 +760,9 @@ export function App() {
     setSwapDim("");
     const newId = nextVariantId();
     const useEngine: ImageEngine = cover.engine || engine;
-    setResults((prev) => [
-      ...prev,
-      { id: newId, combination: cover.combination, label: cover.label, ratio: cover.ratio, engine: useEngine },
-    ]);
+    setResults((prev) => insertAfter(prev, cover.id, { id: newId, combination: cover.combination, label: cover.label, ratio: cover.ratio, engine: useEngine }));
     setRegeneratingIds((prev) => [...prev, newId]);
+    flashNewCover(newId);
     try {
       const img = await getImageDataUrl();
       const token = getToken();
@@ -926,7 +937,7 @@ export function App() {
     // 一张出图就能马上对它操作——哪怕整批还没跑完（编辑都是「另存为新的一张」，不影响还在生成的）。
     const canAct = !busy && (!!cover.image_url || !!cover.error) && !!plansById[cover.id];
     return (
-      <article key={cover.id} className={cn("result-card", busy && "is-loading")}>
+      <article key={cover.id} data-cover-id={cover.id} className={cn("result-card", busy && "is-loading", flashId === cover.id && "is-flash")}>
         {busy ? (
           <div className="result-loading" style={{ aspectRatio: aspect }}>
             <LoaderCircle className="spin" size={28} />
