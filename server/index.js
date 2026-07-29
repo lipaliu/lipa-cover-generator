@@ -308,11 +308,18 @@ if (!trialAccounts || typeof trialAccounts !== "object") {
       const [user, password, quotaRaw] = entry.split(":");
       const key = String(user || "").toLowerCase();
       if (!key || !password || key === ADMIN_KEY) continue;
-      // quota 写 "admin"（或 max/全部）= 全权限管理员账户：额度无限、不限比例、可进 /admin 后台。
-      const isAdmin = /^(admin|max|全部|全权|全)$/iu.test(String(quotaRaw || "").trim());
-      trialAccounts[key] = isAdmin
-        ? { password, quota: Infinity, admin: true }
-        : { password, quota: Math.max(1, Number(quotaRaw) || 2) };
+      // quota 特殊值：
+      //   "admin"（或 max/全部）= 全权限管理员：无限额度、不限比例、可进 /admin 后台。
+      //   "vip"（或 会员/pro/无限）= 会员：无限额度、不限比例，但进不了后台。
+      //   数字 = 体验账户：只能 3:4，单次最多该数字张。
+      const q = String(quotaRaw || "").trim();
+      if (/^(admin|max|全部|全权|全)$/iu.test(q)) {
+        trialAccounts[key] = { password, quota: Infinity, admin: true };
+      } else if (/^(vip|会员|pro|无限)$/iu.test(q)) {
+        trialAccounts[key] = { password, quota: Infinity, vip: true };
+      } else {
+        trialAccounts[key] = { password, quota: Math.max(1, Number(quotaRaw) || 2) };
+      }
     }
   };
   seedFrom(process.env.ACCESS_ACCOUNTS);
@@ -336,6 +343,7 @@ function accountByKey(key) {
   const t = trialAccounts[key];
   if (!t) return null;
   if (t.admin) return { user: key, role: "admin", quota: Infinity, password: t.password };
+  if (t.vip) return { user: key, role: "vip", quota: Infinity, password: t.password };
   return { user: key, role: "trial", quota: t.quota, password: t.password };
 }
 
@@ -721,7 +729,7 @@ if (ACCESS_PASSWORD) {
     }
     const allAccounts = [
       { user: ADMIN_KEY, role: "admin", quota: Infinity },
-      ...Object.entries(trialAccounts).map(([user, t]) => ({ user, role: "trial", quota: t.quota, password: t.password })),
+      ...Object.entries(trialAccounts).map(([user, t]) => ({ user, role: t.admin ? "admin" : t.vip ? "vip" : "trial", quota: t.quota, password: t.password })),
     ];
     const rows = allAccounts.map((a) => {
       const used = usageOf(a.user);
@@ -731,7 +739,9 @@ if (ACCESS_PASSWORD) {
         <form method="POST" action="/admin/accounts/reset" class="inline"><input type="hidden" name="user" value="${escapeHtml(a.user)}" /><button class="mini">重置用量</button></form>
         <form method="POST" action="/admin/accounts/delete" class="inline" onsubmit="return confirm('删除账户 ${escapeHtml(a.user)}？记录也会清掉')"><input type="hidden" name="user" value="${escapeHtml(a.user)}" /><button class="mini danger">删除</button></form>`;
       const pass = a.role === "admin" ? "······" : escapeHtml(a.password);
-      return `<tr><td><b>${escapeHtml(a.user)}</b></td><td>${a.role === "admin" ? "管理员" : "体验"}</td><td>${pass}</td><td>${used}</td><td>${a.role === "admin" ? "不限" : `${quota} 张/次`}</td><td>${last ? escapeHtml(new Date(last).toLocaleString("zh-CN", { hour12: false })) : "—"}</td><td class="ops">${ops}</td></tr>`;
+      const roleLabel = a.role === "admin" ? "管理员" : a.role === "vip" ? "会员" : "体验";
+      const quotaLabel = a.role === "admin" || a.role === "vip" ? "不限" : `${quota} 张/次`;
+      return `<tr><td><b>${escapeHtml(a.user)}</b></td><td>${roleLabel}</td><td>${pass}</td><td>${used}</td><td>${quotaLabel}</td><td>${last ? escapeHtml(new Date(last).toLocaleString("zh-CN", { hour12: false })) : "—"}</td><td class="ops">${ops}</td></tr>`;
     }).join("");
     const cards = Object.entries(usageStore)
       .flatMap(([user, entry]) => (entry.records || []).map((r) => ({ user, ...r })))
@@ -1667,8 +1677,8 @@ app.post("/api/regenerate", async (req, res) => {
     const sourceMode = normalizeSourceMode(requestedSourceMode);
     const engine = resolveEngine(normalizeEngine(requestedEngineRaw));
     assertEngineAvailable(engine);
-    // 体验账户：单张重生 / 换模型 一次一张（本身就受单次限制），但只能 3:4
-    if (req.accessAccount && req.accessAccount.role !== "admin") {
+    // 体验账户(trial)：单张重生 / 换模型只能 3:4；会员(vip)/管理员(admin) 不限。
+    if (req.accessAccount && req.accessAccount.role === "trial") {
       if (ratio !== "3:4") {
         return res.json({ error: "体验账户只能生成「小红书封面 3:4」。" });
       }
@@ -1770,7 +1780,8 @@ app.post("/api/generate", async (req, res) => {
   // ① 只能生成小红书 3:4；② 单次最多 quota 张（生成完可以再来，但一次不能薅太多）。
   // 单次上限不依赖服务器计数 → 免费服务器重启也不会失效。
   let reservedCount = 0;
-  if (req.accessAccount && req.accessAccount.role !== "admin") {
+  // 只限制「体验账户(trial)」：会员(vip)/管理员(admin) 不限比例、不限张数。
+  if (req.accessAccount && req.accessAccount.role === "trial") {
     if (ratioGroups.some((g) => g.ratio !== "3:4")) {
       return res.status(403).json({ error: "体验账户只能生成「小红书封面 3:4」，请只勾选 3:4 这一个比例。" });
     }

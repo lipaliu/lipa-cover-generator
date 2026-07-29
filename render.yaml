@@ -17,10 +17,11 @@ services:
       - key: FAST_DIRECT_MODE
         value: "1"
       # 账户（随 git 走，私有库安全）。格式：用户名:密码:额度，多个用空格隔开。
-      # 额度写数字 = 体验账户单次最多张数；写 "admin" = 全权限管理员（无限额度、不限比例、可进后台）。
+      # 额度写数字 = 体验账户单次最多张数；"admin" = 全权限管理员（无限、不限比例、可进后台）；
+      # "vip" = 会员（无限、不限比例、但进不了后台）。前端每个比例最多 8 张。
       # 与后台里 ACCESS_ACCOUNTS 合并，不覆盖后台已有的 guest。改这里 push 即生效。
       - key: ACCESS_ACCOUNTS_2
-        value: "guest2:baka2024:4 lipa2:bakaboss8:admin"
+        value: "guest2:baka2024:4 lipa2:bakaboss8:admin tongnan:12345677:vip"
       # —— 下面这些是密钥/口令，请在 Render 网页后台手动填，不要写进仓库 ——
       - key: OPENAI_API_KEY
         sync: false
