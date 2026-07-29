@@ -297,14 +297,22 @@ try {
   trialAccounts = null;
 }
 if (!trialAccounts || typeof trialAccounts !== "object") {
-  // 播种：从环境变量 ACCESS_ACCOUNTS 初始化
+  // 播种：从环境变量初始化体验账户。两个来源合并——
+  //   ACCESS_ACCOUNTS   ：一般在 Render 后台里设（不进 git）。
+  //   ACCESS_ACCOUNTS_2 ：放 render.yaml 里随 git 走（私有库，安全），用于长期维护的体验账户，
+  //                       后者不会覆盖前者已有的用户名。
+  // 免费版磁盘易失，data/accounts.json 每次重启都会丢，所以每次都从这里重新播种（后台改的会还原）。
   trialAccounts = {};
-  for (const entry of String(process.env.ACCESS_ACCOUNTS || "").split(/[\s,]+/u).filter(Boolean)) {
-    const [user, password, quotaRaw] = entry.split(":");
-    const key = String(user || "").toLowerCase();
-    if (!key || !password || key === ADMIN_KEY) continue;
-    trialAccounts[key] = { password, quota: Math.max(1, Number(quotaRaw) || 2) };
-  }
+  const seedFrom = (raw) => {
+    for (const entry of String(raw || "").split(/[\s,]+/u).filter(Boolean)) {
+      const [user, password, quotaRaw] = entry.split(":");
+      const key = String(user || "").toLowerCase();
+      if (!key || !password || key === ADMIN_KEY) continue;
+      trialAccounts[key] = { password, quota: Math.max(1, Number(quotaRaw) || 2) };
+    }
+  };
+  seedFrom(process.env.ACCESS_ACCOUNTS);
+  seedFrom(process.env.ACCESS_ACCOUNTS_2);
 }
 let accountsSaveTimer = null;
 function scheduleAccountsSave() {
