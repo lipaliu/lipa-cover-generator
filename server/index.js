@@ -1527,31 +1527,57 @@ async function generateSeedreamCover({ sourceMode, sourceImages, inspiration, pl
   return `data:image/png;base64,${buf.toString("base64")}`;
 }
 
+// 判断一次失败是否值得重试：只有「重试也不会好」的（内容安全审核 / 额度用尽 / 密钥无效）不重试；
+// 其余（网络抖动、超时、限流 429、5xx、未知）都当临时性，值得再试一次。
+function isTransientError(error) {
+  const raw = [error?.message, error?.cause?.message, error?.cause?.code, error?.code]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+  if (/safety|sexual|nsfw|moderat|request was rejected|violat|insufficient_quota|billing|额度|敏感|审核|违规|invalid_api_key|incorrect api key|unauthorized|\b401\b/u.test(raw)) {
+    return false;
+  }
+  return true;
+}
+
 async function generateByEngine({ openai, engine, sourceMode, sourceImages, imageDescription, inspiration, plan, ratio }) {
   const timeoutMs = imageJobTimeoutMs(engine);
-  if (engine === "image2") {
-    if (!openai) throw new Error("OpenAI client is not configured.");
-    return withTimeout(
-      generateImage2Cover(openai, { sourceMode, sourceImages, imageDescription, inspiration, plan, ratio }),
-      timeoutMs,
-      `${engineLabels[engine]} 单张生成`,
-    );
+  const runOnce = async () => {
+    if (engine === "image2") {
+      if (!openai) throw new Error("OpenAI client is not configured.");
+      return withTimeout(
+        generateImage2Cover(openai, { sourceMode, sourceImages, imageDescription, inspiration, plan, ratio }),
+        timeoutMs,
+        `${engineLabels[engine]} 单张生成`,
+      );
+    }
+    if (engine === "seedance") {
+      return withTimeout(
+        generateSeedanceCover({ sourceMode, sourceImages, imageDescription, inspiration, plan, ratio }),
+        timeoutMs,
+        `${engineLabels[engine]} 单张生成`,
+      );
+    }
+    if (engine === "seedream") {
+      return withTimeout(
+        generateSeedreamCover({ sourceMode, sourceImages, inspiration, plan, ratio }),
+        timeoutMs,
+        `${engineLabels[engine]} 单张生成`,
+      );
+    }
+    throw new Error(`${engineLabels[engine] || engine} is not implemented.`);
+  };
+
+  // 成功的封面一次就出、零额外耗时。只有真的失败、且是临时性错误（限流/网络/超时）的那一张，
+  // 才在短暂缓冲后重试一次——把「批量里偶发失败被静默丢掉」的那几张尽量救回来。
+  try {
+    return await runOnce();
+  } catch (error) {
+    if (!isTransientError(error)) throw error;
+    console.warn(`[Retry] ${engine} 单张临时性失败，1 秒后重试一次：${String(error?.message || error).slice(0, 160)}`);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    return await runOnce();
   }
-  if (engine === "seedance") {
-    return withTimeout(
-      generateSeedanceCover({ sourceMode, sourceImages, imageDescription, inspiration, plan, ratio }),
-      timeoutMs,
-      `${engineLabels[engine]} 单张生成`,
-    );
-  }
-  if (engine === "seedream") {
-    return withTimeout(
-      generateSeedreamCover({ sourceMode, sourceImages, inspiration, plan, ratio }),
-      timeoutMs,
-      `${engineLabels[engine]} 单张生成`,
-    );
-  }
-  throw new Error(`${engineLabels[engine] || engine} is not implemented.`);
 }
 
 app.post("/api/export-cover", async (req, res) => {
