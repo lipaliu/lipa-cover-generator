@@ -1556,6 +1556,23 @@ function isTransientError(error) {
   return true;
 }
 
+// 把生成结果转成 JPEG 再发给前端：封面是"照片 + 大字"，JPEG 高质量画质几乎看不出差别，但体积比
+// PNG 小 5-10 倍——大幅省 Render 出站流量（免费 5GB 能用很久，不再动不动因带宽被暂停）。
+// 转失败或反而更大就退回原图，绝不影响出图。质量默认 90，可用 COVER_JPEG_QUALITY 调。
+async function toJpegDataUrl(dataUrl) {
+  try {
+    const m = /^data:([^;]+);base64,(.*)$/su.exec(String(dataUrl || ""));
+    if (!m) return dataUrl;
+    if (/jpe?g/iu.test(m[1])) return dataUrl; // 已经是 JPEG
+    const quality = envNumber("COVER_JPEG_QUALITY", 90, { min: 60, max: 100 });
+    const srcBuf = Buffer.from(m[2], "base64");
+    const outBuf = await sharp(srcBuf).jpeg({ quality, mozjpeg: true }).toBuffer();
+    return outBuf.length < srcBuf.length ? `data:image/jpeg;base64,${outBuf.toString("base64")}` : dataUrl;
+  } catch {
+    return dataUrl;
+  }
+}
+
 async function generateByEngine({ openai, engine, sourceMode, sourceImages, imageDescription, inspiration, plan, ratio }) {
   const timeoutMs = imageJobTimeoutMs(engine);
   const runOnce = async () => {
@@ -1591,7 +1608,7 @@ async function generateByEngine({ openai, engine, sourceMode, sourceImages, imag
   let lastError;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
-      return await runOnce();
+      return await toJpegDataUrl(await runOnce());
     } catch (error) {
       lastError = error;
       if (!isTransientError(error) || attempt === maxAttempts) throw error;
