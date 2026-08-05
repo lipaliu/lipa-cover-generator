@@ -378,6 +378,16 @@ export function App() {
   // 单张「换某一项」面板：哪张打开、选了哪个维度
   const [swapCoverId, setSwapCoverId] = useState<number | null>(null);
   const [swapDim, setSwapDim] = useState("");
+  // ─── 任务队列：一次摆好多个独立任务（各自底图/标题/设置），排队自动一个接一个跑完，出多组图 ───
+  type QueueTask = {
+    id: string; idBase: number; label: string; payload: Record<string, unknown>;
+    status: "pending" | "running" | "done" | "error"; covers: CoverResult[];
+    plans: Record<number, CoverPlan>; total: number; errorMsg?: string;
+  };
+  const [queue, setQueue] = useState<QueueTask[]>([]);
+  const [queueRunning, setQueueRunning] = useState(false);
+  const queueAbortRef = useRef<AbortController | null>(null);
+  const queueIdBaseRef = useRef(200000); // 队列封面 id 基数（避开单次 1..N 与变体 100000+）
   useEffect(() => {
     fetch("/api/style-options")
       .then((r) => r.json())
@@ -548,12 +558,47 @@ export function App() {
   };
 
   /* ─── Generation ─── */
+  // 把当前所有输入打包成一个生成请求体（单次生成和「任务队列」共用，避免两处漂移）。
+  const collectPayload = (image: string) => ({
+    image: image || undefined,
+    title: title.trim(),
+    subtitle: subtitle.trim(),
+    keywords: keywords.trim(),
+    engine,
+    count: requestedCount,
+    sourceMode,
+    imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
+    inspiration: inspiration.trim() || undefined,
+    elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
+    ratios: selectedRatios.map(([ratio, cnt]) => ({ ratio, count: cnt })),
+    slotEngines: slots.map((_, i) => slotEngines[i] ?? engine),
+    stylePreferences: {
+      imageDominantColor: detectedColor,
+      imagePalette: imageColors,
+      fontIds: lockedFont.length ? lockedFont : undefined,
+      layoutIds: lockedLayout.length ? lockedLayout : undefined,
+      effectIds: lockedEffect.length ? lockedEffect : undefined,
+      colorSchemeIds: lockedColorScheme.length ? lockedColorScheme : undefined,
+      decorationIds: lockedDecoration.length ? lockedDecoration : undefined,
+      compositionIds: lockedComposition.length ? lockedComposition : undefined,
+      moodIds: lockedMood.length ? lockedMood : undefined,
+      textColors: lockedTextColor.length ? lockedTextColor : undefined,
+      smartScene: smartScene || undefined,
+    },
+  });
+  // 校验当前输入是否可以生成；可以则返回 null，否则返回错误文案。
+  const validateInputs = (): string | null => {
+    if (sourceMode === "base" && !imagePreview) return "请先上传底图";
+    if (sourceMode === "elements" && elementImages.length === 0) return "请至少上传一张素材";
+    if (sourceMode === "describe" && !imageDescription.trim()) return "请填写画面描述";
+    if (!title.trim()) return "请先填写标题";
+    if (totalCount === 0) return "请至少选择一种比例和数量";
+    return null;
+  };
+
   const startGenerate = async () => {
-    if (sourceMode === "base" && !imagePreview) { setErrorMessage("请先上传底图"); setRunState("error"); return; }
-    if (sourceMode === "elements" && elementImages.length === 0) { setErrorMessage("请至少上传一张素材"); setRunState("error"); return; }
-    if (sourceMode === "describe" && !imageDescription.trim()) { setErrorMessage("请填写画面描述"); setRunState("error"); return; }
-    if (!title.trim()) { setErrorMessage("请先填写标题"); setRunState("error"); return; }
-    if (totalCount === 0) { setErrorMessage("请至少选择一种比例和数量"); setRunState("error"); return; }
+    const invalid = validateInputs();
+    if (invalid) { setErrorMessage(invalid); setRunState("error"); return; }
 
     // Auth check: local LIPA mode does not require login or credits.
     if (!isLocalLipa && !user && !getToken()) {
@@ -584,33 +629,7 @@ export function App() {
           "Content-Type": "application/json",
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({
-          image: image || undefined,
-          title: title.trim(),
-          subtitle: subtitle.trim(),
-          keywords: keywords.trim(),
-          engine,
-          count,
-          sourceMode,
-          imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
-          inspiration: inspiration.trim() || undefined,
-          elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
-          ratios: selectedRatios.map(([ratio, cnt]) => ({ ratio, count: cnt })),
-          slotEngines: slots.map((_, i) => slotEngines[i] ?? engine),
-          stylePreferences: {
-            imageDominantColor: detectedColor,
-            imagePalette: imageColors,
-            fontIds: lockedFont.length ? lockedFont : undefined,
-            layoutIds: lockedLayout.length ? lockedLayout : undefined,
-            effectIds: lockedEffect.length ? lockedEffect : undefined,
-            colorSchemeIds: lockedColorScheme.length ? lockedColorScheme : undefined,
-            decorationIds: lockedDecoration.length ? lockedDecoration : undefined,
-            compositionIds: lockedComposition.length ? lockedComposition : undefined,
-            moodIds: lockedMood.length ? lockedMood : undefined,
-            textColors: lockedTextColor.length ? lockedTextColor : undefined,
-            smartScene: smartScene || undefined,
-          },
-        }),
+        body: JSON.stringify(collectPayload(image)),
         signal: controller.signal,
       });
 
@@ -707,6 +726,98 @@ export function App() {
     abortRef.current = null;
     setRunState("idle");
   };
+
+  /* ─── 任务队列 ─── */
+  const updateTask = (id: string, updater: (t: QueueTask) => QueueTask) =>
+    setQueue((prev) => prev.map((t) => (t.id === id ? updater(t) : t)));
+
+  // 把「当前这一套配置」存成一个任务，加进队列（不立即生成）。
+  const addToQueue = async () => {
+    const invalid = validateInputs();
+    if (invalid) { setErrorMessage(invalid); setRunState("error"); return; }
+    if (!isLocalLipa && !user && !getToken()) { setShowLogin(true); return; }
+    try {
+      const image = await getImageDataUrl();
+      const payload = collectPayload(image);
+      const idBase = (queueIdBaseRef.current += 1000);
+      setQueue((prev) => [
+        ...prev,
+        { id: `qt-${Date.now()}-${prev.length}`, idBase, label: title.trim() || `任务 ${prev.length + 1}`, payload, status: "pending", covers: [], plans: {}, total: totalCount },
+      ]);
+      setErrorMessage("");
+    } catch (e) {
+      setErrorMessage(e instanceof Error ? e.message : "加入队列失败");
+    }
+  };
+
+  const removeTask = (id: string) => setQueue((prev) => prev.filter((t) => t.id !== id));
+  const clearQueue = () => { if (!queueRunning) setQueue([]); };
+  const removeQueueCover = (taskId: string, coverId: number) =>
+    updateTask(taskId, (t) => ({ ...t, covers: t.covers.filter((c) => c.id !== coverId) }));
+
+  // 跑单个任务：流式把结果写进它自己的分组，封面 id 用 idBase 偏移保证全局唯一。
+  const runOneTask = async (task: QueueTask, signal: AbortSignal) => {
+    updateTask(task.id, (t) => ({ ...t, status: "running", covers: [], errorMsg: undefined }));
+    try {
+      const token = getToken();
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        body: JSON.stringify(task.payload),
+        signal,
+      });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        updateTask(task.id, (t) => ({ ...t, status: "error", errorMsg: data?.error || `失败（${response.status}）` }));
+        return;
+      }
+      const collected: CoverResult[] = [];
+      await readSseStream(response, (event) => {
+        if (event.plans && event.plans.length > 0) {
+          updateTask(task.id, (t) => {
+            const plans = { ...t.plans };
+            for (const p of event.plans as CoverPlan[]) plans[task.idBase + p.id] = { ...p, id: task.idBase + p.id };
+            return { ...t, plans };
+          });
+        }
+        if (event.result) {
+          const uid = task.idBase + event.result.id;
+          const cover = { ...(event.result as CoverResult), id: uid, group: task.label };
+          collected.push(cover);
+          updateTask(task.id, (t) => {
+            const filtered = t.covers.filter((c) => c.id !== uid);
+            return { ...t, covers: [...filtered, cover].sort((a, b) => a.id - b.id) };
+          });
+        }
+        if (event.status === "done") {
+          const final = (event.results || collected)
+            .filter((r) => r.image_url)
+            .map((r) => ({ ...r, id: r.id >= task.idBase ? r.id : task.idBase + r.id, group: task.label } as CoverResult));
+          updateTask(task.id, (t) => ({ ...t, status: "done", covers: final }));
+        }
+      });
+    } catch (e) {
+      if (signal.aborted) { updateTask(task.id, (t) => ({ ...t, status: "pending" })); return; }
+      updateTask(task.id, (t) => ({ ...t, status: "error", errorMsg: e instanceof Error ? e.message : "生成失败" }));
+    }
+  };
+
+  // 排队自动跑：把当前所有「待生成」任务，一个接一个跑完（稳，不会一下涌太多把服务器压垮）。
+  const runQueue = async () => {
+    if (queueRunning) return;
+    const tasks = queue.filter((t) => t.status === "pending");
+    if (tasks.length === 0) return;
+    setQueueRunning(true);
+    const controller = new AbortController();
+    queueAbortRef.current = controller;
+    for (const task of tasks) {
+      if (controller.signal.aborted) break;
+      await runOneTask(task, controller.signal);
+    }
+    queueAbortRef.current = null;
+    setQueueRunning(false);
+  };
+  const stopQueue = () => { queueAbortRef.current?.abort(); queueAbortRef.current = null; setQueueRunning(false); };
 
   // 单张重生：用同一引擎或换一个引擎，另生成一张（原图保留，新的一张追加在后面）。
   const regenerateCover = async (cover: CoverResult, newEngine?: ImageEngine) => {
@@ -1143,10 +1254,45 @@ export function App() {
     );
   };
 
+  // 队列分组里的封面卡：看/放大/下载/收藏/删除（编辑类操作留在单次生成里）。
+  const renderGroupCover = (cover: CoverResult, taskId: string) => {
+    const aspect = ratioAspectCss(cover.ratio);
+    return (
+      <article key={cover.id} data-cover-id={cover.id} className={cn("result-card", flashId === cover.id && "is-flash")}>
+        {cover.image_url ? (
+          <button type="button" className="result-image" style={{ aspectRatio: aspect }} onClick={() => setPreviewCover(cover)}>
+            <img src={cover.image_url} alt={cover.label} />
+            <span className="result-download"><Sparkles size={20} /><small>点击放大</small></span>
+          </button>
+        ) : (
+          <div className="result-loading" style={{ aspectRatio: aspect }}><LoaderCircle className="spin" size={28} /><small>生成中...</small></div>
+        )}
+        {cover.image_url && (
+          <button type="button" className={cn("fav-btn", isFavorited(cover.id) && "is-fav")} title={isFavorited(cover.id) ? "取消收藏" : "收藏这张"} onClick={() => toggleFavorite(cover)}>
+            <Heart size={17} />
+          </button>
+        )}
+        <footer className="result-meta">
+          <span>{cover.ratio ? `${cover.ratio} · ${cover.label}` : cover.label}</span>
+          {cover.engine && <span style={{ fontSize: 11, opacity: 0.65 }}>{engineShortLabel(cover.engine)}</span>}
+        </footer>
+        {cover.image_url && (
+          <div className="result-actions">
+            <button type="button" className="result-act" onClick={() => { void downloadCover(cover); }}><Download size={13} /> 下载</button>
+            <button type="button" className="result-act result-act-del" onClick={() => removeQueueCover(taskId, cover.id)}><Trash2 size={13} /> 删除</button>
+          </div>
+        )}
+      </article>
+    );
+  };
+
   // 失败的封面不显示（cover.error 的直接过滤掉，只保留成功或正在生成/重生的）。
   const verticalResults = results.filter((r) => !isLandscapeRatio(r.ratio) && !r.error);
   const horizontalResults = results.filter((r) => isLandscapeRatio(r.ratio) && !r.error);
   const doneCount = results.filter((r) => r.image_url).length;
+  const queuePending = queue.filter((t) => t.status === "pending").length;
+  const taskStatusText = (s: QueueTask["status"]) =>
+    s === "pending" ? "待生成" : s === "running" ? "生成中…" : s === "done" ? "已完成" : "失败";
 
   /* ─── Render ─── */
   return (
@@ -1987,6 +2133,61 @@ export function App() {
               <div className="gen-error"><p>{errorMessage}</p></div>
             )}
 
+            {/* 任务队列：摆好多个任务，排队自动一个接一个跑完 */}
+            {queue.length > 0 && (
+              <div className="queue-panel">
+                <div className="queue-head">
+                  <strong>任务队列（{queue.length}）</strong>
+                  <div className="queue-head-actions">
+                    {!queueRunning ? (
+                      <>
+                        <button type="button" className="generate-btn" style={{ width: "auto" }} disabled={queuePending === 0} onClick={() => { void runQueue(); }}>
+                          <Sparkles size={18} /> 开始排队生成（{queuePending} 个待生成）
+                        </button>
+                        <button type="button" className="stop-btn" style={{ width: "auto" }} onClick={clearQueue}>清空</button>
+                      </>
+                    ) : (
+                      <button type="button" className="stop-btn" style={{ width: "auto" }} onClick={stopQueue}>
+                        <Square size={16} /> 停止排队
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <div className="queue-list">
+                  {queue.map((t, i) => (
+                    <div key={t.id} className={cn("queue-chip", `is-${t.status}`)}>
+                      <span className="queue-chip-idx">{i + 1}</span>
+                      <span className="queue-chip-label" title={t.label}>{t.label}</span>
+                      <span className="queue-chip-meta">
+                        {t.total}张 · {taskStatusText(t.status)}
+                        {t.status === "error" && t.errorMsg ? `（${t.errorMsg}）` : ""}
+                        {t.status === "running" ? ` ${t.covers.filter((c) => c.image_url).length}/${t.total}` : ""}
+                      </span>
+                      {!queueRunning && t.status !== "running" && (
+                        <button type="button" className="queue-chip-del" title="移除" onClick={() => removeTask(t.id)}>×</button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 队列分组结果：每个出了图的任务显示成一组 */}
+            {queue.filter((t) => t.covers.length > 0).map((t) => {
+              const vs = t.covers.filter((c) => !isLandscapeRatio(c.ratio));
+              const hs = t.covers.filter((c) => isLandscapeRatio(c.ratio));
+              return (
+                <div key={`grp-${t.id}`} className="task-group">
+                  <div className="task-group-head">
+                    <strong>{t.label}</strong>
+                    <span>{t.covers.filter((c) => c.image_url).length} 张 · {taskStatusText(t.status)}</span>
+                  </div>
+                  {vs.length > 0 && <div className="results-grid is-vertical">{vs.map((c) => renderGroupCover(c, t.id))}</div>}
+                  {hs.length > 0 && <div className="results-grid is-horizontal">{hs.map((c) => renderGroupCover(c, t.id))}</div>}
+                </div>
+              );
+            })}
+
             {downloadStatus && (
               <div className="download-note">
                 <Download size={16} />
@@ -2010,11 +2211,16 @@ export function App() {
               </>
             )}
 
-            {!isGenerating && runState !== "done" && (
-              <button type="button" className="generate-btn" onClick={startGenerate}>
-                <Sparkles size={20} />
-                开始生成封面（{totalCount}张）
-              </button>
+            {!isGenerating && !queueRunning && runState !== "done" && (
+              <div className="gen-actions" style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "stretch" }}>
+                <button type="button" className="generate-btn" style={{ flex: 1, minWidth: 200 }} onClick={startGenerate}>
+                  <Sparkles size={20} />
+                  开始生成（{totalCount}张）
+                </button>
+                <button type="button" className="stop-btn" style={{ width: "auto" }} title="把当前这套配置存成一个任务，稍后一起排队生成" onClick={() => { void addToQueue(); }}>
+                  ＋ 加入队列
+                </button>
+              </div>
             )}
             {isGenerating && (
               <button type="button" className="stop-btn" onClick={stopGenerate}>

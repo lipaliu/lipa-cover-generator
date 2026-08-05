@@ -10,6 +10,7 @@ export type CoverResult = {
   error?: string;
   engine?: ImageEngine;
   ratio?: string;
+  group?: string; // 任务队列里所属任务的名称（用于分组显示）
 };
 
 export type CoverPlan = {

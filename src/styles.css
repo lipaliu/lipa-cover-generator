@@ -2334,6 +2334,47 @@ h1, h2, h3, p, span, strong, small, label {
 .tc-picked-chip:hover { border-color: var(--accent); }
 .tc-picked-chip i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid rgba(255,255,255,0.7); }
 
+/* —— 任务队列 —— */
+.queue-panel {
+  margin: 8px 0 16px;
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.24));
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+.queue-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.queue-head strong { font-size: 15px; color: var(--ink-primary); }
+.queue-head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.queue-list { display: flex; flex-direction: column; gap: 8px; }
+.queue-chip {
+  display: flex; align-items: center; gap: 10px;
+  padding: 8px 12px; border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55); border: 1px solid var(--glass-brd);
+}
+.queue-chip.is-running { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
+.queue-chip.is-done { border-color: rgba(46, 122, 86, 0.5); }
+.queue-chip.is-error { border-color: rgba(179, 64, 47, 0.5); background: rgba(255, 236, 232, 0.5); }
+.queue-chip-idx {
+  flex: none; width: 22px; height: 22px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 12px; font-weight: 700; color: #fff; background: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+.queue-chip-label { font-weight: 600; color: var(--ink-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+.queue-chip-meta { font-size: 12.5px; color: var(--ink-tertiary); margin-left: auto; }
+.queue-chip-del {
+  flex: none; width: 22px; height: 22px; border-radius: 50%; border: none; cursor: pointer;
+  font-size: 16px; line-height: 1; color: var(--ink-tertiary); background: rgba(0, 0, 0, 0.06);
+}
+.queue-chip-del:hover { background: rgba(200, 40, 60, 0.15); color: #b3402f; }
+.task-group { margin: 16px 0; }
+.task-group-head {
+  display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px;
+  padding-bottom: 6px; border-bottom: 1px solid var(--glass-brd);
+}
+.task-group-head strong { font-size: 16px; color: var(--ink-primary); }
+.task-group-head span { font-size: 12.5px; color: var(--ink-tertiary); }
+
 /* 「可多选」小提示，贴在维度标题后面 */
 .pv-multi {
   margin-left: 8px;
