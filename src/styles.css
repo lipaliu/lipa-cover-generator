@@ -2334,6 +2334,24 @@ h1, h2, h3, p, span, strong, small, label {
 .tc-picked-chip:hover { border-color: var(--accent); }
 .tc-picked-chip i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; border: 1px solid rgba(255,255,255,0.7); }
 
+/* 底部导航「＋加入队列」按钮 */
+.nav-queue {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent, #0e7c86);
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.6), rgba(255, 255, 255, 0.32));
+  border: 1px solid var(--accent, #0e7c86);
+  cursor: pointer;
+  transition: filter 0.18s ease, transform 0.18s ease;
+}
+.nav-queue:hover:not(:disabled) { filter: brightness(1.05); transform: translateY(-1px); }
+.nav-queue:disabled { opacity: 0.4; cursor: not-allowed; }
+
 /* —— 任务队列 —— */
 .queue-panel {
   margin: 8px 0 16px;

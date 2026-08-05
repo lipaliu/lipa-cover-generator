@@ -807,6 +807,7 @@ export function App() {
     if (queueRunning) return;
     const tasks = queue.filter((t) => t.status === "pending");
     if (tasks.length === 0) return;
+    setStep(4); // 跳到「生成」页，边跑边看每组图出来
     setQueueRunning(true);
     const controller = new AbortController();
     queueAbortRef.current = controller;
@@ -1293,6 +1294,44 @@ export function App() {
   const queuePending = queue.filter((t) => t.status === "pending").length;
   const taskStatusText = (s: QueueTask["status"]) =>
     s === "pending" ? "待生成" : s === "running" ? "生成中…" : s === "done" ? "已完成" : "失败";
+  // 任务队列面板（步骤条下方全程可见）：每个任务一张卡，显示到哪一步了。
+  const queuePanel = queue.length > 0 ? (
+    <div className="queue-panel">
+      <div className="queue-head">
+        <strong>任务队列（{queue.length}）· 每个任务 = 一个独立项目</strong>
+        <div className="queue-head-actions">
+          {!queueRunning ? (
+            <>
+              <button type="button" className="generate-btn" style={{ width: "auto" }} disabled={queuePending === 0} onClick={() => { void runQueue(); }}>
+                <Sparkles size={18} /> 开始排队生成（{queuePending} 个待生成）
+              </button>
+              <button type="button" className="stop-btn" style={{ width: "auto" }} onClick={clearQueue}>清空</button>
+            </>
+          ) : (
+            <button type="button" className="stop-btn" style={{ width: "auto" }} onClick={stopQueue}>
+              <Square size={16} /> 停止排队
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="queue-list">
+        {queue.map((t, i) => (
+          <div key={t.id} className={cn("queue-chip", `is-${t.status}`)}>
+            <span className="queue-chip-idx">{i + 1}</span>
+            <span className="queue-chip-label" title={t.label}>{t.label}</span>
+            <span className="queue-chip-meta">
+              {t.total}张 · {taskStatusText(t.status)}
+              {t.status === "error" && t.errorMsg ? `（${t.errorMsg}）` : ""}
+              {t.status === "running" ? ` ${t.covers.filter((c) => c.image_url).length}/${t.total}` : ""}
+            </span>
+            {!queueRunning && t.status !== "running" && (
+              <button type="button" className="queue-chip-del" title="移除" onClick={() => removeTask(t.id)}>×</button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  ) : null;
 
   /* ─── Render ─── */
   return (
@@ -1483,6 +1522,9 @@ export function App() {
         ))}
         <div className="step-line" style={{ "--progress": `${((step - 1) / 3) * 100}%` } as CSSProperties} />
       </nav>
+
+      {/* 任务队列：步骤条下方，全程可见（每个任务=一个独立项目，能看到排到哪、跑到哪） */}
+      {queuePanel}
 
       {/* Step Content */}
       <section className={cn("step-content", step === 4 && results.length > 0 && "is-wide")}>
@@ -2133,46 +2175,7 @@ export function App() {
               <div className="gen-error"><p>{errorMessage}</p></div>
             )}
 
-            {/* 任务队列：摆好多个任务，排队自动一个接一个跑完 */}
-            {queue.length > 0 && (
-              <div className="queue-panel">
-                <div className="queue-head">
-                  <strong>任务队列（{queue.length}）</strong>
-                  <div className="queue-head-actions">
-                    {!queueRunning ? (
-                      <>
-                        <button type="button" className="generate-btn" style={{ width: "auto" }} disabled={queuePending === 0} onClick={() => { void runQueue(); }}>
-                          <Sparkles size={18} /> 开始排队生成（{queuePending} 个待生成）
-                        </button>
-                        <button type="button" className="stop-btn" style={{ width: "auto" }} onClick={clearQueue}>清空</button>
-                      </>
-                    ) : (
-                      <button type="button" className="stop-btn" style={{ width: "auto" }} onClick={stopQueue}>
-                        <Square size={16} /> 停止排队
-                      </button>
-                    )}
-                  </div>
-                </div>
-                <div className="queue-list">
-                  {queue.map((t, i) => (
-                    <div key={t.id} className={cn("queue-chip", `is-${t.status}`)}>
-                      <span className="queue-chip-idx">{i + 1}</span>
-                      <span className="queue-chip-label" title={t.label}>{t.label}</span>
-                      <span className="queue-chip-meta">
-                        {t.total}张 · {taskStatusText(t.status)}
-                        {t.status === "error" && t.errorMsg ? `（${t.errorMsg}）` : ""}
-                        {t.status === "running" ? ` ${t.covers.filter((c) => c.image_url).length}/${t.total}` : ""}
-                      </span>
-                      {!queueRunning && t.status !== "running" && (
-                        <button type="button" className="queue-chip-del" title="移除" onClick={() => removeTask(t.id)}>×</button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 队列分组结果：每个出了图的任务显示成一组 */}
+            {/* 队列分组结果：每个出了图的任务显示成一组（任务队列面板已移到步骤条下方，全程可见） */}
             {queue.filter((t) => t.covers.length > 0).map((t) => {
               const vs = t.covers.filter((c) => !isLandscapeRatio(c.ratio));
               const hs = t.covers.filter((c) => isLandscapeRatio(c.ratio));
@@ -2254,6 +2257,17 @@ export function App() {
           <ArrowLeft size={18} />
           上一步
         </button>
+        {!queueRunning && (
+          <button
+            type="button"
+            className="nav-queue"
+            title="把当前这套配置（底图/标题/风格/比例）存成一个任务，加进队列；可以摆好多个再一起排队生成"
+            disabled={!!validateInputs()}
+            onClick={() => { void addToQueue(); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+          >
+            ＋ 加入队列{queue.length > 0 ? `（已 ${queue.length}）` : ""}
+          </button>
+        )}
         {step < 4 ? (
           <div className="step-nav-next-group">
             {!canProceed(step) && (
