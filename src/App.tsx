@@ -388,6 +388,13 @@ export function App() {
   const [queueRunning, setQueueRunning] = useState(false);
   // 少出图时的说明（比如底图被安全系统拒了）——不再让失败的封面悄悄消失、用户干瞪眼。
   const [shortfallNote, setShortfallNote] = useState<string | null>(null);
+  // 多选批量编辑：勾选多张，一起收藏/下载/删除/重生/调整（历史记录里的也能改）。
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [batchSwapDim, setBatchSwapDim] = useState<string>("");
+  const toggleSelected = (id: number) =>
+    setSelectedIds((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const clearSelection = () => { setSelectedIds(new Set()); setBatchSwapDim(""); };
   const queueAbortRef = useRef<AbortController | null>(null);
   const queueIdBaseRef = useRef(200000); // 队列封面 id 基数（避开单次 1..N 与变体 100000+）
   useEffect(() => {
@@ -839,32 +846,34 @@ export function App() {
   // 单张重生：用同一引擎或换一个引擎，另生成一张（原图保留，新的一张追加在后面）。
   const regenerateCover = async (cover: CoverResult, newEngine?: ImageEngine) => {
     const plan = plansById[cover.id];
-    if (!plan) {
-      setDownloadStatus({ filename: "", message: "这张缺少方案数据（可能来自历史记录），请整批重新生成后再单张重生。" });
+    // 没有完整方案（比如来自历史记录）时，用组合键重建——一样能重生。
+    if (!plan && !cover.combination) {
+      setDownloadStatus({ filename: "", message: "这张缺少方案数据，无法重生。" });
       return;
     }
     const useEngine: ImageEngine = newEngine || cover.engine || engine;
     const newId = nextVariantId();
-    setPlansById((prev) => ({ ...prev, [newId]: plan }));
+    if (plan) setPlansById((prev) => ({ ...prev, [newId]: plan }));
     setResults((prev) => insertAfter(prev, cover.id, { id: newId, combination: cover.combination, label: cover.label, ratio: cover.ratio, engine: useEngine }));
     setRegeneratingIds((prev) => [...prev, newId]);
     flashNewCover(newId);
     try {
       const img = await getImageDataUrl();
       const token = getToken();
+      const body = plan
+        ? { plan, ratio: cover.ratio, engine: useEngine, sourceMode, image: img || undefined,
+            elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
+            imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
+            inspiration: inspiration.trim() || undefined }
+        : { rebuild: { combination: cover.combination, title: title.trim(), subtitle: subtitle.trim(), smartScene: smartScene || undefined, id: newId },
+            ratio: cover.ratio, engine: useEngine, sourceMode, image: img || undefined,
+            elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
+            imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
+            inspiration: inspiration.trim() || undefined };
       const response = await fetch("/api/regenerate", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({
-          plan,
-          ratio: cover.ratio,
-          engine: useEngine,
-          sourceMode,
-          image: img || undefined,
-          elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
-          imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
-          inspiration: inspiration.trim() || undefined,
-        }),
+        body: JSON.stringify(body),
         signal: abortRef.current?.signal,
       });
       const data = (await response.json().catch(() => ({ error: "重生失败" }))) as CoverResult;
@@ -892,33 +901,34 @@ export function App() {
   // 同款别的比例：用同一方案（样式不变），额外生成一张别的比例的图，作为新的一张加进结果。
   const generateAnotherRatio = async (cover: CoverResult, newRatio: AspectRatio) => {
     const plan = plansById[cover.id];
-    if (!plan) {
+    if (!plan && !cover.combination) {
       setDownloadStatus({ filename: "", message: "这张缺少方案数据，无法出同款别的比例。" });
       return;
     }
     setRatioPickerFor(null);
     const newId = nextVariantId();
     const useEngine: ImageEngine = cover.engine || engine;
-    setPlansById((prev) => ({ ...prev, [newId]: plan }));
+    if (plan) setPlansById((prev) => ({ ...prev, [newId]: plan }));
     setResults((prev) => insertAfter(prev, cover.id, { id: newId, combination: cover.combination, label: cover.label, ratio: newRatio, engine: useEngine }));
     setRegeneratingIds((prev) => [...prev, newId]);
     flashNewCover(newId);
     try {
       const img = await getImageDataUrl();
       const token = getToken();
+      const body = plan
+        ? { plan, ratio: newRatio, engine: useEngine, sourceMode, image: img || undefined,
+            elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
+            imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
+            inspiration: inspiration.trim() || undefined }
+        : { rebuild: { combination: cover.combination, title: title.trim(), subtitle: subtitle.trim(), smartScene: smartScene || undefined, id: newId },
+            ratio: newRatio, engine: useEngine, sourceMode, image: img || undefined,
+            elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
+            imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
+            inspiration: inspiration.trim() || undefined };
       const response = await fetch("/api/regenerate", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        body: JSON.stringify({
-          plan,
-          ratio: newRatio,
-          engine: useEngine,
-          sourceMode,
-          image: img || undefined,
-          elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
-          imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
-          inspiration: inspiration.trim() || undefined,
-        }),
+        body: JSON.stringify(body),
         signal: abortRef.current?.signal,
       });
       const data = (await response.json().catch(() => ({ error: "生成失败" }))) as CoverResult;
@@ -990,6 +1000,19 @@ export function App() {
       setRegeneratingIds((prev) => prev.filter((id) => id !== newId));
     }
   };
+
+  // ─── 多选批量操作：对所有勾选的封面一起执行 ───
+  const selectedCovers = () => results.filter((c) => selectedIds.has(c.id) && c.image_url);
+  const batchFavorite = async () => { for (const c of selectedCovers()) if (!isFavorited(c.id)) await toggleFavorite(c); };
+  const batchDownload = async () => { for (const c of selectedCovers()) await downloadCover(c); };
+  const batchDelete = () => {
+    setResults((prev) => prev.filter((c) => !selectedIds.has(c.id)));
+    setPlansById((prev) => { const n = { ...prev }; selectedIds.forEach((id) => delete n[id]); return n; });
+    clearSelection();
+  };
+  // 批量重生 / 批量调整：逐张顺序执行（稳，不一下涌太多）；每张都「另存为新的一张」，原图保留。
+  const batchRegenerate = async () => { const list = selectedCovers(); clearSelection(); for (const c of list) await regenerateCover(c); };
+  const batchAdjust = async (dim: string, optId: string) => { const list = selectedCovers(); setBatchSwapDim(""); clearSelection(); for (const c of list) await regenerateRebuild(c, { swap: { dimension: dim, optionId: optId } }); };
 
   // 维度字母 → 选项列表 / 中文名（单张调整面板用）
   const dimOptionsOf = (dim: string): StyleOpt =>
@@ -1123,18 +1146,25 @@ export function App() {
     const aspect = ratioAspectCss(cover.ratio);
     const busy = regeneratingIds.includes(cover.id);
     // 一张出图就能马上对它操作——哪怕整批还没跑完（编辑都是「另存为新的一张」，不影响还在生成的）。
-    const canAct = !busy && (!!cover.image_url || !!cover.error) && !!plansById[cover.id];
+    // 有完整方案(plansById) 或 有组合键(combination，历史记录里也有) 都能编辑。
+    const canAct = !busy && (!!cover.image_url || !!cover.error) && (!!plansById[cover.id] || !!cover.combination);
+    const selected = selectedIds.has(cover.id);
     return (
-      <article key={cover.id} data-cover-id={cover.id} className={cn("result-card", busy && "is-loading", flashId === cover.id && "is-flash")}>
+      <article key={cover.id} data-cover-id={cover.id} className={cn("result-card", busy && "is-loading", flashId === cover.id && "is-flash", selectMode && selected && "is-selected")}>
+        {selectMode && cover.image_url && (
+          <button type="button" className={cn("select-check", selected && "is-on")} title={selected ? "取消选择" : "选择这张"} onClick={() => toggleSelected(cover.id)}>
+            {selected ? <Check size={15} /> : null}
+          </button>
+        )}
         {busy ? (
           <div className="result-loading" style={{ aspectRatio: aspect }}>
             <LoaderCircle className="spin" size={28} />
             <small>重新生成中...</small>
           </div>
         ) : cover.image_url ? (
-          <button type="button" className="result-image" style={{ aspectRatio: aspect }} onClick={() => setPreviewCover(cover)}>
+          <button type="button" className="result-image" style={{ aspectRatio: aspect }} onClick={() => selectMode ? toggleSelected(cover.id) : setPreviewCover(cover)}>
             <img src={cover.image_url} alt={cover.label} />
-            <span className="result-download"><Sparkles size={20} /><small>点击放大</small></span>
+            <span className="result-download">{selectMode ? <><Check size={20} /><small>{selected ? "已选" : "点击选择"}</small></> : <><Sparkles size={20} /><small>点击放大</small></>}</span>
           </button>
         ) : cover.error ? (
           <div className="result-error" style={{ aspectRatio: aspect }}><p>{cover.error}</p></div>
@@ -2225,6 +2255,47 @@ export function App() {
 
             {results.length > 0 && (
               <>
+                {/* 多选批量编辑工具条 */}
+                <div className="batch-toolbar">
+                  <button type="button" className={cn("batch-toggle", selectMode && "is-on")} onClick={() => { setSelectMode((v) => !v); clearSelection(); }}>
+                    {selectMode ? "退出多选" : "☑ 多选批量改"}
+                  </button>
+                  {selectMode && (
+                    <>
+                      <span className="batch-count">已选 {selectedIds.size} 张</span>
+                      <button type="button" className="batch-act" onClick={() => setSelectedIds(new Set(results.filter((c) => c.image_url).map((c) => c.id)))}>全选</button>
+                      <button type="button" className="batch-act" onClick={clearSelection} disabled={selectedIds.size === 0}>清空</button>
+                      {selectedIds.size > 0 && (
+                        <>
+                          <span className="batch-sep" />
+                          <button type="button" className="batch-act" onClick={() => { void batchFavorite(); }}><Heart size={13} /> 收藏</button>
+                          <button type="button" className="batch-act" onClick={() => { void batchDownload(); }}><Download size={13} /> 下载</button>
+                          <button type="button" className="batch-act" onClick={() => { void batchRegenerate(); }}><RotateCw size={13} /> 重生</button>
+                          <button type="button" className={cn("batch-act", batchSwapDim && "is-on")} onClick={() => setBatchSwapDim(batchSwapDim ? "" : "PICK")}>调整…</button>
+                          <button type="button" className="batch-act batch-del" onClick={batchDelete}><Trash2 size={13} /> 删除</button>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
+                {/* 批量调整：先选维度，再选具体项，应用到所有选中 */}
+                {selectMode && batchSwapDim && selectedIds.size > 0 && (
+                  <div className="batch-adjust">
+                    <span className="rrp-hint">把选中的 {selectedIds.size} 张一起换：</span>
+                    <div className="rrp-chips">
+                      {SWAP_DIMS.filter((sd) => sd.d !== "COLOR").map((sd) => (
+                        <button key={sd.d} type="button" className={cn("result-act", batchSwapDim === sd.d && "is-cur")} onClick={() => setBatchSwapDim(sd.d)}>{sd.n}</button>
+                      ))}
+                    </div>
+                    {batchSwapDim !== "PICK" && (
+                      <div className="rrp-chips">
+                        {dimOptionsOf(batchSwapDim).map((o) => (
+                          <button key={o.id} type="button" className="result-act" title={`选中的全部换成「${o.name}」`} onClick={() => { void batchAdjust(batchSwapDim, o.id); }}>{o.name}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {verticalResults.length > 0 && (
                   <div className="results-grid is-vertical">{verticalResults.map(renderCard)}</div>
                 )}

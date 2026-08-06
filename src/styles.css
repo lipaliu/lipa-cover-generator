@@ -1231,6 +1231,43 @@ input, select, textarea { color: inherit; }
 .fav-btn.is-fav { color: #ff4d6d; background: rgba(255, 255, 255, 0.92); border-color: #ff4d6d; }
 .fav-btn.is-fav svg { fill: #ff4d6d; }
 .brand-home { border: none; background: none; padding: 0; cursor: pointer; }
+/* 多选批量编辑 */
+.result-card.is-selected { outline: 3px solid var(--accent, #0e7c86); outline-offset: -1px; }
+.select-check {
+  position: absolute; top: 8px; left: 8px; z-index: 3;
+  width: 26px; height: 26px; border-radius: 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #fff; background: rgba(20, 20, 30, 0.45);
+  border: 2px solid #fff; cursor: pointer;
+}
+.select-check.is-on { background: var(--accent, #0e7c86); border-color: var(--accent, #0e7c86); }
+.batch-toolbar {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px;
+  margin: 8px 0 12px; padding: 8px 10px; border-radius: 12px;
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.24));
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+.batch-toggle {
+  font-size: 13px; font-weight: 700; padding: 7px 14px; border-radius: 999px; cursor: pointer;
+  color: var(--accent, #0e7c86); background: rgba(255, 255, 255, 0.6); border: 1px solid var(--accent, #0e7c86);
+}
+.batch-toggle.is-on { color: #fff; background: var(--accent, #0e7c86); }
+.batch-count { font-size: 13px; font-weight: 600; color: var(--ink-primary); }
+.batch-sep { width: 1px; height: 20px; background: var(--glass-brd); margin: 0 2px; }
+.batch-act {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12.5px; font-weight: 600; padding: 6px 11px; border-radius: 999px; cursor: pointer;
+  color: var(--ink-primary); background: rgba(255, 255, 255, 0.6); border: 1px solid var(--glass-brd);
+}
+.batch-act:hover:not(:disabled) { border-color: var(--accent, #0e7c86); }
+.batch-act:disabled { opacity: 0.4; cursor: not-allowed; }
+.batch-act.is-on { color: #fff; background: var(--accent, #0e7c86); border-color: var(--accent, #0e7c86); }
+.batch-act.batch-del { color: #b3402f; border-color: rgba(179, 64, 47, 0.35); }
+.batch-adjust {
+  display: flex; flex-direction: column; gap: 8px;
+  margin: 0 0 12px; padding: 12px 14px; border-radius: 12px;
+  background: rgba(14, 124, 134, 0.06); border: 1px solid rgba(14, 124, 134, 0.25);
+}
 /* 收藏夹面板 */
 .fav-summary { margin-bottom: 16px; }
 .fav-summary-title { display: block; font-size: 13px; font-weight: 600; color: var(--ink-secondary); margin-bottom: 8px; }
