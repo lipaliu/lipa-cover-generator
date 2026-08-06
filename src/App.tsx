@@ -386,6 +386,8 @@ export function App() {
   };
   const [queue, setQueue] = useState<QueueTask[]>([]);
   const [queueRunning, setQueueRunning] = useState(false);
+  // 少出图时的说明（比如底图被安全系统拒了）——不再让失败的封面悄悄消失、用户干瞪眼。
+  const [shortfallNote, setShortfallNote] = useState<string | null>(null);
   const queueAbortRef = useRef<AbortController | null>(null);
   const queueIdBaseRef = useRef(200000); // 队列封面 id 基数（避开单次 1..N 与变体 100000+）
   useEffect(() => {
@@ -613,6 +615,7 @@ export function App() {
     abortRef.current = controller;
     setRunState("analyzing");
     setErrorMessage("");
+    setShortfallNote(null);
     setResults([]);
     setPlansById({});
     setRegeneratingIds([]);
@@ -682,13 +685,26 @@ export function App() {
           });
         }
         if (event.status === "done") {
-          // 只保留成功出图的：失败/未返回的直接不显示（少一张就少一张，不弹错误原因）。
+          // 只保留成功出图的；失败的封面本身不显示，但要在下面给个总的说明（别让用户干瞪眼）。
           const final = (event.results || collected).filter((r) => r.image_url);
           // 但要保住用户在批量还没跑完时就动手编辑出的「新变体」卡片（id 从 VARIANT_ID_BASE 起）。
           setResults((prev) => {
             const variants = prev.filter((r) => r.id >= VARIANT_ID_BASE);
             return [...final, ...variants].sort((a, b) => a.id - b.id);
           });
+          // 少出图时给原因说明：安全审核拒图（换图/换引擎）还是网络波动（重试）。
+          const shortfall = (event.total || count) - final.length;
+          if (shortfall > 0) {
+            const errText = (event.results || collected).filter((r) => r.error).map((r) => r.error || "").join(" ");
+            const isSafety = /安全系统|safety|sexual|敏感|审核|rejected|violat/iu.test(errText);
+            setShortfallNote(
+              isSafety
+                ? `这次少出了 ${shortfall} 张：你这张底图被 ${engine === "image2" ? "OpenAI(Image2)" : "生成平台"} 的安全系统判为敏感、拒掉了（常见误判）。建议换一张更"干净/正常"的底图，或把引擎切到 Seedream 再试——多半就都能出。`
+                : `这次少出了 ${shortfall} 张（多半是网络波动）。可点"再生成一批"，或对缺的那几张单独重生。`,
+            );
+          } else {
+            setShortfallNote(null);
+          }
           setProgress(event.total || count);
           setRunState("done");
           if (final.length > 0) {
@@ -2173,6 +2189,10 @@ export function App() {
 
             {runState === "error" && errorMessage && (
               <div className="gen-error"><p>{errorMessage}</p></div>
+            )}
+
+            {shortfallNote && runState === "done" && (
+              <div className="shortfall-note"><p>ℹ️ {shortfallNote}</p></div>
             )}
 
             {/* 队列分组结果：每个出了图的任务显示成一组（任务队列面板已移到步骤条下方，全程可见） */}

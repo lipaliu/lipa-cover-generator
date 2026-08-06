@@ -1148,6 +1148,15 @@ input, select, textarea { color: inherit; }
   font-size: 14px;
   color: var(--error);
 }
+/* 少出图说明：不是报错红，用温和的琥珀色信息条 */
+.shortfall-note {
+  margin: 10px 0 4px;
+  padding: 13px 16px;
+  background: rgba(245, 178, 60, 0.12);
+  border: 1px solid rgba(245, 178, 60, 0.4);
+  border-radius: var(--radius-md);
+}
+.shortfall-note p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--ink-primary); }
 
 .download-note {
   display: flex;
