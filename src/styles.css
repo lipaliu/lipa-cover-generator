@@ -2296,6 +2296,15 @@ h1, h2, h3, p, span, strong, small, label {
 }
 .rrp-hint { font-size: 11px; color: var(--ink-tertiary); }
 .rrp-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+/* 已经选了要改的维度/选项（待应用）：绿色打钩感 */
+.result-act.has-pick { border-color: var(--accent, #0e7c86); box-shadow: 0 0 0 2px rgba(14, 124, 134, 0.22); }
+.rrp-apply {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  margin-top: 8px; padding-top: 8px; border-top: 1px dashed var(--glass-brd);
+}
+.rrp-apply-summary { font-size: 12px; color: var(--ink-secondary); flex: 1; min-width: 140px; }
+.rrp-apply .result-act-ratio { background: var(--accent, #0e7c86); color: #fff; border-color: var(--accent, #0e7c86); font-weight: 700; }
+.rrp-apply .result-act-ratio:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* —— 风格定制（字体 / 色彩风格 / 字体颜色）—— */
 .style-custom {

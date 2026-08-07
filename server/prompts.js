@@ -359,14 +359,20 @@ export function fallbackPlans({ analysis, title, subtitle, count, keywords, rati
 }
 
 // 按组合键重建单个方案，可替换其中一个维度（单张「换字体/换风格/换配色/换字色」用）。
-export function rebuildPlanFromKey({ combinationKey, swap, analysis, title, subtitle, ratio = "", textColor = "", smartScene = false }) {
+export function rebuildPlanFromKey({ combinationKey, swap, swaps, analysis, title, subtitle, ratio = "", textColor = "", smartScene = false }) {
   const combo = comboFromKey(combinationKey);
   if (!combo) return null;
-  if (swap?.dimension && swap?.optionId) {
-    const opt = dimensionOption(swap.dimension, swap.optionId);
-    if (!opt) return null;
-    combo[String(swap.dimension).toLowerCase()] = opt;
-    combo.key = ["a", "b", "c", "d", "e", "f", "g"].map((k) => combo[k].id).join("+");
+  // 一次换多个维度：swaps 数组 [{dimension, optionId}, ...]（字体+配色+构图…一起改）；兼容旧的单个 swap。
+  const list = Array.isArray(swaps) ? [...swaps] : [];
+  if (swap?.dimension && swap?.optionId) list.push(swap);
+  let changed = false;
+  for (const s of list) {
+    if (!s?.dimension || !s?.optionId) continue;
+    const opt = dimensionOption(s.dimension, s.optionId);
+    if (!opt) continue;
+    combo[String(s.dimension).toLowerCase()] = opt;
+    changed = true;
   }
+  if (changed) combo.key = ["a", "b", "c", "d", "e", "f", "g"].map((k) => combo[k].id).join("+");
   return planFromCombo(combo, { analysis, title, subtitle, ratio, textColor, id: 1, smartScene });
 }

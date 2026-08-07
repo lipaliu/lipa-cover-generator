@@ -1679,6 +1679,7 @@ app.post("/api/regenerate", async (req, res) => {
       plan = rebuildPlanFromKey({
         combinationKey: rebuild.combination,
         swap: rebuild.swap,
+        swaps: Array.isArray(rebuild.swaps) ? rebuild.swaps : undefined,
         analysis: fallbackAnalysis,
         title: String(rebuild.title || ""),
         subtitle: String(rebuild.subtitle || ""),

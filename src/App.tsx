@@ -378,6 +378,9 @@ export function App() {
   // 单张「换某一项」面板：哪张打开、选了哪个维度
   const [swapCoverId, setSwapCoverId] = useState<number | null>(null);
   const [swapDim, setSwapDim] = useState("");
+  // 「调整」面板：累积要同时换的多个维度（维度字母 → 选项id）+ 字色，最后一起「应用」。
+  const [pendingSwaps, setPendingSwaps] = useState<Record<string, string>>({});
+  const [pendingTextColor, setPendingTextColor] = useState("");
   // ─── 任务队列：一次摆好多个独立任务（各自底图/标题/设置），排队自动一个接一个跑完，出多组图 ───
   type QueueTask = {
     id: string; idBase: number; label: string; payload: Record<string, unknown>;
@@ -943,11 +946,13 @@ export function App() {
     }
   };
 
-  // 单张「换某一项」：保持组合不变，只替换一个维度（或只换字体颜色），另出一张（原图保留）。
-  const regenerateRebuild = async (cover: CoverResult, opts: { swap?: { dimension: string; optionId: string }; textColor?: string }) => {
+  // 单张「调整」：保持组合，换其中一个或【同时换多个】维度（字体+配色+构图…），或换字色，另出一张（原图保留）。
+  const regenerateRebuild = async (cover: CoverResult, opts: { swap?: { dimension: string; optionId: string }; swaps?: Array<{ dimension: string; optionId: string }>; textColor?: string }) => {
     if (!cover.combination) return;
     setSwapCoverId(null);
     setSwapDim("");
+    setPendingSwaps({});
+    setPendingTextColor("");
     const newId = nextVariantId();
     const useEngine: ImageEngine = cover.engine || engine;
     setResults((prev) => insertAfter(prev, cover.id, { id: newId, combination: cover.combination, label: cover.label, ratio: cover.ratio, engine: useEngine }));
@@ -963,6 +968,7 @@ export function App() {
           rebuild: {
             combination: cover.combination,
             swap: opts.swap,
+            swaps: opts.swaps && opts.swaps.length ? opts.swaps : undefined,
             textColor: opts.textColor ?? (lockedTextColor.length ? lockedTextColor[Math.floor(Math.random() * lockedTextColor.length)] : undefined),
             title: title.trim(),
             subtitle: subtitle.trim(),
@@ -1220,7 +1226,7 @@ export function App() {
               <button
                 type="button"
                 className="result-act result-act-ratio"
-                onClick={() => { setSwapCoverId(swapCoverId === cover.id ? null : cover.id); setSwapDim(""); }}
+                onClick={() => { setSwapCoverId(swapCoverId === cover.id ? null : cover.id); setSwapDim(""); setPendingSwaps({}); setPendingTextColor(""); }}
                 title="只换其中一项（字体/风格/配色/字色…），其余保持，另出一张"
               >
                 调整
@@ -1236,29 +1242,37 @@ export function App() {
             </button>
           </div>
         )}
-        {canAct && cover.image_url && swapCoverId === cover.id && (
+        {canAct && cover.image_url && swapCoverId === cover.id && (() => {
+          const pendingCount = Object.keys(pendingSwaps).length + (pendingTextColor ? 1 : 0);
+          const dimName = (d: string) => SWAP_DIMS.find((s) => s.d === d)?.n || d;
+          const optName = (d: string, id: string) => dimOptionsOf(d).find((o) => o.id === id)?.name || id;
+          return (
           <div className="result-ratio-picker">
-            <span className="rrp-hint">这张哪里想换？（其余保持不变）</span>
+            <span className="rrp-hint">想改哪些？可以<b>同时选好几样</b>（字体＋配色＋构图…），也可只改一样，选完点「应用」。</span>
             <div className="rrp-chips">
-              {SWAP_DIMS.map((sd) => (
-                <button key={sd.d} type="button" className={cn("result-act", swapDim === sd.d && "is-cur")} onClick={() => setSwapDim(swapDim === sd.d ? "" : sd.d)}>
-                  {sd.n}
-                </button>
-              ))}
+              {SWAP_DIMS.map((sd) => {
+                const picked = sd.d === "COLOR" ? !!pendingTextColor : !!pendingSwaps[sd.d];
+                return (
+                  <button key={sd.d} type="button" className={cn("result-act", swapDim === sd.d && "is-cur", picked && "has-pick")} onClick={() => setSwapDim(swapDim === sd.d ? "" : sd.d)}>
+                    {sd.n}{picked ? " ✓" : ""}
+                  </button>
+                );
+              })}
             </div>
             {swapDim && swapDim !== "COLOR" && (
               <div className="rrp-chips">
                 {dimOptionsOf(swapDim).map((o) => {
                   const isCurrent = (cover.combination || "").split("+").includes(o.id);
+                  const isPicked = pendingSwaps[swapDim] === o.id;
                   return (
                     <button
                       key={o.id}
                       type="button"
-                      className={cn("result-act", isCurrent && "is-cur")}
-                      title={isCurrent ? "当前就是这个" : `换成「${o.name}」重生这张`}
-                      onClick={() => { if (!isCurrent) regenerateRebuild(cover, { swap: { dimension: swapDim, optionId: o.id } }); }}
+                      className={cn("result-act", isPicked && "is-cur", isCurrent && !isPicked && "has-pick")}
+                      title={isCurrent ? "当前就是这个" : `选「${o.name}」`}
+                      onClick={() => setPendingSwaps((prev) => { const n = { ...prev }; if (n[swapDim] === o.id) delete n[swapDim]; else n[swapDim] = o.id; return n; })}
                     >
-                      {o.name}
+                      {o.name}{isCurrent ? "（当前）" : ""}
                     </button>
                   );
                 })}
@@ -1267,16 +1281,32 @@ export function App() {
             {swapDim === "COLOR" && (
               <div className="textcolor-row">
                 {presetTextColors.map((c) => (
-                  <button key={c} type="button" className="tc-swatch" style={{ background: c }} title={`主标题换成 ${c}`} onClick={() => regenerateRebuild(cover, { textColor: c })} />
+                  <button key={c} type="button" className={cn("tc-swatch", pendingTextColor === c && "is-on")} style={{ background: c }} title={`主标题换成 ${c}`} onClick={() => setPendingTextColor(pendingTextColor === c ? "" : c)} />
                 ))}
                 <label className="tc-custom" title="自定义颜色">
-                  <input type="color" defaultValue="#FFDE00" onChange={(e) => regenerateRebuild(cover, { textColor: e.target.value.toUpperCase() })} />
+                  <input type="color" value={pendingTextColor || "#FFDE00"} onChange={(e) => setPendingTextColor(e.target.value.toUpperCase())} />
                   自定义
                 </label>
               </div>
             )}
+            <div className="rrp-apply">
+              <span className="rrp-apply-summary">
+                {pendingCount === 0
+                  ? "还没选要改什么"
+                  : `要改 ${pendingCount} 项：${[...Object.entries(pendingSwaps).map(([d, id]) => `${dimName(d)}→${optName(d, id)}`), ...(pendingTextColor ? [`字色→${pendingTextColor}`] : [])].join("、")}`}
+              </span>
+              <button
+                type="button"
+                className="result-act result-act-ratio"
+                disabled={pendingCount === 0}
+                onClick={() => regenerateRebuild(cover, { swaps: Object.entries(pendingSwaps).map(([dimension, optionId]) => ({ dimension, optionId })), textColor: pendingTextColor || undefined })}
+              >
+                应用（改 {pendingCount} 项）
+              </button>
+            </div>
           </div>
-        )}
+          );
+        })()}
         {canAct && cover.image_url && ratioPickerFor === cover.id && (
           <div className="result-ratio-picker">
             <span className="rrp-hint">出同款 · 选个比例：</span>
