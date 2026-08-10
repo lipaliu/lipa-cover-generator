@@ -845,6 +845,35 @@ export function App() {
   const stopQueue = () => { queueAbortRef.current?.abort(); queueAbortRef.current = null; setQueueRunning(false); };
 
   // 单张重生：用同一引擎或换一个引擎，另生成一张（原图保留，新的一张追加在后面）。
+  // 关键：编辑某张封面时要用【它自己那一批】的底图/标题/设置，而不是"当前界面"里的。
+  // 队列封面(cover.group)从它所属任务的 payload 取；单次/历史/收藏的用当前界面。
+  const contextForCover = async (cover: CoverResult) => {
+    const task = cover.group ? queue.find((t) => t.id === cover.group) : null;
+    if (task) {
+      const p = task.payload as Record<string, unknown>;
+      return {
+        image: (p.image as string) || undefined,
+        sourceMode: (p.sourceMode as string) || "base",
+        elementImages: p.elementImages as string[] | undefined,
+        imageDescription: p.imageDescription as string | undefined,
+        inspiration: p.inspiration as string | undefined,
+        title: (p.title as string) || "",
+        subtitle: (p.subtitle as string) || "",
+        smartScene: !!((p.stylePreferences as Record<string, unknown> | undefined)?.smartScene) || undefined,
+      };
+    }
+    return {
+      image: (await getImageDataUrl()) || undefined,
+      sourceMode,
+      elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
+      imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
+      inspiration: inspiration.trim() || undefined,
+      title: title.trim(),
+      subtitle: subtitle.trim(),
+      smartScene: smartScene || undefined,
+    };
+  };
+
   const regenerateCover = async (cover: CoverResult, newEngine?: ImageEngine) => {
     const plan = plansById[cover.id];
     // 没有完整方案（比如来自历史记录）时，用组合键重建——一样能重生。
@@ -859,18 +888,14 @@ export function App() {
     setRegeneratingIds((prev) => [...prev, newId]);
     flashNewCover(newId);
     try {
-      const img = await getImageDataUrl();
+      const ctx = await contextForCover(cover);
       const token = getToken();
       const body = plan
-        ? { plan, ratio: cover.ratio, engine: useEngine, sourceMode, image: img || undefined,
-            elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
-            imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
-            inspiration: inspiration.trim() || undefined }
-        : { rebuild: { combination: cover.combination, title: title.trim(), subtitle: subtitle.trim(), smartScene: smartScene || undefined, id: newId },
-            ratio: cover.ratio, engine: useEngine, sourceMode, image: img || undefined,
-            elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
-            imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
-            inspiration: inspiration.trim() || undefined };
+        ? { plan, ratio: cover.ratio, engine: useEngine, sourceMode: ctx.sourceMode, image: ctx.image,
+            elementImages: ctx.elementImages, imageDescription: ctx.imageDescription, inspiration: ctx.inspiration }
+        : { rebuild: { combination: cover.combination, title: ctx.title, subtitle: ctx.subtitle, smartScene: ctx.smartScene, id: newId },
+            ratio: cover.ratio, engine: useEngine, sourceMode: ctx.sourceMode, image: ctx.image,
+            elementImages: ctx.elementImages, imageDescription: ctx.imageDescription, inspiration: ctx.inspiration };
       const response = await fetch("/api/regenerate", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -914,18 +939,14 @@ export function App() {
     setRegeneratingIds((prev) => [...prev, newId]);
     flashNewCover(newId);
     try {
-      const img = await getImageDataUrl();
+      const ctx = await contextForCover(cover);
       const token = getToken();
       const body = plan
-        ? { plan, ratio: newRatio, engine: useEngine, sourceMode, image: img || undefined,
-            elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
-            imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
-            inspiration: inspiration.trim() || undefined }
-        : { rebuild: { combination: cover.combination, title: title.trim(), subtitle: subtitle.trim(), smartScene: smartScene || undefined, id: newId },
-            ratio: newRatio, engine: useEngine, sourceMode, image: img || undefined,
-            elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
-            imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
-            inspiration: inspiration.trim() || undefined };
+        ? { plan, ratio: newRatio, engine: useEngine, sourceMode: ctx.sourceMode, image: ctx.image,
+            elementImages: ctx.elementImages, imageDescription: ctx.imageDescription, inspiration: ctx.inspiration }
+        : { rebuild: { combination: cover.combination, title: ctx.title, subtitle: ctx.subtitle, smartScene: ctx.smartScene, id: newId },
+            ratio: newRatio, engine: useEngine, sourceMode: ctx.sourceMode, image: ctx.image,
+            elementImages: ctx.elementImages, imageDescription: ctx.imageDescription, inspiration: ctx.inspiration };
       const response = await fetch("/api/regenerate", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
@@ -957,7 +978,7 @@ export function App() {
     setRegeneratingIds((prev) => [...prev, newId]);
     flashNewCover(newId);
     try {
-      const img = await getImageDataUrl();
+      const ctx = await contextForCover(cover);
       const token = getToken();
       const response = await fetch("/api/regenerate", {
         method: "POST",
@@ -968,18 +989,18 @@ export function App() {
             swap: opts.swap,
             swaps: opts.swaps && opts.swaps.length ? opts.swaps : undefined,
             textColor: opts.textColor ?? (lockedTextColor.length ? lockedTextColor[Math.floor(Math.random() * lockedTextColor.length)] : undefined),
-            title: title.trim(),
-            subtitle: subtitle.trim(),
-            smartScene: smartScene || undefined,
+            title: ctx.title,
+            subtitle: ctx.subtitle,
+            smartScene: ctx.smartScene,
             id: newId,
           },
           ratio: cover.ratio,
           engine: useEngine,
-          sourceMode,
-          image: img || undefined,
-          elementImages: sourceMode === "elements" ? elementImages.map((e) => e.dataUrl) : undefined,
-          imageDescription: sourceMode === "describe" ? imageDescription.trim() : undefined,
-          inspiration: inspiration.trim() || undefined,
+          sourceMode: ctx.sourceMode,
+          image: ctx.image,
+          elementImages: ctx.elementImages,
+          imageDescription: ctx.imageDescription,
+          inspiration: ctx.inspiration,
         }),
         signal: abortRef.current?.signal,
       });
