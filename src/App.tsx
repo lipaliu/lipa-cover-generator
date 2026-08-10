@@ -285,13 +285,21 @@ export function App() {
 
   // 收藏夹：本机持久化（localStorage）。每个收藏存缩略图 + 它的风格组合，用来在收藏夹里回看，
   // 并统计「你最常收藏的字体/配色/排版…」，自动把这些选项在风格定制里往前排。
-  type FavItem = { favId: string; coverId: number; combination: string; label: string; ratio?: string; engine?: string; thumb: string; textColor?: string; ts: number };
+  // 收藏时把这张的"生成上下文"（底图/文案/设置）一并存下，打开时还原，编辑才不会串用当前界面的图和字。
+  type FavCtx = { image?: string; sourceMode: string; elementImages?: string[]; imageDescription?: string; inspiration?: string; title: string; subtitle: string; smartScene?: boolean };
+  type FavItem = { favId: string; coverId: number; combination: string; label: string; ratio?: string; engine?: string; thumb: string; textColor?: string; ts: number; ctx?: FavCtx };
   const [favorites, setFavorites] = useState<FavItem[]>(() => {
     try { return JSON.parse(localStorage.getItem("baka_favs") || "[]"); } catch { return []; }
   });
   const persistFavs = (next: FavItem[]) => {
     setFavorites(next);
-    try { localStorage.setItem("baka_favs", JSON.stringify(next)); } catch { /* 满了就算了 */ }
+    try { localStorage.setItem("baka_favs", JSON.stringify(next)); return; } catch { /* 太大，降级 */ }
+    // localStorage 满了：丢掉所有收藏里重量级的底图/素材，只留缩略图和文字上下文，保证收藏本身不丢。
+    try {
+      const light = next.map((f) => (f.ctx ? { ...f, ctx: { ...f.ctx, image: undefined, elementImages: undefined } } : f));
+      localStorage.setItem("baka_favs", JSON.stringify(light));
+      setFavorites(light);
+    } catch { /* 还是满就算了 */ }
   };
   // 把整图压成 ~240px 缩略图存起来（localStorage 有限，不能存原图）。
   const makeThumb = (dataUrl: string, max = 240): Promise<string> => new Promise((resolve) => {
@@ -317,8 +325,16 @@ export function App() {
     }
     if (!cover.image_url || !cover.combination) return;
     const thumb = await makeThumb(cover.image_url);
+    // 抓这张的生成上下文（底图/文案/设置），底图/素材压到 ~1024px 省空间，供以后打开编辑用。
+    let ctx: FavCtx | undefined;
+    try {
+      const c = await contextForCover(cover);
+      const baseImg = c.image ? await makeThumb(c.image, 1024) : undefined;
+      const els = c.elementImages ? await Promise.all(c.elementImages.map((d) => makeThumb(d, 1024))) : undefined;
+      ctx = { image: baseImg, sourceMode: c.sourceMode, elementImages: els, imageDescription: c.imageDescription, inspiration: c.inspiration, title: c.title, subtitle: c.subtitle, smartScene: c.smartScene };
+    } catch { ctx = undefined; }
     persistFavs([
-      { favId: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, coverId: cover.id, combination: cover.combination, label: cover.label, ratio: cover.ratio, engine: cover.engine, thumb, ts: Date.now() },
+      { favId: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, coverId: cover.id, combination: cover.combination, label: cover.label, ratio: cover.ratio, engine: cover.engine, thumb, ts: Date.now(), ctx },
       ...favorites,
     ]);
   };
@@ -442,8 +458,21 @@ export function App() {
     setFlashId(id);
     window.setTimeout(() => setFlashId((cur) => (cur === id ? null : cur)), 1800);
   };
-  // 从收藏夹「打开来编辑」：把这张收藏放进结果区（带组合键，可继续调整/重生），跳到生成页。
-  const openFavorite = (fav: { combination: string; label: string; ratio?: string; engine?: string; thumb: string }) => {
+  // 从收藏夹「打开来编辑」：先把这张收藏的原始上下文（底图/文案/设置）还原到界面，再放进结果区。
+  // 这样后续编辑用的就是它自己的底图和字，不会串成当前界面的。
+  const openFavorite = (fav: FavItem) => {
+    const c = fav.ctx;
+    if (c) {
+      setSourceMode((["base", "elements", "describe"].includes(c.sourceMode) ? c.sourceMode : "base") as SourceMode);
+      setImagePreview(c.image || null);
+      setImageName(c.image ? "收藏底图" : "");
+      setElementImages(c.elementImages ? c.elementImages.map((d, i) => ({ name: `素材${i + 1}`, dataUrl: d })) : []);
+      setImageDescription(c.imageDescription || "");
+      setInspiration(c.inspiration || "");
+      setSmartScene(!!c.smartScene);
+      setTitle(c.title || "");
+      setSubtitle(c.subtitle || "");
+    }
     const newId = nextVariantId();
     setResults((prev) => [...prev, { id: newId, combination: fav.combination, label: fav.label, ratio: fav.ratio, engine: fav.engine as ImageEngine | undefined, image_url: fav.thumb }]);
     setShowFavorites(false);
