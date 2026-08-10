@@ -761,6 +761,26 @@ export function App() {
     setQueue((prev) => prev.map((t) => (t.id === id ? updater(t) : t)));
 
   // 把「当前这一套配置」存成一个任务，加进队列（不立即生成）。
+  // 加入队列后，清空这一份的底图/文案/风格，回到第一步，方便直接换图加下一个任务（保留引擎和比例这些常用设定）。
+  const resetInputsForNextTask = () => {
+    setImagePreview(null);
+    setImageName("");
+    setElementImages([]);
+    setImageDescription("");
+    setInspiration("");
+    setSmartScene(false);
+    setTitle("");
+    setSubtitle("");
+    setKeywords("");
+    setLockedFont([]); setLockedLayout([]); setLockedEffect([]); setLockedColorScheme([]);
+    setLockedDecoration([]); setLockedComposition([]); setLockedMood([]); setLockedTextColor([]);
+    setDetectedColor("");
+    setImageColors([]);
+    setErrorMessage("");
+    setStep(1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const addToQueue = async () => {
     const invalid = validateInputs();
     if (invalid) { setErrorMessage(invalid); setRunState("error"); return; }
@@ -773,7 +793,7 @@ export function App() {
         ...prev,
         { id: `qt-${Date.now()}-${prev.length}`, idBase, label: title.trim() || `任务 ${prev.length + 1}`, payload, status: "pending", total: totalCount },
       ]);
-      setErrorMessage("");
+      resetInputsForNextTask(); // 自动清空、回第一步，接着加下一个任务
     } catch (e) {
       setErrorMessage(e instanceof Error ? e.message : "加入队列失败");
     }
