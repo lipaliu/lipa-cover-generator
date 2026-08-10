@@ -382,22 +382,16 @@ export function App() {
   const [pendingSwaps, setPendingSwaps] = useState<Record<string, string>>({});
   const [pendingTextColor, setPendingTextColor] = useState("");
   // ─── 任务队列：一次摆好多个独立任务（各自底图/标题/设置），排队自动一个接一个跑完，出多组图 ───
+  // 封面统一存进主 results（用 cover.group = task.id 标记属于哪一批），所以队列里的每张封面
+  // 和普通封面一样都能单独调整。任务本身只存状态/元信息。
   type QueueTask = {
     id: string; idBase: number; label: string; payload: Record<string, unknown>;
-    status: "pending" | "running" | "done" | "error"; covers: CoverResult[];
-    plans: Record<number, CoverPlan>; total: number; errorMsg?: string;
+    status: "pending" | "running" | "done" | "error"; total: number; errorMsg?: string;
   };
   const [queue, setQueue] = useState<QueueTask[]>([]);
   const [queueRunning, setQueueRunning] = useState(false);
   // 少出图时的说明（比如底图被安全系统拒了）——不再让失败的封面悄悄消失、用户干瞪眼。
   const [shortfallNote, setShortfallNote] = useState<string | null>(null);
-  // 多选批量编辑：勾选多张，一起收藏/下载/删除/重生/调整（历史记录里的也能改）。
-  const [selectMode, setSelectMode] = useState(false);
-  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
-  const [batchSwapDim, setBatchSwapDim] = useState<string>("");
-  const toggleSelected = (id: number) =>
-    setSelectedIds((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
-  const clearSelection = () => { setSelectedIds(new Set()); setBatchSwapDim(""); };
   const queueAbortRef = useRef<AbortController | null>(null);
   const queueIdBaseRef = useRef(200000); // 队列封面 id 基数（避开单次 1..N 与变体 100000+）
   useEffect(() => {
@@ -447,6 +441,15 @@ export function App() {
   const flashNewCover = (id: number) => {
     setFlashId(id);
     window.setTimeout(() => setFlashId((cur) => (cur === id ? null : cur)), 1800);
+  };
+  // 从收藏夹「打开来编辑」：把这张收藏放进结果区（带组合键，可继续调整/重生），跳到生成页。
+  const openFavorite = (fav: { combination: string; label: string; ratio?: string; engine?: string; thumb: string }) => {
+    const newId = nextVariantId();
+    setResults((prev) => [...prev, { id: newId, combination: fav.combination, label: fav.label, ratio: fav.ratio, engine: fav.engine as ImageEngine | undefined, image_url: fav.thumb }]);
+    setShowFavorites(false);
+    setStep(4);
+    setRunState("done");
+    flashNewCover(newId);
   };
   // 新卡片一出现就滚动到可视区（点了"调整/重生/＋比例"立刻能看到那张，而不是甩到网格底部看不见）。
   useEffect(() => {
@@ -768,7 +771,7 @@ export function App() {
       const idBase = (queueIdBaseRef.current += 1000);
       setQueue((prev) => [
         ...prev,
-        { id: `qt-${Date.now()}-${prev.length}`, idBase, label: title.trim() || `任务 ${prev.length + 1}`, payload, status: "pending", covers: [], plans: {}, total: totalCount },
+        { id: `qt-${Date.now()}-${prev.length}`, idBase, label: title.trim() || `任务 ${prev.length + 1}`, payload, status: "pending", total: totalCount },
       ]);
       setErrorMessage("");
     } catch (e) {
@@ -776,14 +779,17 @@ export function App() {
     }
   };
 
-  const removeTask = (id: string) => setQueue((prev) => prev.filter((t) => t.id !== id));
-  const clearQueue = () => { if (!queueRunning) setQueue([]); };
-  const removeQueueCover = (taskId: string, coverId: number) =>
-    updateTask(taskId, (t) => ({ ...t, covers: t.covers.filter((c) => c.id !== coverId) }));
+  const removeTask = (id: string) => {
+    setResults((prev) => prev.filter((c) => c.group !== id)); // 连它那一批的封面一起清掉
+    setQueue((prev) => prev.filter((t) => t.id !== id));
+  };
+  const clearQueue = () => { if (queueRunning) return; setResults((prev) => prev.filter((c) => !queue.some((t) => t.id === c.group))); setQueue([]); };
 
-  // 跑单个任务：流式把结果写进它自己的分组，封面 id 用 idBase 偏移保证全局唯一。
+  // 跑单个任务：流式把结果写进【主 results】（打上 group=task.id 标记），封面 id 用 idBase 偏移保证
+  // 全局唯一；方案写进 plansById。这样队列里的每张封面和普通封面一样可单独调整。
   const runOneTask = async (task: QueueTask, signal: AbortSignal) => {
-    updateTask(task.id, (t) => ({ ...t, status: "running", covers: [], errorMsg: undefined }));
+    updateTask(task.id, (t) => ({ ...t, status: "running", errorMsg: undefined }));
+    setResults((prev) => prev.filter((c) => c.group !== task.id)); // 清掉本任务旧的（重跑时）
     try {
       const token = getToken();
       const response = await fetch("/api/generate", {
@@ -800,30 +806,22 @@ export function App() {
       const collected: CoverResult[] = [];
       await readSseStream(response, (event) => {
         if (event.plans && event.plans.length > 0) {
-          updateTask(task.id, (t) => {
-            const plans = { ...t.plans };
-            for (const p of event.plans as CoverPlan[]) plans[task.idBase + p.id] = { ...p, id: task.idBase + p.id };
-            return { ...t, plans };
-          });
+          setPlansById((prev) => { const n = { ...prev }; for (const p of event.plans as CoverPlan[]) n[task.idBase + p.id] = { ...p, id: task.idBase + p.id }; return n; });
         }
         if (event.result) {
           const uid = task.idBase + event.result.id;
-          const cover = { ...(event.result as CoverResult), id: uid, group: task.label };
+          const cover = { ...(event.result as CoverResult), id: uid, group: task.id };
           collected.push(cover);
-          updateTask(task.id, (t) => {
-            const filtered = t.covers.filter((c) => c.id !== uid);
-            return { ...t, covers: [...filtered, cover].sort((a, b) => a.id - b.id) };
-          });
+          setResults((prev) => { const filtered = prev.filter((c) => c.id !== uid); return [...filtered, cover]; });
         }
         if (event.status === "done") {
-          const final = (event.results || collected)
-            .filter((r) => r.image_url)
-            .map((r) => ({ ...r, id: r.id >= task.idBase ? r.id : task.idBase + r.id, group: task.label } as CoverResult));
-          updateTask(task.id, (t) => ({ ...t, status: "done", covers: final }));
+          // 丢掉本任务里失败的（没出图的）
+          setResults((prev) => prev.filter((c) => c.group !== task.id || c.image_url));
+          updateTask(task.id, (t) => ({ ...t, status: "done" }));
         }
       });
     } catch (e) {
-      if (signal.aborted) { updateTask(task.id, (t) => ({ ...t, status: "pending" })); return; }
+      if (signal.aborted) { updateTask(task.id, (t) => ({ ...t, status: "pending" })); setResults((prev) => prev.filter((c) => c.group !== task.id)); return; }
       updateTask(task.id, (t) => ({ ...t, status: "error", errorMsg: e instanceof Error ? e.message : "生成失败" }));
     }
   };
@@ -857,7 +855,7 @@ export function App() {
     const useEngine: ImageEngine = newEngine || cover.engine || engine;
     const newId = nextVariantId();
     if (plan) setPlansById((prev) => ({ ...prev, [newId]: plan }));
-    setResults((prev) => insertAfter(prev, cover.id, { id: newId, combination: cover.combination, label: cover.label, ratio: cover.ratio, engine: useEngine }));
+    setResults((prev) => insertAfter(prev, cover.id, { id: newId, combination: cover.combination, label: cover.label, ratio: cover.ratio, engine: useEngine, group: cover.group }));
     setRegeneratingIds((prev) => [...prev, newId]);
     flashNewCover(newId);
     try {
@@ -912,7 +910,7 @@ export function App() {
     const newId = nextVariantId();
     const useEngine: ImageEngine = cover.engine || engine;
     if (plan) setPlansById((prev) => ({ ...prev, [newId]: plan }));
-    setResults((prev) => insertAfter(prev, cover.id, { id: newId, combination: cover.combination, label: cover.label, ratio: newRatio, engine: useEngine }));
+    setResults((prev) => insertAfter(prev, cover.id, { id: newId, combination: cover.combination, label: cover.label, ratio: newRatio, engine: useEngine, group: cover.group }));
     setRegeneratingIds((prev) => [...prev, newId]);
     flashNewCover(newId);
     try {
@@ -955,7 +953,7 @@ export function App() {
     setPendingTextColor("");
     const newId = nextVariantId();
     const useEngine: ImageEngine = cover.engine || engine;
-    setResults((prev) => insertAfter(prev, cover.id, { id: newId, combination: cover.combination, label: cover.label, ratio: cover.ratio, engine: useEngine }));
+    setResults((prev) => insertAfter(prev, cover.id, { id: newId, combination: cover.combination, label: cover.label, ratio: cover.ratio, engine: useEngine, group: cover.group }));
     setRegeneratingIds((prev) => [...prev, newId]);
     flashNewCover(newId);
     try {
@@ -1006,19 +1004,6 @@ export function App() {
       setRegeneratingIds((prev) => prev.filter((id) => id !== newId));
     }
   };
-
-  // ─── 多选批量操作：对所有勾选的封面一起执行 ───
-  const selectedCovers = () => results.filter((c) => selectedIds.has(c.id) && c.image_url);
-  const batchFavorite = async () => { for (const c of selectedCovers()) if (!isFavorited(c.id)) await toggleFavorite(c); };
-  const batchDownload = async () => { for (const c of selectedCovers()) await downloadCover(c); };
-  const batchDelete = () => {
-    setResults((prev) => prev.filter((c) => !selectedIds.has(c.id)));
-    setPlansById((prev) => { const n = { ...prev }; selectedIds.forEach((id) => delete n[id]); return n; });
-    clearSelection();
-  };
-  // 批量重生 / 批量调整：逐张顺序执行（稳，不一下涌太多）；每张都「另存为新的一张」，原图保留。
-  const batchRegenerate = async () => { const list = selectedCovers(); clearSelection(); for (const c of list) await regenerateCover(c); };
-  const batchAdjust = async (dim: string, optId: string) => { const list = selectedCovers(); setBatchSwapDim(""); clearSelection(); for (const c of list) await regenerateRebuild(c, { swap: { dimension: dim, optionId: optId } }); };
 
   // 维度字母 → 选项列表 / 中文名（单张调整面板用）
   const dimOptionsOf = (dim: string): StyleOpt =>
@@ -1154,23 +1139,17 @@ export function App() {
     // 一张出图就能马上对它操作——哪怕整批还没跑完（编辑都是「另存为新的一张」，不影响还在生成的）。
     // 有完整方案(plansById) 或 有组合键(combination，历史记录里也有) 都能编辑。
     const canAct = !busy && (!!cover.image_url || !!cover.error) && (!!plansById[cover.id] || !!cover.combination);
-    const selected = selectedIds.has(cover.id);
     return (
-      <article key={cover.id} data-cover-id={cover.id} className={cn("result-card", busy && "is-loading", flashId === cover.id && "is-flash", selectMode && selected && "is-selected")}>
-        {selectMode && cover.image_url && (
-          <button type="button" className={cn("select-check", selected && "is-on")} title={selected ? "取消选择" : "选择这张"} onClick={() => toggleSelected(cover.id)}>
-            {selected ? <Check size={15} /> : null}
-          </button>
-        )}
+      <article key={cover.id} data-cover-id={cover.id} className={cn("result-card", busy && "is-loading", flashId === cover.id && "is-flash")}>
         {busy ? (
           <div className="result-loading" style={{ aspectRatio: aspect }}>
             <LoaderCircle className="spin" size={28} />
             <small>重新生成中...</small>
           </div>
         ) : cover.image_url ? (
-          <button type="button" className="result-image" style={{ aspectRatio: aspect }} onClick={() => selectMode ? toggleSelected(cover.id) : setPreviewCover(cover)}>
+          <button type="button" className="result-image" style={{ aspectRatio: aspect }} onClick={() => setPreviewCover(cover)}>
             <img src={cover.image_url} alt={cover.label} />
-            <span className="result-download">{selectMode ? <><Check size={20} /><small>{selected ? "已选" : "点击选择"}</small></> : <><Sparkles size={20} /><small>点击放大</small></>}</span>
+            <span className="result-download"><Sparkles size={20} /><small>点击放大</small></span>
           </button>
         ) : cover.error ? (
           <div className="result-error" style={{ aspectRatio: aspect }}><p>{cover.error}</p></div>
@@ -1331,41 +1310,10 @@ export function App() {
     );
   };
 
-  // 队列分组里的封面卡：看/放大/下载/收藏/删除（编辑类操作留在单次生成里）。
-  const renderGroupCover = (cover: CoverResult, taskId: string) => {
-    const aspect = ratioAspectCss(cover.ratio);
-    return (
-      <article key={cover.id} data-cover-id={cover.id} className={cn("result-card", flashId === cover.id && "is-flash")}>
-        {cover.image_url ? (
-          <button type="button" className="result-image" style={{ aspectRatio: aspect }} onClick={() => setPreviewCover(cover)}>
-            <img src={cover.image_url} alt={cover.label} />
-            <span className="result-download"><Sparkles size={20} /><small>点击放大</small></span>
-          </button>
-        ) : (
-          <div className="result-loading" style={{ aspectRatio: aspect }}><LoaderCircle className="spin" size={28} /><small>生成中...</small></div>
-        )}
-        {cover.image_url && (
-          <button type="button" className={cn("fav-btn", isFavorited(cover.id) && "is-fav")} title={isFavorited(cover.id) ? "取消收藏" : "收藏这张"} onClick={() => toggleFavorite(cover)}>
-            <Heart size={17} />
-          </button>
-        )}
-        <footer className="result-meta">
-          <span>{cover.ratio ? `${cover.ratio} · ${cover.label}` : cover.label}</span>
-          {cover.engine && <span style={{ fontSize: 11, opacity: 0.65 }}>{engineShortLabel(cover.engine)}</span>}
-        </footer>
-        {cover.image_url && (
-          <div className="result-actions">
-            <button type="button" className="result-act" onClick={() => { void downloadCover(cover); }}><Download size={13} /> 下载</button>
-            <button type="button" className="result-act result-act-del" onClick={() => removeQueueCover(taskId, cover.id)}><Trash2 size={13} /> 删除</button>
-          </div>
-        )}
-      </article>
-    );
-  };
-
   // 失败的封面不显示（cover.error 的直接过滤掉，只保留成功或正在生成/重生的）。
-  const verticalResults = results.filter((r) => !isLandscapeRatio(r.ratio) && !r.error);
-  const horizontalResults = results.filter((r) => isLandscapeRatio(r.ratio) && !r.error);
+  // 未分组的（单次生成/历史/收藏打开的）；队列分批的按 group 单独成组显示。
+  const verticalResults = results.filter((r) => !isLandscapeRatio(r.ratio) && !r.error && !r.group);
+  const horizontalResults = results.filter((r) => isLandscapeRatio(r.ratio) && !r.error && !r.group);
   const doneCount = results.filter((r) => r.image_url).length;
   const queuePending = queue.filter((t) => t.status === "pending").length;
   const taskStatusText = (s: QueueTask["status"]) =>
@@ -1398,7 +1346,7 @@ export function App() {
             <span className="queue-chip-meta">
               {t.total}张 · {taskStatusText(t.status)}
               {t.status === "error" && t.errorMsg ? `（${t.errorMsg}）` : ""}
-              {t.status === "running" ? ` ${t.covers.filter((c) => c.image_url).length}/${t.total}` : ""}
+              {t.status === "running" ? ` ${results.filter((c) => c.group === t.id && c.image_url).length}/${t.total}` : ""}
             </span>
             {!queueRunning && t.status !== "running" && (
               <button type="button" className="queue-chip-del" title="移除" onClick={() => removeTask(t.id)}>×</button>
@@ -1534,7 +1482,10 @@ export function App() {
                 <div className="fav-grid">
                   {favorites.map((f) => (
                     <div className="fav-cell" key={f.favId}>
-                      <img src={f.thumb} alt={f.label} />
+                      <button type="button" className="fav-cell-open" title="打开来继续调整" onClick={() => openFavorite(f)}>
+                        <img src={f.thumb} alt={f.label} />
+                        <span className="fav-cell-edit">✎ 打开调整</span>
+                      </button>
                       <button type="button" className="fav-remove" title="移出收藏" onClick={() => persistFavs(favorites.filter((x) => x.favId !== f.favId))}>&times;</button>
                       <span className="fav-cell-label">{f.label}</span>
                     </div>
@@ -2255,18 +2206,21 @@ export function App() {
               <div className="shortfall-note"><p>ℹ️ {shortfallNote}</p></div>
             )}
 
-            {/* 队列分组结果：每个出了图的任务显示成一组（任务队列面板已移到步骤条下方，全程可见） */}
-            {queue.filter((t) => t.covers.length > 0).map((t) => {
-              const vs = t.covers.filter((c) => !isLandscapeRatio(c.ratio));
-              const hs = t.covers.filter((c) => isLandscapeRatio(c.ratio));
+            {/* 队列分批结果：每批一组，组里每张都能单独调整（和普通封面完全一样） */}
+            {queue.map((t) => {
+              const covers = results.filter((c) => c.group === t.id && !c.error);
+              if (covers.length === 0 && t.status !== "running") return null;
+              const vs = covers.filter((c) => !isLandscapeRatio(c.ratio));
+              const hs = covers.filter((c) => isLandscapeRatio(c.ratio));
               return (
                 <div key={`grp-${t.id}`} className="task-group">
                   <div className="task-group-head">
                     <strong>{t.label}</strong>
-                    <span>{t.covers.filter((c) => c.image_url).length} 张 · {taskStatusText(t.status)}</span>
+                    <span>{covers.filter((c) => c.image_url).length} 张 · {taskStatusText(t.status)}</span>
                   </div>
-                  {vs.length > 0 && <div className="results-grid is-vertical">{vs.map((c) => renderGroupCover(c, t.id))}</div>}
-                  {hs.length > 0 && <div className="results-grid is-horizontal">{hs.map((c) => renderGroupCover(c, t.id))}</div>}
+                  {vs.length > 0 && <div className="results-grid is-vertical">{vs.map(renderCard)}</div>}
+                  {hs.length > 0 && <div className="results-grid is-horizontal">{hs.map(renderCard)}</div>}
+                  {covers.length === 0 && t.status === "running" && <p className="task-group-empty">生成中…</p>}
                 </div>
               );
             })}
@@ -2283,49 +2237,9 @@ export function App() {
               </div>
             )}
 
-            {results.length > 0 && (
+            {/* 未分组的封面（单次生成 / 从历史或收藏打开的）——每张都能单独调整 */}
+            {(verticalResults.length > 0 || horizontalResults.length > 0) && (
               <>
-                {/* 多选批量编辑工具条 */}
-                <div className="batch-toolbar">
-                  <button type="button" className={cn("batch-toggle", selectMode && "is-on")} onClick={() => { setSelectMode((v) => !v); clearSelection(); }}>
-                    {selectMode ? "退出多选" : "☑ 多选批量改"}
-                  </button>
-                  {selectMode && (
-                    <>
-                      <span className="batch-count">已选 {selectedIds.size} 张</span>
-                      <button type="button" className="batch-act" onClick={() => setSelectedIds(new Set(results.filter((c) => c.image_url).map((c) => c.id)))}>全选</button>
-                      <button type="button" className="batch-act" onClick={clearSelection} disabled={selectedIds.size === 0}>清空</button>
-                      {selectedIds.size > 0 && (
-                        <>
-                          <span className="batch-sep" />
-                          <button type="button" className="batch-act" onClick={() => { void batchFavorite(); }}><Heart size={13} /> 收藏</button>
-                          <button type="button" className="batch-act" onClick={() => { void batchDownload(); }}><Download size={13} /> 下载</button>
-                          <button type="button" className="batch-act" onClick={() => { void batchRegenerate(); }}><RotateCw size={13} /> 重生</button>
-                          <button type="button" className={cn("batch-act", batchSwapDim && "is-on")} onClick={() => setBatchSwapDim(batchSwapDim ? "" : "PICK")}>调整…</button>
-                          <button type="button" className="batch-act batch-del" onClick={batchDelete}><Trash2 size={13} /> 删除</button>
-                        </>
-                      )}
-                    </>
-                  )}
-                </div>
-                {/* 批量调整：先选维度，再选具体项，应用到所有选中 */}
-                {selectMode && batchSwapDim && selectedIds.size > 0 && (
-                  <div className="batch-adjust">
-                    <span className="rrp-hint">把选中的 {selectedIds.size} 张一起换：</span>
-                    <div className="rrp-chips">
-                      {SWAP_DIMS.filter((sd) => sd.d !== "COLOR").map((sd) => (
-                        <button key={sd.d} type="button" className={cn("result-act", batchSwapDim === sd.d && "is-cur")} onClick={() => setBatchSwapDim(sd.d)}>{sd.n}</button>
-                      ))}
-                    </div>
-                    {batchSwapDim !== "PICK" && (
-                      <div className="rrp-chips">
-                        {dimOptionsOf(batchSwapDim).map((o) => (
-                          <button key={o.id} type="button" className="result-act" title={`选中的全部换成「${o.name}」`} onClick={() => { void batchAdjust(batchSwapDim, o.id); }}>{o.name}</button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                )}
                 {verticalResults.length > 0 && (
                   <div className="results-grid is-vertical">{verticalResults.map(renderCard)}</div>
                 )}
