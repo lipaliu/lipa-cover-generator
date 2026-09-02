@@ -16,6 +16,8 @@ services:
         value: "22"
       - key: FAST_DIRECT_MODE
         value: "1"
+      - key: TITLE_MASTER_API_URL
+        value: "https://changdao-title-h5.vercel.app/api/generate"
       # 账户（随 git 走，私有库安全）。格式：用户名:密码:额度，多个用空格隔开。
       # 额度写数字 = 体验账户单次最多张数；"admin" = 全权限管理员（无限、不限比例、可进后台）；
       # "vip" = 会员（无限、不限比例、但进不了后台）。前端每个比例最多 8 张。

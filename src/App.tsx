@@ -25,15 +25,16 @@ import {
   ShieldCheck,
   Home,
   Heart,
+  Copy,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { deleteHistoryBatch, getHistory, saveHistoryBatch } from "./lib/history";
 import { downloadImageUrl, exportImageUrl, fileToDownscaledDataUrl, formatTime, urlToDataUrl } from "./lib/image";
-import type { CoverResult, CoverPlan, GenerateEvent, HistoryBatch, ImageEngine } from "./lib/types";
+import type { CoverResult, CoverPlan, GenerateEvent, HistoryBatch, ImageEngine, TitlePlan } from "./lib/types";
 import { LoginModal } from "./components/LoginModal";
 import { CreditsBadge } from "./components/CreditsBadge";
 import { RechargeModal } from "./components/RechargeModal";
-import { fetchMe, logout as apiLogout, getToken, getCreditsCost, fetchBalance, type UserInfo } from "./lib/api";
+import { fetchMe, logout as apiLogout, getToken, getCreditsCost, fetchBalance, generateTitlePlans, type UserInfo } from "./lib/api";
 import "./components/auth-styles.css";
 
 /* ─── Constants ─── */
@@ -402,6 +403,7 @@ export function App() {
   // 和普通封面一样都能单独调整。任务本身只存状态/元信息。
   type QueueTask = {
     id: string; idBase: number; label: string; payload: Record<string, unknown>;
+    publishTitle?: string; publishPlatform?: "xiaohongshu" | "douyin"; coverTitle?: string; coverSubtitle?: string;
     status: "pending" | "running" | "done" | "error"; total: number; errorMsg?: string;
   };
   const [queue, setQueue] = useState<QueueTask[]>([]);
@@ -427,6 +429,15 @@ export function App() {
   const [title, setTitle] = useState("");
   const [subtitle, setSubtitle] = useState("");
   const [keywords, setKeywords] = useState("");
+  const [sourceText, setSourceText] = useState("");
+  const [titleAngle, setTitleAngle] = useState("");
+  const [titlePlans, setTitlePlans] = useState<TitlePlan[]>([]);
+  const [titlePlansLoading, setTitlePlansLoading] = useState(false);
+  const [titlePlansError, setTitlePlansError] = useState("");
+  const [selectedTitlePlan, setSelectedTitlePlan] = useState<number | null>(null);
+  const [publishPlatform, setPublishPlatform] = useState<"xiaohongshu" | "douyin">("xiaohongshu");
+  const [publishTitle, setPublishTitle] = useState("");
+  const [deliveryCopied, setDeliveryCopied] = useState(false);
 
   // Step 3: Style
   const [engine, setEngine] = useState<ImageEngine>("image2");
@@ -601,6 +612,72 @@ export function App() {
     return urlToDataUrl(imagePreview);
   };
 
+  const requestTitleMaster = async () => {
+    if (sourceText.trim().length < 10) {
+      setTitlePlansError("请至少输入 10 个字的全文");
+      return;
+    }
+    setTitlePlansLoading(true);
+    setTitlePlansError("");
+    try {
+      const plans = await generateTitlePlans(sourceText.trim(), titleAngle.trim());
+      setTitlePlans(plans);
+      setSelectedTitlePlan(null);
+    } catch (error) {
+      setTitlePlansError(error instanceof Error ? error.message : "标题生成失败，请稍后重试");
+    } finally {
+      setTitlePlansLoading(false);
+    }
+  };
+
+  const applyTitlePlan = (plan: TitlePlan, index: number) => {
+    setTitle(plan.coverMain);
+    setSubtitle(plan.coverSub);
+    setPublishTitle(publishPlatform === "xiaohongshu" ? plan.xiaohongshu : plan.videoTitle);
+    setSelectedTitlePlan(index);
+  };
+
+  const changePublishPlatform = (platform: "xiaohongshu" | "douyin") => {
+    setPublishPlatform(platform);
+    if (selectedTitlePlan != null) {
+      const plan = titlePlans[selectedTitlePlan];
+      if (plan) setPublishTitle(platform === "xiaohongshu" ? plan.xiaohongshu : plan.videoTitle);
+    }
+  };
+
+  const deliveryText = (values?: { publishTitle?: string; coverTitle?: string; coverSubtitle?: string; publishPlatform?: "xiaohongshu" | "douyin" }) => {
+    const finalPublishTitle = values?.publishTitle ?? (publishTitle.trim() || title.trim());
+    const finalCoverTitle = values?.coverTitle ?? title.trim();
+    const finalCoverSubtitle = values?.coverSubtitle ?? subtitle.trim();
+    const finalPlatform = values?.publishPlatform ?? publishPlatform;
+    return [
+      `发布平台：${finalPlatform === "douyin" ? "抖音" : "小红书"}`,
+      `发布标题：${finalPublishTitle}`,
+      `封面主字：${finalCoverTitle}`,
+      finalCoverSubtitle ? `封面副标题：${finalCoverSubtitle}` : "",
+    ].filter(Boolean).join("\n");
+  };
+
+  const copyDelivery = async (values?: Parameters<typeof deliveryText>[0]) => {
+    try {
+      await navigator.clipboard.writeText(deliveryText(values));
+      setDeliveryCopied(true);
+      window.setTimeout(() => setDeliveryCopied(false), 1800);
+    } catch {
+      downloadDelivery(values);
+    }
+  };
+
+  const downloadDelivery = (values?: Parameters<typeof deliveryText>[0]) => {
+    const blob = new Blob([deliveryText(values)], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = "发布标题与封面文案.txt";
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
+
   /* ─── Generation ─── */
   // 把当前所有输入打包成一个生成请求体（单次生成和「任务队列」共用，避免两处漂移）。
   const collectPayload = (image: string) => ({
@@ -756,6 +833,8 @@ export function App() {
               title: title.trim(),
               subtitle: subtitle.trim(),
               keywords: keywords.trim(),
+              publishTitle: publishTitle.trim() || title.trim(),
+              publishPlatform,
               engine,
               count,
               baseImage: imagePreview || "",
@@ -801,6 +880,12 @@ export function App() {
     setTitle("");
     setSubtitle("");
     setKeywords("");
+    setSourceText("");
+    setTitleAngle("");
+    setTitlePlans([]);
+    setTitlePlansError("");
+    setSelectedTitlePlan(null);
+    setPublishTitle("");
     setLockedFont([]); setLockedLayout([]); setLockedEffect([]); setLockedColorScheme([]);
     setLockedDecoration([]); setLockedComposition([]); setLockedMood([]); setLockedTextColor([]);
     setDetectedColor("");
@@ -820,7 +905,18 @@ export function App() {
       const idBase = (queueIdBaseRef.current += 1000);
       setQueue((prev) => [
         ...prev,
-        { id: `qt-${Date.now()}-${prev.length}`, idBase, label: title.trim() || `任务 ${prev.length + 1}`, payload, status: "pending", total: totalCount },
+        {
+          id: `qt-${Date.now()}-${prev.length}`,
+          idBase,
+          label: title.trim() || `任务 ${prev.length + 1}`,
+          payload,
+          publishTitle: publishTitle.trim() || title.trim(),
+          publishPlatform,
+          coverTitle: title.trim(),
+          coverSubtitle: subtitle.trim(),
+          status: "pending",
+          total: totalCount,
+        },
       ]);
       resetInputsForNextTask(); // 自动清空、回第一步，接着加下一个任务
     } catch (e) {
@@ -1146,6 +1242,12 @@ export function App() {
     setTitle("");
     setSubtitle("");
     setKeywords("");
+    setSourceText("");
+    setTitleAngle("");
+    setTitlePlans([]);
+    setTitlePlansError("");
+    setSelectedTitlePlan(null);
+    setPublishTitle("");
     setErrorMessage("");
     setDownloadStatus(null);
     setStep(1);
@@ -1155,6 +1257,8 @@ export function App() {
     setTitle(batch.title);
     setSubtitle(batch.subtitle);
     setKeywords(batch.keywords || "");
+    setPublishTitle(batch.publishTitle || batch.title);
+    setPublishPlatform(batch.publishPlatform || "xiaohongshu");
     setEngine(normalizeStoredEngine(batch.engine));
     setRatioSelection({ "16:9": 0, "4:3": 0, "1:1": 0, "3:4": Math.min(8, batch.count), "9:16": 0, "bilibili-safe": 0 });
     setTotal(batch.count);
@@ -2081,10 +2185,85 @@ export function App() {
               <span className="step-number">02</span>
               <div>
                 <h2>填写文案</h2>
-                <p>输入封面上要展示的标题和副标题</p>
+                <p>有全文就让标题大师先写；没有全文就照旧直接填写封面字</p>
               </div>
             </div>
             <div className="form-fields">
+              <section className="title-bridge">
+                <div className="title-bridge-head">
+                  <div>
+                    <strong>连接标题大师</strong>
+                    <p>选填 · 只负责起标题，不改变巴咔巴咔的任何生图模型与风格设置</p>
+                  </div>
+                  <span className="title-bridge-badge">豆包 Seed 2.1</span>
+                </div>
+                <label className="form-field">
+                  <span className="field-label">全文 <em>选填</em></span>
+                  <textarea
+                    value={sourceText}
+                    maxLength={20000}
+                    rows={7}
+                    onChange={(e) => {
+                      setSourceText(e.target.value);
+                      setTitlePlans([]);
+                      setSelectedTitlePlan(null);
+                      setTitlePlansError("");
+                    }}
+                    placeholder="粘贴完整口播稿、录音转写或视频文案。留空时不调用标题大师，下面仍可直接填写封面字。"
+                  />
+                  <span className="field-count is-textarea">{sourceText.length}/20,000</span>
+                </label>
+                <label className="form-field">
+                  <span className="field-label">创作参考 <em>选填</em></span>
+                  <input
+                    type="text"
+                    value={titleAngle}
+                    maxLength={2000}
+                    onChange={(e) => {
+                      setTitleAngle(e.target.value);
+                      setTitlePlans([]);
+                      setSelectedTitlePlan(null);
+                      setTitlePlansError("");
+                    }}
+                    placeholder="例如：更犀利，但不要标题党"
+                  />
+                  <span className="field-count">{titleAngle.length}/2,000</span>
+                </label>
+                <div className="title-bridge-actions">
+                  <div className="platform-toggle" aria-label="发布平台">
+                    <button type="button" className={publishPlatform === "xiaohongshu" ? "is-active" : ""} onClick={() => changePublishPlatform("xiaohongshu")}>小红书</button>
+                    <button type="button" className={publishPlatform === "douyin" ? "is-active" : ""} onClick={() => changePublishPlatform("douyin")}>抖音</button>
+                  </div>
+                  <button
+                    type="button"
+                    className="title-generate-btn"
+                    disabled={sourceText.trim().length < 10 || titlePlansLoading}
+                    onClick={() => { void requestTitleMaster(); }}
+                  >
+                    {titlePlansLoading ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
+                    {titlePlansLoading ? "标题大师正在读全文…" : "生成标题方案"}
+                  </button>
+                </div>
+                {titlePlansError && <p className="title-bridge-error">{titlePlansError}</p>}
+                {titlePlans.length > 0 && (
+                  <div className="title-plan-grid">
+                    {titlePlans.map((plan, index) => (
+                      <button
+                        type="button"
+                        key={`${plan.direction}-${index}`}
+                        className={cn("title-plan-card", selectedTitlePlan === index && "is-selected")}
+                        onClick={() => applyTitlePlan(plan, index)}
+                      >
+                        <span className="title-plan-direction">{plan.direction}</span>
+                        <strong>{publishPlatform === "xiaohongshu" ? plan.xiaohongshu : plan.videoTitle}</strong>
+                        <span>封面：{plan.coverMain}{plan.coverSub ? ` · ${plan.coverSub}` : ""}</span>
+                        <em>{selectedTitlePlan === index ? "已用于这张封面" : "选用这套"}</em>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </section>
+
               <label className="form-field">
                 <span className="field-label">主标题 <em>必填</em></span>
                 <input
@@ -2106,6 +2285,17 @@ export function App() {
                   placeholder="例如：一场治愈身心的自由之旅"
                 />
                 <span className="field-count">{subtitle.length}/30</span>
+              </label>
+              <label className="form-field">
+                <span className="field-label">发布标题 <em>交给发布人员</em></span>
+                <input
+                  type="text"
+                  value={publishTitle}
+                  maxLength={100}
+                  onChange={(e) => setPublishTitle(e.target.value)}
+                  placeholder="选用标题大师方案后自动填入，也可以手动填写"
+                />
+                <span className="field-count">{publishTitle.length}/100</span>
               </label>
               <label className="form-field">
                 <span className="field-label">关键词 <em>选填</em></span>
@@ -2151,6 +2341,10 @@ export function App() {
                     <span className="summary-value">{subtitle}</span>
                   </div>
                 )}
+                <div className="summary-item">
+                  <span className="summary-label">发布标题</span>
+                  <span className="summary-value">{publishTitle.trim() || title}</span>
+                </div>
                 {keywords && (
                   <div className="summary-item">
                     <span className="summary-label">关键词</span>
@@ -2276,6 +2470,20 @@ export function App() {
               <div className="shortfall-note"><p>ℹ️ {shortfallNote}</p></div>
             )}
 
+            {runState === "done" && (verticalResults.length > 0 || horizontalResults.length > 0) && (
+              <div className="delivery-card">
+                <div>
+                  <span>交给发布人员</span>
+                  <strong>{publishTitle.trim() || title}</strong>
+                  <p>封面字：{title}{subtitle ? ` · ${subtitle}` : ""}</p>
+                </div>
+                <div className="delivery-actions">
+                  <button type="button" onClick={() => { void copyDelivery(); }}><Copy size={15} />{deliveryCopied ? "已复制" : "复制文案"}</button>
+                  <button type="button" onClick={() => downloadDelivery()}><Download size={15} />下载文案</button>
+                </div>
+              </div>
+            )}
+
             {/* 队列分批结果：每批一组，组里每张都能单独调整（和普通封面完全一样） */}
             {queue.map((t) => {
               const covers = results.filter((c) => c.group === t.id && !c.error);
@@ -2285,8 +2493,16 @@ export function App() {
               return (
                 <div key={`grp-${t.id}`} className="task-group">
                   <div className="task-group-head">
-                    <strong>{t.label}</strong>
-                    <span>{covers.filter((c) => c.image_url).length} 张 · {taskStatusText(t.status)}</span>
+                    <div>
+                      <strong>{t.label}</strong>
+                      {t.publishTitle && <small>发布标题：{t.publishTitle}</small>}
+                    </div>
+                    <div className="task-group-delivery">
+                      <span>{covers.filter((c) => c.image_url).length} 张 · {taskStatusText(t.status)}</span>
+                      {t.status === "done" && t.publishTitle && (
+                        <button type="button" onClick={() => { void copyDelivery(t); }}><Copy size={13} />复制交付文案</button>
+                      )}
+                    </div>
                   </div>
                   {vs.length > 0 && <div className="results-grid is-vertical">{vs.map(renderCard)}</div>}
                   {hs.length > 0 && <div className="results-grid is-horizontal">{hs.map(renderCard)}</div>}

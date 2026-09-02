@@ -11,6 +11,7 @@ LIPA is a Xiaohongshu / Douyin cover generator PWA. It turns uploaded images, ma
 - Engine selector before generation
 - Image2 / OpenAI GPT-Image-2 adapter
 - SeeDance / 即梦 CLI adapter
+- Optional Title Boom connection: paste a full script, choose a generated publishing title + cover copy, then continue through the unchanged cover pipeline
 
 ## Setup
 
@@ -24,6 +25,15 @@ Fill `.env.local` with the providers you want to use:
 ```env
 OPENAI_API_KEY=
 ```
+
+The title-writing step calls the existing Title Boom service, so its model and prompts remain owned by `changdao-title-h5`:
+
+```env
+TITLE_MASTER_API_URL=https://changdao-title-h5.vercel.app/api/generate
+TITLE_MASTER_TIMEOUT_MS=100000
+```
+
+If no full script is supplied, no title-service request is made and the original manual cover-copy workflow is used.
 
 For SeeDance / 即梦, install and log in once on the machine:
 

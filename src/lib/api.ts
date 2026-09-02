@@ -24,6 +24,21 @@ function authHeaders(): Record<string, string> {
   return { Authorization: `Bearer ${token}` };
 }
 
+export async function generateTitlePlans(
+  text: string,
+  angle = "",
+): Promise<import("./types").TitlePlan[]> {
+  const res = await fetch(`${API_BASE}/api/title-plans`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ text, angle }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "标题生成失败，请稍后重试");
+  if (!Array.isArray(data.plans)) throw new Error("标题大师没有返回可用方案");
+  return data.plans;
+}
+
 // ─── Auth API ───
 
 export async function sendCode(phone: string): Promise<{ ok: boolean; error?: string }> {

@@ -20,3 +20,11 @@ Selected direction: macOS-native minimal editorial. The UI should feel like a pr
 - **Accent**: Apple blue `#0071e3` for focus states and active indicators only — used sparingly.
 
 Logo direction: use a macOS-style rounded-square app icon with four letters in a 2x2 grid: L I on the first row, P A on the second row. Dark background (#1d1d1f), white text. Use it for the header logo and PWA icon.
+
+## Title Master Integration Guardrails
+
+- Keep BAKABAKA's Image2, Seedream, SeeDance, design-matrix, prompt, regeneration, and queue pipelines unchanged.
+- Full-script title generation is optional. When the full script is empty, make no Title Master request and preserve the original manual cover-copy flow.
+- Title Master remains a separate service owned by `lipaliu/changdao-title-h5`; call its API through the thin server proxy instead of copying or rewriting its model prompts inside BAKABAKA.
+- A selected title plan may only fill the publishing title, cover main text, and cover subtitle before handing control back to the existing cover-generation pipeline.
+- Final delivery should keep the generated cover image together with the publishing title and cover copy for the publishing team.

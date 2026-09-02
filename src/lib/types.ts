@@ -21,6 +21,15 @@ export type CoverPlan = {
   prompt?: string;
 };
 
+export type TitlePlan = {
+  direction: string;
+  xiaohongshu: string;
+  videoTitle: string;
+  videoTitleAlt: string;
+  coverMain: string;
+  coverSub: string;
+};
+
 export type GenerateEvent = {
   status: "analyzing" | "planning" | "planned" | "generating" | "done" | "error";
   progress: number;
@@ -39,6 +48,8 @@ export type HistoryBatch = {
   title: string;
   subtitle: string;
   keywords?: string;
+  publishTitle?: string;
+  publishPlatform?: "xiaohongshu" | "douyin";
   engine?: ImageEngine;
   count: GenerateCount;
   baseImage: string;

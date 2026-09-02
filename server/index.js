@@ -18,6 +18,7 @@ import { deductCredits, refundCredits } from "./credits.js";
 import { shouldApplyWatermark, addWatermark } from "./watermark.js";
 import authRoutes from "./routes/auth.js";
 import creditsRoutes from "./routes/credits.js";
+import { requestTitlePlans } from "./title-master.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -831,6 +832,21 @@ app.use(optionalAuth);
 // Mount auth and credits routes
 app.use("/api/auth", authRoutes);
 app.use("/api/credits", creditsRoutes);
+
+// 标题大师连接层：只做服务端转发，模型、提示词和标题逻辑继续由原项目负责。
+app.post("/api/title-plans", async (req, res) => {
+  try {
+    const result = await requestTitlePlans({
+      text: req.body?.text,
+      angle: req.body?.angle,
+    });
+    return res.json(result);
+  } catch (error) {
+    console.warn(`[title-master] ${error?.message || error}`);
+    const status = /至少输入|不能超过/u.test(String(error?.message || "")) ? 400 : 502;
+    return res.status(status).json({ error: error?.message || "标题生成失败，请稍后重试" });
+  }
+});
 
 function writeSse(res, payload) {
   res.write(`data: ${JSON.stringify(payload)}\n\n`);
