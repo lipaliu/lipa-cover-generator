@@ -43,7 +43,13 @@ export async function requestTitlePlans({ text, angle = "", fetchImpl = fetch })
       body: JSON.stringify({ text: sourceText, angle: creativeAngle, model: "doubao" }),
     });
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data?.error || `标题大师返回 ${response.status}`);
+    if (!response.ok) {
+      const upstreamMessage = String(data?.error || `标题大师返回 ${response.status}`);
+      if (/overdue balance|insufficient balance|余额不足|欠费/iu.test(upstreamMessage)) {
+        throw new Error("标题大师的豆包账户余额不足，请充值后再试；没有原文仍可直接进入巴咔巴咔生图。");
+      }
+      throw new Error(upstreamMessage);
+    }
     return {
       plans: normalizeTitlePlans(data),
       provider: data?.provider || "volcengine",

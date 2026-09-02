@@ -36,3 +36,17 @@ test("proxies the full text to the title master's existing Doubao route", async 
 test("rejects short source text before calling the title service", async () => {
   await assert.rejects(() => requestTitlePlans({ text: "太短", fetchImpl: async () => { throw new Error("should not run"); } }), /至少输入 10 个字/u);
 });
+
+test("turns an overdue title-model response into a clear Chinese message", async () => {
+  await assert.rejects(
+    () => requestTitlePlans({
+      text: "这是一段超过十个字的完整口播稿，用于测试欠费提示。",
+      fetchImpl: async () => ({
+        ok: false,
+        status: 502,
+        json: async () => ({ error: "The request failed because your account has an overdue balance." }),
+      }),
+    }),
+    /标题大师的豆包账户余额不足/u,
+  );
+});
