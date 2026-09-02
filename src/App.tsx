@@ -280,6 +280,7 @@ async function analyzePaletteFromDataUrl(dataUrl: string): Promise<{ dominant: s
 /* ─── Main App ─── */
 export function App() {
   const [step, setStep] = useState<Step>(1);
+  const [entryFlow, setEntryFlow] = useState<"choose" | "title" | "cover">("choose");
   const [showHistory, setShowHistory] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [showFavorites, setShowFavorites] = useState(false);
@@ -488,6 +489,7 @@ export function App() {
     setResults((prev) => [...prev, { id: newId, combination: fav.combination, label: fav.label, ratio: fav.ratio, engine: fav.engine as ImageEngine | undefined, image_url: fav.thumb }]);
     setShowFavorites(false);
     setStep(4);
+    setEntryFlow("cover");
     setRunState("done");
     flashNewCover(newId);
   };
@@ -643,6 +645,13 @@ export function App() {
       const plan = titlePlans[selectedTitlePlan];
       if (plan) setPublishTitle(platform === "xiaohongshu" ? plan.xiaohongshu : plan.videoTitle);
     }
+  };
+
+  const continueToCoverGenerator = () => {
+    if (selectedTitlePlan == null) return;
+    setEntryFlow("cover");
+    setStep(1);
+    window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
   const deliveryText = (values?: { publishTitle?: string; coverTitle?: string; coverSubtitle?: string; publishPlatform?: "xiaohongshu" | "douyin" }) => {
@@ -1251,6 +1260,7 @@ export function App() {
     setErrorMessage("");
     setDownloadStatus(null);
     setStep(1);
+    setEntryFlow("choose");
   };
 
   const openBatch = (batch: HistoryBatch) => {
@@ -1268,6 +1278,7 @@ export function App() {
     setProgress(batch.results.length);
     setRunState("done");
     setStep(4);
+    setEntryFlow("cover");
     setShowHistory(false);
   };
 
@@ -1293,6 +1304,7 @@ export function App() {
   // 回主页：任意步骤都能一键回到第一步并滚到顶部（不清空已生成的结果）。
   const goHome = () => {
     setStep(1);
+    setEntryFlow("choose");
     setShowHistory(false);
     setShowSettings(false);
     setShowFavorites(false);
@@ -1703,6 +1715,130 @@ export function App() {
         <p className="hero-slogan">自媒体封面之王 · King of Cover</p>
         <p className="hero-subtitle">上传一张底图，AI 按爆款审美自动排版花字、多引擎多风格一次出图，一眼挑出最吸睛的封面。</p>
       </section>
+
+      {entryFlow === "choose" && (
+        <section className="entry-panel fade-in">
+          <div className="entry-heading">
+            <span>开始之前</span>
+            <h2>你现在有完整原文吗？</h2>
+            <p>有原文就先生成标题和封面字；没有原文就直接进入巴咔巴咔。</p>
+          </div>
+          <div className="entry-options">
+            <button type="button" className="entry-option is-primary" onClick={() => setEntryFlow("title")}>
+              <span className="entry-option-icon"><Type size={24} /></span>
+              <strong>我有原文</strong>
+              <p>粘贴原文，先生成发布标题、封面主字和副标题</p>
+              <em>先生成文案 <ArrowRight size={15} /></em>
+            </button>
+            <button type="button" className="entry-option" onClick={() => { setEntryFlow("cover"); setStep(1); }}>
+              <span className="entry-option-icon"><ImagePlus size={24} /></span>
+              <strong>我没有原文</strong>
+              <p>跳过标题生成，直接进入原来的巴咔巴咔生图流程</p>
+              <em>直接做封面 <ArrowRight size={15} /></em>
+            </button>
+          </div>
+        </section>
+      )}
+
+      {entryFlow === "title" && (
+        <section className="entry-panel title-entry-panel fade-in">
+          <button type="button" className="entry-back" onClick={() => setEntryFlow("choose")}><ArrowLeft size={15} />返回选择</button>
+          <div className="entry-heading">
+            <span>第一步 · 原文变标题</span>
+            <h2>把完整原文放进来</h2>
+            <p>标题大师会给出发布标题和封面上的字；选好后再进入巴咔巴咔生图。</p>
+          </div>
+          <section className="title-bridge">
+            <div className="title-bridge-head">
+              <div>
+                <strong>标题与封面文案</strong>
+                <p>这里只生成文字，选定以后才进入巴咔巴咔的底图与生图流程</p>
+              </div>
+              <span className="title-bridge-badge">豆包 Seed 2.1</span>
+            </div>
+            <label className="form-field">
+              <span className="field-label">完整原文 <em>必填</em></span>
+              <textarea
+                value={sourceText}
+                maxLength={20000}
+                rows={9}
+                onChange={(e) => {
+                  setSourceText(e.target.value);
+                  setTitlePlans([]);
+                  setSelectedTitlePlan(null);
+                  setTitlePlansError("");
+                }}
+                placeholder="粘贴完整口播稿、录音转写或视频文案"
+              />
+              <span className="field-count is-textarea">{sourceText.length}/20,000</span>
+            </label>
+            <label className="form-field">
+              <span className="field-label">创作参考 <em>选填</em></span>
+              <input
+                type="text"
+                value={titleAngle}
+                maxLength={2000}
+                onChange={(e) => {
+                  setTitleAngle(e.target.value);
+                  setTitlePlans([]);
+                  setSelectedTitlePlan(null);
+                  setTitlePlansError("");
+                }}
+                placeholder="例如：更犀利，但不要标题党"
+              />
+              <span className="field-count">{titleAngle.length}/2,000</span>
+            </label>
+            <div className="title-bridge-actions">
+              <div className="platform-toggle" aria-label="发布平台">
+                <button type="button" className={publishPlatform === "xiaohongshu" ? "is-active" : ""} onClick={() => changePublishPlatform("xiaohongshu")}>小红书</button>
+                <button type="button" className={publishPlatform === "douyin" ? "is-active" : ""} onClick={() => changePublishPlatform("douyin")}>抖音</button>
+              </div>
+              <button
+                type="button"
+                className="title-generate-btn"
+                disabled={sourceText.trim().length < 10 || titlePlansLoading}
+                onClick={() => { void requestTitleMaster(); }}
+              >
+                {titlePlansLoading ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
+                {titlePlansLoading ? "正在读原文…" : "生成标题和封面字"}
+              </button>
+            </div>
+            {titlePlansError && <p className="title-bridge-error">{titlePlansError}</p>}
+            {titlePlans.length > 0 && (
+              <div className="title-plan-grid">
+                {titlePlans.map((plan, index) => (
+                  <button
+                    type="button"
+                    key={`${plan.direction}-${index}`}
+                    className={cn("title-plan-card", selectedTitlePlan === index && "is-selected")}
+                    onClick={() => applyTitlePlan(plan, index)}
+                  >
+                    <span className="title-plan-direction">{plan.direction}</span>
+                    <strong>{publishPlatform === "xiaohongshu" ? plan.xiaohongshu : plan.videoTitle}</strong>
+                    <span>封面：{plan.coverMain}{plan.coverSub ? ` · ${plan.coverSub}` : ""}</span>
+                    <em>{selectedTitlePlan === index ? "已选定" : "选择这套"}</em>
+                  </button>
+                ))}
+              </div>
+            )}
+            {selectedTitlePlan != null && (
+              <div className="title-entry-confirm">
+                <div>
+                  <span>已选发布标题</span>
+                  <strong>{publishTitle}</strong>
+                  <p>封面字：{title}{subtitle ? ` · ${subtitle}` : ""}</p>
+                </div>
+                <button type="button" className="generate-btn" onClick={continueToCoverGenerator}>
+                  进入巴咔巴咔生图 <ArrowRight size={18} />
+                </button>
+              </div>
+            )}
+          </section>
+        </section>
+      )}
+
+      {entryFlow === "cover" && (
+        <>
 
       {/* Step Indicator */}
       <nav className="step-indicator" aria-label="创作步骤">
@@ -2185,85 +2321,10 @@ export function App() {
               <span className="step-number">02</span>
               <div>
                 <h2>填写文案</h2>
-                <p>有全文就让标题大师先写；没有全文就照旧直接填写封面字</p>
+                <p>{sourceText.trim() ? "标题和封面字已带入，可以在生图前最后调整" : "输入封面上要展示的标题和副标题"}</p>
               </div>
             </div>
             <div className="form-fields">
-              <section className="title-bridge">
-                <div className="title-bridge-head">
-                  <div>
-                    <strong>连接标题大师</strong>
-                    <p>选填 · 只负责起标题，不改变巴咔巴咔的任何生图模型与风格设置</p>
-                  </div>
-                  <span className="title-bridge-badge">豆包 Seed 2.1</span>
-                </div>
-                <label className="form-field">
-                  <span className="field-label">全文 <em>选填</em></span>
-                  <textarea
-                    value={sourceText}
-                    maxLength={20000}
-                    rows={7}
-                    onChange={(e) => {
-                      setSourceText(e.target.value);
-                      setTitlePlans([]);
-                      setSelectedTitlePlan(null);
-                      setTitlePlansError("");
-                    }}
-                    placeholder="粘贴完整口播稿、录音转写或视频文案。留空时不调用标题大师，下面仍可直接填写封面字。"
-                  />
-                  <span className="field-count is-textarea">{sourceText.length}/20,000</span>
-                </label>
-                <label className="form-field">
-                  <span className="field-label">创作参考 <em>选填</em></span>
-                  <input
-                    type="text"
-                    value={titleAngle}
-                    maxLength={2000}
-                    onChange={(e) => {
-                      setTitleAngle(e.target.value);
-                      setTitlePlans([]);
-                      setSelectedTitlePlan(null);
-                      setTitlePlansError("");
-                    }}
-                    placeholder="例如：更犀利，但不要标题党"
-                  />
-                  <span className="field-count">{titleAngle.length}/2,000</span>
-                </label>
-                <div className="title-bridge-actions">
-                  <div className="platform-toggle" aria-label="发布平台">
-                    <button type="button" className={publishPlatform === "xiaohongshu" ? "is-active" : ""} onClick={() => changePublishPlatform("xiaohongshu")}>小红书</button>
-                    <button type="button" className={publishPlatform === "douyin" ? "is-active" : ""} onClick={() => changePublishPlatform("douyin")}>抖音</button>
-                  </div>
-                  <button
-                    type="button"
-                    className="title-generate-btn"
-                    disabled={sourceText.trim().length < 10 || titlePlansLoading}
-                    onClick={() => { void requestTitleMaster(); }}
-                  >
-                    {titlePlansLoading ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
-                    {titlePlansLoading ? "标题大师正在读全文…" : "生成标题方案"}
-                  </button>
-                </div>
-                {titlePlansError && <p className="title-bridge-error">{titlePlansError}</p>}
-                {titlePlans.length > 0 && (
-                  <div className="title-plan-grid">
-                    {titlePlans.map((plan, index) => (
-                      <button
-                        type="button"
-                        key={`${plan.direction}-${index}`}
-                        className={cn("title-plan-card", selectedTitlePlan === index && "is-selected")}
-                        onClick={() => applyTitlePlan(plan, index)}
-                      >
-                        <span className="title-plan-direction">{plan.direction}</span>
-                        <strong>{publishPlatform === "xiaohongshu" ? plan.xiaohongshu : plan.videoTitle}</strong>
-                        <span>封面：{plan.coverMain}{plan.coverSub ? ` · ${plan.coverSub}` : ""}</span>
-                        <em>{selectedTitlePlan === index ? "已用于这张封面" : "选用这套"}</em>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </section>
-
               <label className="form-field">
                 <span className="field-label">主标题 <em>必填</em></span>
                 <input
@@ -2610,6 +2671,8 @@ export function App() {
           )
         )}
       </footer>
+        </>
+      )}
 
       {/* Auth Modals */}
       {!isLocalLipa && (

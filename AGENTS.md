@@ -24,7 +24,7 @@ Logo direction: use a macOS-style rounded-square app icon with four letters in a
 ## Title Master Integration Guardrails
 
 - Keep BAKABAKA's Image2, Seedream, SeeDance, design-matrix, prompt, regeneration, and queue pipelines unchanged.
-- Full-script title generation is optional. When the full script is empty, make no Title Master request and preserve the original manual cover-copy flow.
+- Start with a two-path choice. With a full script: generate and select the publishing title + cover copy first, then enter BAKABAKA's existing image workflow with those fields prefilled. Without a full script: skip Title Master and enter the existing BAKABAKA workflow immediately.
 - Title Master remains a separate service owned by `lipaliu/changdao-title-h5`; call its API through the thin server proxy instead of copying or rewriting its model prompts inside BAKABAKA.
 - A selected title plan may only fill the publishing title, cover main text, and cover subtitle before handing control back to the existing cover-generation pipeline.
 - Final delivery should keep the generated cover image together with the publishing title and cover copy for the publishing team.
