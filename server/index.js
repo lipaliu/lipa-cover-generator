@@ -446,6 +446,8 @@ if (ACCESS_PASSWORD) {
   }
   .logo { width: min(230px, 70%); height: auto; margin: 0 auto 6px; display: block;
     filter: drop-shadow(0 6px 22px rgba(120, 100, 220, 0.35)); }
+  .logoLink { display: block; text-decoration: none; border-radius: 20px; }
+  .logoLink:focus-visible { outline: 3px solid rgba(139,112,240,0.35); outline-offset: 4px; }
   .slogan { font-size: 13px; color: rgba(36,26,61,0.6); margin-bottom: 26px; letter-spacing: 0.02em; }
   .field { margin-bottom: 14px; text-align: left; }
   .field label { display: block; font-size: 12px; font-weight: 600; color: rgba(36,26,61,0.65); margin: 0 0 6px 4px; }
@@ -474,7 +476,7 @@ if (ACCESS_PASSWORD) {
 <body>
   <form class="card" method="POST" action="/access-login">
     <input type="hidden" name="next" value="${escapeHtml(nextPath)}" />
-    <img class="logo" src="/logo.png" alt="巴卡巴卡 BAKABAKA" />
+    <a class="logoLink" href="/" aria-label="回到首页"><img class="logo" src="/logo.png" alt="巴卡巴卡 BAKABAKA" /></a>
     <p class="slogan">自媒体封面之王 · King of Cover</p>
     <div class="field">
       <label>用户名</label>

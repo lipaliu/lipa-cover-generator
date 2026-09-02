@@ -1299,7 +1299,12 @@ export function App() {
     if (step < 4 && canProceed(step)) setStep((step + 1) as Step);
   };
   const prevStep = () => {
-    if (step > 1) setStep((step - 1) as Step);
+    if (step === 1) {
+      setEntryFlow("choose");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    setStep((step - 1) as Step);
   };
   // 回主页：任意步骤都能一键回到第一步并滚到顶部（不清空已生成的结果）。
   const goHome = () => {
@@ -1709,9 +1714,9 @@ export function App() {
 
       {/* Hero Section */}
       <section className="hero">
-        <div className="hero-logo-plate">
+        <button type="button" className="hero-logo-plate" title="回到首页" onClick={goHome}>
           <img src="/logo.png" alt="巴卡巴卡 BAKABAKA" className="hero-logo" />
-        </div>
+        </button>
         <p className="hero-slogan">自媒体封面之王 · King of Cover</p>
         <p className="hero-subtitle">上传一张底图，AI 按爆款审美自动排版花字、多引擎多风格一次出图，一眼挑出最吸睛的封面。</p>
       </section>
@@ -2635,9 +2640,9 @@ export function App() {
 
       {/* Step Navigation */}
       <footer className="step-nav">
-        <button type="button" className="nav-prev" onClick={prevStep} disabled={step === 1}>
+        <button type="button" className="nav-prev" onClick={prevStep}>
           <ArrowLeft size={18} />
-          上一步
+          {step === 1 ? "返回选择" : "上一步"}
         </button>
         {!queueRunning && (
           <button

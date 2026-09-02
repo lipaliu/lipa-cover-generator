@@ -1997,7 +1997,11 @@ h1, h2, h3, p, span, strong, small, label {
     inset 0 -16px 36px rgba(56, 46, 140, 0.4),
     0 20px 54px rgba(36, 26, 96, 0.34);
   overflow: hidden;
+  transition: transform 0.18s ease;
 }
+.hero-logo-plate { cursor: pointer; }
+.hero-logo-plate:hover { transform: translateY(-2px); }
+.hero-logo-plate:focus-visible { outline: 3px solid var(--accent-glow); outline-offset: 4px; }
 /* 顶部弧形高光反射，强化厚玻璃质感 */
 .hero-logo-plate::before {
   content: "";
