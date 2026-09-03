@@ -2550,21 +2550,24 @@ h1, h2, h3, p, span, strong, small, label {
   background: rgba(255,255,255,0.5);
   border: 1px solid var(--border);
 }
-.title-entry-confirm {
+.title-compose {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 16px;
-  border-radius: 14px;
+  flex-direction: column;
+  gap: 16px;
+  padding: 18px;
+  border-radius: 16px;
   background: var(--accent-glow);
   border: 1px solid rgba(0, 113, 227, 0.2);
 }
-.title-entry-confirm > div { min-width: 0; }
-.title-entry-confirm span { display: block; margin-bottom: 4px; font-size: 11px; color: var(--ink-tertiary); }
-.title-entry-confirm strong { display: block; font-size: 15px; color: var(--ink-primary); }
-.title-entry-confirm p { margin: 4px 0 0; font-size: 12px; color: var(--ink-secondary); }
-.title-entry-confirm .generate-btn { width: auto; flex: none; padding: 12px 17px; font-size: 14px; }
+.title-compose-head > span { display: block; margin-bottom: 4px; font-size: 11px; font-weight: 800; color: var(--accent); }
+.title-compose-head strong { display: block; font-size: 16px; color: var(--ink-primary); }
+.title-compose-head p { margin: 4px 0 0; font-size: 12.5px; line-height: 1.55; color: var(--ink-secondary); }
+.title-compose-fields { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 12px; }
+.title-compose-fields .form-field { min-width: 0; }
+.title-compose-fields .form-field textarea { min-height: 92px; }
+.title-compose-footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.title-compose-footer p { margin: 0; font-size: 12.5px; color: var(--ink-secondary); }
+.title-compose-footer .generate-btn { width: auto; flex: none; padding: 12px 17px; font-size: 14px; }
 .title-bridge {
   display: flex;
   flex-direction: column;
@@ -2659,7 +2662,18 @@ h1, h2, h3, p, span, strong, small, label {
 .title-plan-card.is-selected { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-glow); }
 .title-plan-card strong { font-size: 14px; line-height: 1.45; color: var(--ink-primary); }
 .title-plan-card > span:not(.title-plan-direction) { font-size: 12px; line-height: 1.45; color: var(--ink-secondary); }
-.title-plan-card em { font-style: normal; font-size: 11px; font-weight: 700; color: var(--accent); }
+.title-plan-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.title-plan-actions button {
+  padding: 5px 8px;
+  border-radius: 7px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--ink-secondary);
+}
+.title-plan-actions button:hover { border-color: var(--accent); color: var(--accent); }
+.title-plan-actions button.is-primary { border-color: var(--accent); color: white; background: var(--accent); }
 .title-plan-direction {
   padding: 3px 7px;
   border-radius: 999px;
@@ -2702,8 +2716,9 @@ h1, h2, h3, p, span, strong, small, label {
   .entry-panel { padding: 20px 16px; }
   .entry-options { grid-template-columns: 1fr; }
   .entry-option { min-height: 190px; }
-  .title-entry-confirm { align-items: stretch; flex-direction: column; }
-  .title-entry-confirm .generate-btn { width: 100%; }
+  .title-compose-fields { grid-template-columns: 1fr; }
+  .title-compose-footer { align-items: stretch; flex-direction: column; }
+  .title-compose-footer .generate-btn { width: 100%; }
   .title-plan-grid { grid-template-columns: 1fr; }
   .title-bridge-head,
   .title-bridge-actions,

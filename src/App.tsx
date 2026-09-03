@@ -641,14 +641,10 @@ export function App() {
 
   const changePublishPlatform = (platform: "xiaohongshu" | "douyin") => {
     setPublishPlatform(platform);
-    if (selectedTitlePlan != null) {
-      const plan = titlePlans[selectedTitlePlan];
-      if (plan) setPublishTitle(platform === "xiaohongshu" ? plan.xiaohongshu : plan.videoTitle);
-    }
   };
 
   const continueToCoverGenerator = () => {
-    if (selectedTitlePlan == null) return;
+    if (!publishTitle.trim() || !title.trim()) return;
     setEntryFlow("cover");
     setStep(1);
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -1751,13 +1747,13 @@ export function App() {
           <div className="entry-heading">
             <span>第一步 · 原文变标题</span>
             <h2>把完整原文放进来</h2>
-            <p>标题大师会给出发布标题和封面上的字；选好后再进入巴咔巴咔生图。</p>
+            <p>标题大师先给几组灵感火花；你整理成自己的发布标题和封面字后，再进入巴咔巴咔生图。</p>
           </div>
           <section className="title-bridge">
             <div className="title-bridge-head">
               <div>
-                <strong>标题与封面文案</strong>
-                <p>这里只生成文字，选定以后才进入巴咔巴咔的底图与生图流程</p>
+                <strong>标题灵感与封面文案</strong>
+                <p>AI 给你的只是灵感火花，可以选一套作为基底，也可以完全自己写</p>
               </div>
               <span className="title-bridge-badge">豆包 Seed 2.1</span>
             </div>
@@ -1805,39 +1801,79 @@ export function App() {
                 onClick={() => { void requestTitleMaster(); }}
               >
                 {titlePlansLoading ? <LoaderCircle className="spin" size={16} /> : <Sparkles size={16} />}
-                {titlePlansLoading ? "正在读原文…" : "生成标题和封面字"}
+                {titlePlansLoading ? "正在读原文…" : "生成几组灵感火花"}
               </button>
             </div>
             {titlePlansError && <p className="title-bridge-error">{titlePlansError}</p>}
             {titlePlans.length > 0 && (
               <div className="title-plan-grid">
                 {titlePlans.map((plan, index) => (
-                  <button
-                    type="button"
-                    key={`${plan.direction}-${index}`}
-                    className={cn("title-plan-card", selectedTitlePlan === index && "is-selected")}
-                    onClick={() => applyTitlePlan(plan, index)}
-                  >
+                  <article key={`${plan.direction}-${index}`} className={cn("title-plan-card", selectedTitlePlan === index && "is-selected")}>
                     <span className="title-plan-direction">{plan.direction}</span>
                     <strong>{publishPlatform === "xiaohongshu" ? plan.xiaohongshu : plan.videoTitle}</strong>
                     <span>封面：{plan.coverMain}{plan.coverSub ? ` · ${plan.coverSub}` : ""}</span>
-                    <em>{selectedTitlePlan === index ? "已选定" : "选择这套"}</em>
-                  </button>
+                    <div className="title-plan-actions">
+                      <button type="button" onClick={() => setPublishTitle(publishPlatform === "xiaohongshu" ? plan.xiaohongshu : plan.videoTitle)}>放入发布标题</button>
+                      <button type="button" onClick={() => { setTitle(plan.coverMain); setSubtitle(plan.coverSub); }}>放入封面字</button>
+                      <button type="button" className="is-primary" onClick={() => applyTitlePlan(plan, index)}>{selectedTitlePlan === index ? "整套已填入" : "整套填入"}</button>
+                    </div>
+                  </article>
                 ))}
               </div>
             )}
-            {selectedTitlePlan != null && (
-              <div className="title-entry-confirm">
-                <div>
-                  <span>已选发布标题</span>
-                  <strong>{publishTitle}</strong>
-                  <p>封面字：{title}{subtitle ? ` · ${subtitle}` : ""}</p>
-                </div>
-                <button type="button" className="generate-btn" onClick={continueToCoverGenerator}>
+            <div className="title-compose">
+              <div className="title-compose-head">
+                <span>最终由你决定</span>
+                <strong>把想要的文字放进对应位置</strong>
+                <p>可以从上面的灵感中复制、拼接和修改，不必原样使用任何一套。</p>
+              </div>
+              <div className="title-compose-fields">
+                <label className="form-field">
+                  <span className="field-label">发布标题 <em>必填 · 给发布人员</em></span>
+                  <textarea
+                    value={publishTitle}
+                    maxLength={100}
+                    rows={3}
+                    onChange={(e) => setPublishTitle(e.target.value)}
+                    placeholder="把最终发布时使用的标题放在这里"
+                  />
+                  <span className="field-count is-textarea">{publishTitle.length}/100</span>
+                </label>
+                <label className="form-field">
+                  <span className="field-label">封面主字 <em>必填 · 醒目短句</em></span>
+                  <input
+                    type="text"
+                    value={title}
+                    maxLength={30}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="决定封面上最大、最醒目的字"
+                  />
+                  <span className="field-count">{title.length}/30</span>
+                </label>
+                <label className="form-field">
+                  <span className="field-label">封面副标题 <em>选填 · 补充说明</em></span>
+                  <input
+                    type="text"
+                    value={subtitle}
+                    maxLength={30}
+                    onChange={(e) => setSubtitle(e.target.value)}
+                    placeholder="需要时补一句，不需要可以留空"
+                  />
+                  <span className="field-count">{subtitle.length}/30</span>
+                </label>
+              </div>
+              <div className="title-compose-footer">
+                <p>{!publishTitle.trim() || !title.trim() ? "填好发布标题和封面主字，就可以进入生图。" : "文案已准备好，进入巴咔巴咔后仍可继续修改。"}</p>
+                <button
+                  type="button"
+                  className="generate-btn"
+                  disabled={!publishTitle.trim() || !title.trim()}
+                  onClick={continueToCoverGenerator}
+                >
                   进入巴咔巴咔生图 <ArrowRight size={18} />
                 </button>
               </div>
-            )}
+            </div>
           </section>
         </section>
       )}
