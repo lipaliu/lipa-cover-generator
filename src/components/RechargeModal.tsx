@@ -1,74 +1,175 @@
-import { X, Coins, Zap } from "lucide-react";
+import { useEffect, useState } from "react";
+import { ArrowLeft, CheckCircle2, Coins, Loader2, X, Zap } from "lucide-react";
+import {
+  createBillingOrder,
+  fetchBillingOrder,
+  fetchBillingProducts,
+  type BillingProduct,
+} from "../lib/api";
 
 interface RechargeModalProps {
   open: boolean;
   onClose: () => void;
+  onPaid: () => void;
   currentCredits: number;
   requiredCredits: number;
 }
 
-const rechargePacks = [
-  { id: "pack_20", credits: 20, price: 9.9, label: "尝鲜包", tag: "" },
-  { id: "pack_60", credits: 60, price: 25, label: "热门包", tag: "热门" },
-  { id: "pack_150", credits: 150, price: 49, label: "超值包", tag: "超值" },
-];
+type PaymentOrder = {
+  orderNo: string;
+  name: string;
+  amountFen: number;
+  credits: number;
+  qrDataUrl: string;
+};
 
-const subscriptionPlans = [
-  { id: "creator_monthly", name: "创作者版", price: 49, period: "月", credits: 200, tag: "" },
-  { id: "creator_yearly", name: "创作者版", price: 349, period: "年", credits: "200/月+送500", tag: "推荐" },
-];
+function price(amountFen: number) {
+  return `¥${(amountFen / 100).toFixed(amountFen % 100 === 0 ? 0 : 2)}`;
+}
 
-export function RechargeModal({ open, onClose, currentCredits, requiredCredits }: RechargeModalProps) {
+export function RechargeModal({ open, onClose, onPaid, currentCredits, requiredCredits }: RechargeModalProps) {
+  const [packs, setPacks] = useState<BillingProduct[]>([]);
+  const [subscriptions, setSubscriptions] = useState<BillingProduct[]>([]);
+  const [paymentReady, setPaymentReady] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [order, setOrder] = useState<PaymentOrder | null>(null);
+  const [paid, setPaid] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    setError("");
+    setOrder(null);
+    setPaid(false);
+    setLoading(true);
+    fetchBillingProducts()
+      .then((data) => {
+        setPacks(data.packs || []);
+        setSubscriptions(data.subscriptions || []);
+        setPaymentReady(data.paymentReady !== false);
+      })
+      .catch((e) => setError(e instanceof Error ? e.message : "套餐加载失败"))
+      .finally(() => setLoading(false));
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !order || paid) return;
+    let active = true;
+    const check = async () => {
+      try {
+        const data = await fetchBillingOrder(order.orderNo);
+        if (active && data.order.status === "paid") {
+          setPaid(true);
+          onPaid();
+        }
+      } catch { /* 下一轮继续查，避免一次网络抖动中断支付 */ }
+    };
+    check();
+    const timer = window.setInterval(check, 3000);
+    return () => { active = false; window.clearInterval(timer); };
+  }, [open, order, paid, onPaid]);
+
   if (!open) return null;
+  const deficit = Math.max(0, requiredCredits - currentCredits);
 
-  const deficit = requiredCredits - currentCredits;
+  const startPayment = async (product: BillingProduct) => {
+    setLoading(true);
+    setError("");
+    try {
+      const data = await createBillingOrder(product.id);
+      setOrder({ ...data.order, qrDataUrl: data.qrDataUrl });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "创建支付订单失败");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const ProductCard = ({ product, subscription = false }: { product: BillingProduct; subscription?: boolean }) => (
+    <button
+      type="button"
+      className={`recharge-card${subscription ? " recharge-card--sub" : ""}`}
+      onClick={() => startPayment(product)}
+      disabled={loading || !paymentReady}
+    >
+      {product.id === "pack_pro" || product.id === "sub_yearly" ? <span className="recharge-tag">推荐</span> : null}
+      <span className={subscription ? "recharge-plan-name" : "recharge-credits"}>
+        {subscription ? product.name : `${product.credits} 积分`}
+      </span>
+      <span className="recharge-price">{price(product.amountFen)}</span>
+      {product.amountFen < product.originalAmountFen && (
+        <span className="recharge-original-price">{price(product.originalAmountFen)}</span>
+      )}
+      <span className="recharge-unit">
+        {subscription ? `${product.credits} 积分 · ${product.months} 个月会员` : product.note}
+      </span>
+    </button>
+  );
 
   return (
     <div className="login-modal-overlay" onClick={onClose}>
       <div className="recharge-modal" onClick={(e) => e.stopPropagation()}>
-        <button className="login-modal-close" onClick={onClose}>
-          <X size={20} />
-        </button>
+        <button className="login-modal-close" onClick={onClose}><X size={20} /></button>
 
-        <div className="recharge-modal-header">
-          <h2>积分不足</h2>
-          <p>
-            当前余额 <strong>{currentCredits}</strong> 积分，本次需要{" "}
-            <strong>{requiredCredits}</strong> 积分（差 {deficit} 积分）
-          </p>
-        </div>
-
-        <div className="recharge-section">
-          <h3><Coins size={16} /> 积分充值</h3>
-          <div className="recharge-grid">
-            {rechargePacks.map((pack) => (
-              <button key={pack.id} className="recharge-card" onClick={() => alert("支付功能开发中，敬请期待")}>
-                {pack.tag && <span className="recharge-tag">{pack.tag}</span>}
-                <span className="recharge-credits">{pack.credits} 积分</span>
-                <span className="recharge-price">¥{pack.price}</span>
-                <span className="recharge-unit">¥{(pack.price / pack.credits).toFixed(2)}/积分</span>
+        {order ? (
+          <div className="payment-panel">
+            {!paid && (
+              <button className="payment-back" type="button" onClick={() => setOrder(null)}>
+                <ArrowLeft size={15} /> 换一个套餐
               </button>
-            ))}
+            )}
+            {paid ? (
+              <div className="payment-success">
+                <CheckCircle2 size={54} />
+                <h2>支付成功，积分已到账</h2>
+                <p>{order.name} · +{order.credits} 积分</p>
+                <button type="button" className="login-btn-primary" onClick={onClose}>继续做封面</button>
+              </div>
+            ) : (
+              <>
+                <div className="recharge-modal-header">
+                  <h2>微信扫码支付</h2>
+                  <p>{order.name} · <strong>{price(order.amountFen)}</strong></p>
+                </div>
+                <img className="payment-qr" src={order.qrDataUrl} alt="微信支付二维码" />
+                <p className="payment-tip">请打开微信扫一扫 · 支付后积分自动到账</p>
+                <p className="payment-order-no">订单号 {order.orderNo}</p>
+              </>
+            )}
           </div>
-        </div>
+        ) : (
+          <>
+            <div className="recharge-modal-header">
+              <h2>{deficit > 0 ? "积分不足" : "充值与会员"}</h2>
+              <p>
+                当前余额 <strong>{currentCredits}</strong> 积分
+                {deficit > 0 ? <>，本次还差 <strong>{deficit}</strong> 积分</> : null}
+              </p>
+            </div>
 
-        <div className="recharge-section">
-          <h3><Zap size={16} /> 订阅会员（更划算）</h3>
-          <div className="recharge-grid">
-            {subscriptionPlans.map((plan) => (
-              <button key={plan.id} className="recharge-card recharge-card--sub" onClick={() => alert("支付功能开发中，敬请期待")}>
-                {plan.tag && <span className="recharge-tag">{plan.tag}</span>}
-                <span className="recharge-plan-name">{plan.name}</span>
-                <span className="recharge-price">¥{plan.price}/{plan.period}</span>
-                <span className="recharge-unit">每月 {plan.credits} 积分 + 无水印</span>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        <div className="recharge-modal-footer">
-          <p>支付功能即将上线，敬请期待</p>
-        </div>
+            {loading && packs.length === 0 ? (
+              <div className="payment-loading"><Loader2 size={24} className="spin" /> 正在读取套餐…</div>
+            ) : (
+              <>
+                <div className="recharge-section">
+                  <h3><Coins size={16} /> 积分充值</h3>
+                  <div className="recharge-grid recharge-grid--packs">
+                    {packs.map((product) => <ProductCard key={product.id} product={product} />)}
+                  </div>
+                </div>
+                <div className="recharge-section">
+                  <h3><Zap size={16} /> 会员套餐</h3>
+                  <div className="recharge-grid">
+                    {subscriptions.map((product) => <ProductCard key={product.id} product={product} subscription />)}
+                  </div>
+                </div>
+              </>
+            )}
+            {!paymentReady && <p className="login-error">微信支付正在配置中，套餐可查看，暂时不能下单。</p>}
+            {error && <p className="login-error">{error}</p>}
+            <div className="recharge-modal-footer"><p>微信支付 · 到账后可立即使用</p></div>
+          </>
+        )}
       </div>
     </div>
   );

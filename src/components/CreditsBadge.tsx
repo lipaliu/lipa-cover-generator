@@ -5,9 +5,10 @@ interface CreditsBadgeProps {
   user: UserInfo | null;
   onLoginClick: () => void;
   onLogout: () => void;
+  onRechargeClick: () => void;
 }
 
-export function CreditsBadge({ user, onLoginClick, onLogout }: CreditsBadgeProps) {
+export function CreditsBadge({ user, onLoginClick, onLogout, onRechargeClick }: CreditsBadgeProps) {
   if (!user) {
     return (
       <button className="credits-badge credits-badge--login" onClick={onLoginClick}>
@@ -36,6 +37,11 @@ export function CreditsBadge({ user, onLoginClick, onLogout }: CreditsBadgeProps
           {isAdmin ? "∞" : user.credits}
         </span>
       </div>
+      {!isAdmin && (
+        <button className="credits-badge-recharge" onClick={onRechargeClick} title="充值积分">
+          充值
+        </button>
+      )}
       <button className="credits-badge-logout" onClick={onLogout} title="退出登录">
         <LogOut size={14} />
       </button>

@@ -8,9 +8,24 @@ CREATE TABLE IF NOT EXISTS users (
   credits                INT          NOT NULL DEFAULT 0,
   subscription_plan      VARCHAR(20)  NOT NULL DEFAULT 'free',      -- free | monthly | yearly
   subscription_expires_at DATETIME    NULL,
+  terms_accepted_at      DATETIME     NULL,
+  terms_version          VARCHAR(20)  NOT NULL DEFAULT '',
   created_at             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at             DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_phone (phone)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS verification_codes (
+  id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+  phone         VARCHAR(20) NOT NULL,
+  code          VARCHAR(10) NOT NULL,
+  request_ip    VARCHAR(64) NOT NULL DEFAULT '',
+  used          TINYINT(1) NOT NULL DEFAULT 0,
+  expires_at    DATETIME NOT NULL,
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_code_lookup (phone, code, expires_at, used),
+  INDEX idx_code_phone_time (phone, created_at),
+  INDEX idx_code_ip_time (request_ip, created_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 CREATE TABLE IF NOT EXISTS credit_transactions (
@@ -29,6 +44,7 @@ CREATE TABLE IF NOT EXISTS credit_transactions (
 -- 订单：支付接入前用于「后台手动开通」留痕；接支付后写入交易号即可复用
 CREATE TABLE IF NOT EXISTS orders (
   id            BIGINT AUTO_INCREMENT PRIMARY KEY,
+  order_no      VARCHAR(32)  NULL,                                  -- 商户订单号；历史手工订单可为空
   user_id       BIGINT       NOT NULL,
   product_id    VARCHAR(40)  NOT NULL,                              -- 套餐 id，见 server/pricing.js
   product_name  VARCHAR(80)  NOT NULL DEFAULT '',
@@ -40,8 +56,11 @@ CREATE TABLE IF NOT EXISTS orders (
   channel       VARCHAR(20)  NOT NULL DEFAULT 'manual',             -- manual | wechat | alipay
   trade_no      VARCHAR(64)  NOT NULL DEFAULT '',                   -- 第三方交易号（接支付后填）
   operator      VARCHAR(40)  NOT NULL DEFAULT '',                   -- 手动开通的管理员
+  paid_at       DATETIME     NULL,
   created_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_user_time (user_id, created_at),
+  UNIQUE KEY uq_orders_order_no (order_no),
   INDEX idx_trade (trade_no),
   CONSTRAINT fk_od_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

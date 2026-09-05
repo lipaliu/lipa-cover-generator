@@ -2044,6 +2044,7 @@ h1, h2, h3, p, span, strong, small, label {
 }
 .login-input-group input { color: var(--ink-primary); }
 .login-input-group input::placeholder { color: var(--ink-tertiary); }
+.login-consent { color: var(--ink-secondary); }
 .login-btn-primary, .credits-badge--login {
   background: linear-gradient(168deg, rgba(150, 160, 255, 0.95), rgba(108, 92, 240, 1));
 }
@@ -2055,6 +2056,19 @@ h1, h2, h3, p, span, strong, small, label {
 .credits-badge-info { color: var(--ink-secondary); }
 .credits-badge-plan { color: var(--accent); }
 .credits-badge-amount, .credits-badge-crown { color: #c98a1e; }
+.recharge-section h3 { color: var(--ink-primary); }
+.recharge-card {
+  color: var(--ink-primary);
+  background: rgba(255, 255, 255, 0.42);
+  border-color: rgba(255, 255, 255, 0.76);
+}
+.recharge-card:hover { background: rgba(255, 255, 255, 0.66); }
+.recharge-unit, .recharge-modal-footer p, .payment-tip, .payment-order-no, .payment-back, .payment-loading {
+  color: var(--ink-secondary);
+}
+.recharge-original-price { color: var(--ink-tertiary); }
+.payment-success h2 { color: var(--ink-primary); }
+.payment-success p { color: var(--ink-secondary); }
 
 /* 滚动条美化 */
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -2486,6 +2500,13 @@ h1, h2, h3, p, span, strong, small, label {
   padding-left: 6px;
   white-space: nowrap;
 }
+.brand-legal {
+  padding-left: 6px;
+  color: var(--ink-tertiary);
+  font-size: 10.5px;
+  text-decoration: none;
+}
+.brand-legal:hover { color: var(--accent); }
 
 /* —— 标题大师连接层：沿用巴咔巴咔现有控件，不改生图区 —— */
 .entry-panel {

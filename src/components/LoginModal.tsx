@@ -15,6 +15,7 @@ export function LoginModal({ open, onClose, onLogin }: LoginModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [countdown, setCountdown] = useState(0);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   useEffect(() => {
     if (countdown <= 0) return;
@@ -52,13 +53,15 @@ export function LoginModal({ open, onClose, onLogin }: LoginModalProps) {
     setLoading(true);
     setError("");
     try {
-      const res = await login(phone, code);
+      if (!acceptedTerms) { setError("请先阅读并同意用户协议和隐私政策"); return; }
+      const res = await login(phone, code, acceptedTerms);
       if (res.ok && res.user) {
         onLogin(res.user);
         onClose();
         // Reset state
         setPhone("");
         setCode("");
+        setAcceptedTerms(false);
         setStep("phone");
       } else {
         setError(res.error || "登录失败");
@@ -68,7 +71,7 @@ export function LoginModal({ open, onClose, onLogin }: LoginModalProps) {
     } finally {
       setLoading(false);
     }
-  }, [phone, code, onLogin, onClose]);
+  }, [phone, code, acceptedTerms, onLogin, onClose]);
 
   if (!open) return null;
 
@@ -145,10 +148,14 @@ export function LoginModal({ open, onClose, onLogin }: LoginModalProps) {
               </button>
             </>
           )}
+          <label className="login-consent">
+            <input type="checkbox" checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} />
+            <span>我已阅读并同意 <a href="/legal/terms" target="_blank" rel="noreferrer">用户协议</a>、<a href="/legal/privacy" target="_blank" rel="noreferrer">隐私政策</a> 和 <a href="/legal/refund" target="_blank" rel="noreferrer">退款说明</a></span>
+          </label>
         </div>
 
         <div className="login-modal-footer">
-          <p>注册即赠送 15 积分（可生成 1 次 10 张封面）</p>
+          <p>首次登录即完成注册，赠送 1200 积分（可生成 5 张封面）</p>
         </div>
       </div>
     </div>

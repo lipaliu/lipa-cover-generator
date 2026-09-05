@@ -1,13 +1,13 @@
 # Render 部署蓝图（Blueprint）。在 Render 新建 Blueprint 时会自动读取本文件。
-# 云端：免登录(VITE_LOCAL_MODE=1) + 访问口令(ACCESS_USER/ACCESS_PASSWORD) + Image2/Seedream
-#（即梦是本机 CLI，云端自动隐藏，不构建进去）。
+# 云端默认仍保留原内部访问模式。商业上线时在 Render 将 VITE_LOCAL_MODE=0、
+# PUBLIC_SIGNUP_MODE=1、LOCAL_FREE_MODE=0，并补齐数据库、短信、微信支付密钥。
 services:
   - type: web
     name: bakabaka
     runtime: node
     plan: free                # 免费档（闲置会休眠，冷启动约 30 秒）；要常驻可改 starter
     region: oregon            # 海外地域，OpenAI 直连、免备案
-    buildCommand: npm install --include=dev && VITE_LOCAL_MODE=1 npm run build
+    buildCommand: npm install --include=dev && VITE_LOCAL_MODE=${VITE_LOCAL_MODE:-1} npm run build
     startCommand: node server/index.js --serve-dist
     healthCheckPath: /healthz
     autoDeploy: true          # push 到 GitHub 后自动重新部署
@@ -34,4 +34,62 @@ services:
       - key: ACCESS_USER
         sync: false
       - key: ACCESS_PASSWORD
+        sync: false
+      - key: VITE_LOCAL_MODE
+        sync: false
+      - key: PUBLIC_SIGNUP_MODE
+        sync: false
+      - key: LOCAL_FREE_MODE
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: ADMIN_PHONES
+        sync: false
+      - key: LEGAL_ENTITY_NAME
+        sync: false
+      - key: LEGAL_UNIFIED_SOCIAL_CREDIT_CODE
+        sync: false
+      - key: LEGAL_ADDRESS
+        sync: false
+      - key: LEGAL_CONTACT
+        sync: false
+      - key: MYSQL_HOST
+        sync: false
+      - key: MYSQL_PORT
+        sync: false
+      - key: MYSQL_USER
+        sync: false
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: MYSQL_DATABASE
+        sync: false
+      - key: MYSQL_SSL
+        sync: false
+      - key: MYSQL_SSL_CA
+        sync: false
+      - key: TENCENT_SMS_SECRET_ID
+        sync: false
+      - key: TENCENT_SMS_SECRET_KEY
+        sync: false
+      - key: TENCENT_SMS_SDK_APP_ID
+        sync: false
+      - key: TENCENT_SMS_SIGN_NAME
+        sync: false
+      - key: TENCENT_SMS_TEMPLATE_ID
+        sync: false
+      - key: WECHAT_PAY_MERCHANT_ID
+        sync: false
+      - key: WECHAT_PAY_SERIAL_NO
+        sync: false
+      - key: WECHAT_PAY_PRIVATE_KEY
+        sync: false
+      - key: WECHAT_PAY_API_V3_KEY
+        sync: false
+      - key: WECHAT_PAY_APP_ID
+        sync: false
+      - key: WECHAT_PAY_NOTIFY_URL
+        sync: false
+      - key: WECHAT_PAY_PUBLIC_KEY_ID
+        sync: false
+      - key: WECHAT_PAY_PUBLIC_KEY
         sync: false

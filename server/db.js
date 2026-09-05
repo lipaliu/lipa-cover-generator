@@ -8,6 +8,7 @@
 import mysql from "mysql2/promise";
 
 let pool = null;
+let warnedNoDb = false;
 
 /**
  * Get or create the MySQL connection pool.
@@ -20,7 +21,10 @@ export function getPool() {
   const database = process.env.MYSQL_DATABASE;
 
   if (!host || !database) {
-    console.warn("[DB] MySQL not configured. Running in no-DB mode (auth/credits disabled).");
+    if (!warnedNoDb) {
+      warnedNoDb = true;
+      console.warn("[DB] MySQL not configured. Running in no-DB mode (auth/credits disabled).");
+    }
     return null;
   }
 
@@ -34,6 +38,14 @@ export function getPool() {
     connectionLimit: 10,
     queueLimit: 0,
     charset: "utf8mb4",
+    ...(process.env.MYSQL_SSL === "1"
+      ? {
+          ssl: {
+            rejectUnauthorized: process.env.MYSQL_SSL_REJECT_UNAUTHORIZED !== "0",
+            ...(process.env.MYSQL_SSL_CA ? { ca: process.env.MYSQL_SSL_CA.replace(/\\n/gu, "\n") } : {}),
+          },
+        }
+      : {}),
   });
 
   console.log(`[DB] MySQL pool created → ${host}:${process.env.MYSQL_PORT || 3306}/${database}`);
@@ -48,6 +60,24 @@ export async function query(sql, params = []) {
   const p = getPool();
   if (!p) throw new Error("Database not configured.");
   return p.execute(sql, params);
+}
+
+/** Run a callback on one connection inside a real database transaction. */
+export async function withTransaction(callback) {
+  const p = getPool();
+  if (!p) throw new Error("Database not configured.");
+  const connection = await p.getConnection();
+  try {
+    await connection.beginTransaction();
+    const result = await callback(connection);
+    await connection.commit();
+    return result;
+  } catch (error) {
+    await connection.rollback();
+    throw error;
+  } finally {
+    connection.release();
+  }
 }
 
 /**
@@ -75,6 +105,25 @@ export async function ensureSchema() {
       .filter(Boolean);
     for (const statement of statements) {
       await p.query(statement);
+    }
+    // Existing installations need these additive migrations because CREATE TABLE IF NOT EXISTS
+    // does not update a table that is already present.
+    const migrations = [
+      "ALTER TABLE verification_codes ADD COLUMN request_ip VARCHAR(64) NOT NULL DEFAULT ''",
+      "ALTER TABLE users ADD COLUMN terms_accepted_at DATETIME NULL",
+      "ALTER TABLE users ADD COLUMN terms_version VARCHAR(20) NOT NULL DEFAULT ''",
+      "ALTER TABLE orders ADD COLUMN order_no VARCHAR(32) NULL",
+      "ALTER TABLE orders ADD COLUMN paid_at DATETIME NULL",
+      "ALTER TABLE orders ADD COLUMN updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+      "CREATE UNIQUE INDEX uq_orders_order_no ON orders (order_no)",
+    ];
+    for (const migration of migrations) {
+      try {
+        await p.query(migration);
+      } catch (error) {
+        // Duplicate column/index means this migration has already been applied.
+        if (![1060, 1061].includes(Number(error?.errno))) throw error;
+      }
     }
     console.log(`[DB] Schema ready (${statements.length} statements).`);
     return true;

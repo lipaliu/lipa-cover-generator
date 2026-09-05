@@ -64,12 +64,13 @@ export interface UserInfo {
 
 export async function login(
   phone: string,
-  code: string
+  code: string,
+  acceptedTerms: boolean,
 ): Promise<{ ok: boolean; token?: string; user?: UserInfo; error?: string }> {
   const res = await fetch(`${API_BASE}/api/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ phone, code }),
+    body: JSON.stringify({ phone, code, acceptedTerms }),
   });
   const data = await res.json();
   if (data.ok && data.token) {
@@ -143,16 +144,66 @@ export async function fetchCreditHistory(
   return res.json();
 }
 
+// ─── Billing API ───
+
+export interface BillingProduct {
+  id: string;
+  name: string;
+  credits: number;
+  amountFen: number;
+  originalAmountFen: number;
+  note?: string;
+  plan?: string;
+  months?: number;
+  perks?: string[];
+}
+
+export async function fetchBillingProducts(): Promise<{
+  packs: BillingProduct[];
+  subscriptions: BillingProduct[];
+  discount: number;
+  paymentReady: boolean;
+}> {
+  const res = await fetch(`${API_BASE}/api/billing/products`, { headers: authHeaders() });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "套餐加载失败");
+  return data;
+}
+
+export async function createBillingOrder(productId: string): Promise<{
+  order: { orderNo: string; name: string; amountFen: number; credits: number };
+  qrDataUrl: string;
+  expiresInSeconds: number;
+}> {
+  const res = await fetch(`${API_BASE}/api/billing/orders`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ productId }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "创建支付订单失败");
+  return data;
+}
+
+export async function fetchBillingOrder(orderNo: string): Promise<{
+  order: { status: "pending" | "paid" | "refunded"; amount_fen: number; product_name: string };
+}> {
+  const res = await fetch(`${API_BASE}/api/billing/orders/${encodeURIComponent(orderNo)}`, { headers: authHeaders() });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || "订单查询失败");
+  return data;
+}
+
 // ─── Pricing constants (keep in sync with server/middleware.js) ───
-// 阶梯计费：1=3, 2=5, 3-4=8, 5-7=12, 8-10=15
+// 阶梯计费：1=300, 2=500, 3-4=800, 5-7=1200, 8-10=1500
 
 function tierCost(n: number): number {
   if (n <= 0) return 0;
-  if (n === 1) return 3;
-  if (n === 2) return 5;
-  if (n <= 4) return 8;
-  if (n <= 7) return 12;
-  return 15;
+  if (n === 1) return 300;
+  if (n === 2) return 500;
+  if (n <= 4) return 800;
+  if (n <= 7) return 1200;
+  return 1500;
 }
 
 export function getCreditsCost(count: number): number {
@@ -160,5 +211,5 @@ export function getCreditsCost(count: number): number {
   // 1-10 阶梯；超过 10 张按每满 10 张叠加 15 分 + 余数阶梯。
   const fullTens = Math.floor(n / 10);
   const remainder = n % 10;
-  return fullTens * 15 + tierCost(remainder);
+  return fullTens * 1500 + tierCost(remainder);
 }

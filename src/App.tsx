@@ -136,7 +136,7 @@ const MOOD_PREVIEW: Record<string, { bg: string; style: CSSProperties; sample?: 
 
 const isLocalLipa =
   import.meta.env.VITE_LOCAL_MODE === "1" ||
-  (typeof window !== "undefined" &&
+  (import.meta.env.VITE_LOCAL_MODE !== "0" && typeof window !== "undefined" &&
     ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname));
 
 // 即梦(SeeDance)是本机 CLI：只有开发、真·本机、或构建时显式设了 VITE_ENABLE_SEEDANCE=1
@@ -355,6 +355,14 @@ export function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [showRecharge, setShowRecharge] = useState(false);
   const [rechargeInfo, setRechargeInfo] = useState({ required: 0, current: 0 });
+  const refreshAccountCredits = useCallback(() => {
+    fetchBalance()
+      .then((balance) => {
+        setUser((previous) => previous ? { ...previous, credits: balance.credits } : previous);
+        setRechargeInfo((previous) => ({ ...previous, current: balance.credits }));
+      })
+      .catch(() => {});
+  }, []);
 
   // Step 1: Image + Ratio
   type SourceMode = "base" | "elements" | "describe";
@@ -615,6 +623,10 @@ export function App() {
   };
 
   const requestTitleMaster = async () => {
+    if (!isLocalLipa && !user && !getToken()) {
+      setShowLogin(true);
+      return;
+    }
     if (sourceText.trim().length < 10) {
       setTitlePlansError("请至少输入 10 个字的全文");
       return;
@@ -1052,6 +1064,14 @@ export function App() {
         body: JSON.stringify(body),
         signal: abortRef.current?.signal,
       });
+      if (response.status === 401) { setShowLogin(true); setResults((prev) => prev.filter((c) => c.id !== newId)); return; }
+      if (response.status === 402) {
+        const shortage = await response.json();
+        setRechargeInfo({ required: shortage.required || 300, current: shortage.current || 0 });
+        setShowRecharge(true);
+        setResults((prev) => prev.filter((c) => c.id !== newId));
+        return;
+      }
       const data = (await response.json().catch(() => ({ error: "重生失败" }))) as CoverResult;
       if (!response.ok && !data.error) data.error = "重生失败";
       setResults((prev) =>
@@ -1071,6 +1091,7 @@ export function App() {
       );
     } finally {
       setRegeneratingIds((prev) => prev.filter((id) => id !== newId));
+      if (!isLocalLipa && user) refreshAccountCredits();
     }
   };
 
@@ -1103,6 +1124,14 @@ export function App() {
         body: JSON.stringify(body),
         signal: abortRef.current?.signal,
       });
+      if (response.status === 401) { setShowLogin(true); setResults((prev) => prev.filter((c) => c.id !== newId)); return; }
+      if (response.status === 402) {
+        const shortage = await response.json();
+        setRechargeInfo({ required: shortage.required || 300, current: shortage.current || 0 });
+        setShowRecharge(true);
+        setResults((prev) => prev.filter((c) => c.id !== newId));
+        return;
+      }
       const data = (await response.json().catch(() => ({ error: "生成失败" }))) as CoverResult;
       if (!response.ok && !data.error) data.error = "生成失败";
       setResults((prev) => prev.map((c) => (c.id === newId ? { ...c, image_url: data.image_url, error: data.error } : c)));
@@ -1112,6 +1141,7 @@ export function App() {
       );
     } finally {
       setRegeneratingIds((prev) => prev.filter((id) => id !== newId));
+      if (!isLocalLipa && user) refreshAccountCredits();
     }
   };
 
@@ -1154,6 +1184,14 @@ export function App() {
         }),
         signal: abortRef.current?.signal,
       });
+      if (response.status === 401) { setShowLogin(true); setResults((prev) => prev.filter((c) => c.id !== newId)); return; }
+      if (response.status === 402) {
+        const shortage = await response.json();
+        setRechargeInfo({ required: shortage.required || 300, current: shortage.current || 0 });
+        setShowRecharge(true);
+        setResults((prev) => prev.filter((c) => c.id !== newId));
+        return;
+      }
       const data = (await response.json().catch(() => ({ error: "调整失败" }))) as CoverResult & { prompt?: string };
       if (!response.ok && !data.error) data.error = "调整失败";
       setResults((prev) =>
@@ -1173,6 +1211,7 @@ export function App() {
       );
     } finally {
       setRegeneratingIds((prev) => prev.filter((id) => id !== newId));
+      if (!isLocalLipa && user) refreshAccountCredits();
     }
   };
 
@@ -1556,6 +1595,7 @@ export function App() {
             <img src="/logo.png" alt="巴卡巴卡 BAKABAKA" className="brand-logo" />
           </button>
           <small className="brand-copyright">Copyright © 畅导吃枸杞</small>
+          {!isLocalLipa && <a className="brand-legal" href="/legal/terms" target="_blank" rel="noreferrer">经营主体与服务协议</a>}
         </div>
         <nav className="header-nav">
           <button type="button" className="nav-btn" title="回到第一步" onClick={goHome}>
@@ -1580,15 +1620,21 @@ export function App() {
               <span>管理后台</span>
             </button>
           )}
-          <button type="button" className="nav-btn" title="退出登录" onClick={() => { window.location.href = "/access-logout"; }}>
-            <LogOut size={18} />
-            <span>退出</span>
-          </button>
+          {isAdminAccount && (
+            <button type="button" className="nav-btn" title="退出后台账户" onClick={() => { window.location.href = "/access-logout"; }}>
+              <LogOut size={18} />
+              <span>退出后台</span>
+            </button>
+          )}
           {!isLocalLipa && (
             <CreditsBadge
               user={user}
               onLoginClick={() => setShowLogin(true)}
               onLogout={() => { apiLogout(); setUser(null); }}
+              onRechargeClick={() => {
+                setRechargeInfo({ required: 0, current: user?.credits || 0 });
+                setShowRecharge(true);
+              }}
             />
           )}
         </nav>
@@ -2722,6 +2768,7 @@ export function App() {
           <RechargeModal
             open={showRecharge}
             onClose={() => setShowRecharge(false)}
+            onPaid={refreshAccountCredits}
             currentCredits={rechargeInfo.current}
             requiredCredits={rechargeInfo.required}
           />

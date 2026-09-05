@@ -4,7 +4,30 @@
  * Handles credit deduction, refund, and transaction history.
  */
 
-import { query } from "./db.js";
+import { query, withTransaction } from "./db.js";
+
+async function changeCredits(connection, userId, amount, type, description, referenceId) {
+  const [users] = await connection.execute("SELECT credits FROM users WHERE id = ? FOR UPDATE", [userId]);
+  if (users.length === 0) throw new Error("User not found");
+  const currentBalance = Number(users[0].credits);
+  const newBalance = currentBalance + amount;
+  if (newBalance < 0) {
+    const error = new Error(`Insufficient credits: have ${currentBalance}, need ${Math.abs(amount)}`);
+    error.code = "INSUFFICIENT_CREDITS";
+    error.current = currentBalance;
+    throw error;
+  }
+  await connection.execute("UPDATE users SET credits = ? WHERE id = ?", [newBalance, userId]);
+  await connection.execute(
+    "INSERT INTO credit_transactions (user_id, amount, type, description, reference_id, balance_after) VALUES (?, ?, ?, ?, ?, ?)",
+    [userId, amount, type, description, referenceId, newBalance],
+  );
+  return newBalance;
+}
+
+export async function changeCreditsInTransaction(connection, userId, amount, type, description = "", referenceId = "") {
+  return changeCredits(connection, userId, Math.trunc(Number(amount)), type, description, referenceId);
+}
 
 /**
  * Deduct credits from a user's balance.
@@ -12,65 +35,24 @@ import { query } from "./db.js";
  * Returns the new balance, or throws if insufficient.
  */
 export async function deductCredits(userId, amount, description = "", referenceId = "") {
-  // Check current balance
-  const [users] = await query("SELECT credits FROM users WHERE id = ? FOR UPDATE", [userId]);
-  if (users.length === 0) throw new Error("User not found");
-
-  const currentBalance = users[0].credits;
-  if (currentBalance < amount) {
-    throw new Error(`Insufficient credits: have ${currentBalance}, need ${amount}`);
-  }
-
-  const newBalance = currentBalance - amount;
-
-  // Update balance
-  await query("UPDATE users SET credits = ? WHERE id = ?", [newBalance, userId]);
-
-  // Record transaction
-  await query(
-    "INSERT INTO credit_transactions (user_id, amount, type, description, reference_id, balance_after) VALUES (?, ?, 'generate', ?, ?, ?)",
-    [userId, -amount, description, referenceId, newBalance]
-  );
-
-  return newBalance;
+  const value = Math.max(0, Math.trunc(Number(amount)));
+  return withTransaction((connection) => changeCredits(connection, userId, -value, "generate", description, referenceId));
 }
 
 /**
  * Refund credits to a user (e.g., when generation fails).
  */
 export async function refundCredits(userId, amount, description = "", referenceId = "") {
-  const [users] = await query("SELECT credits FROM users WHERE id = ?", [userId]);
-  if (users.length === 0) throw new Error("User not found");
-
-  const newBalance = users[0].credits + amount;
-
-  await query("UPDATE users SET credits = ? WHERE id = ?", [newBalance, userId]);
-
-  await query(
-    "INSERT INTO credit_transactions (user_id, amount, type, description, reference_id, balance_after) VALUES (?, ?, 'refund', ?, ?, ?)",
-    [userId, amount, description, referenceId, newBalance]
-  );
-
-  return newBalance;
+  const value = Math.max(0, Math.trunc(Number(amount)));
+  return withTransaction((connection) => changeCredits(connection, userId, value, "refund", description, referenceId));
 }
 
 /**
  * Add credits to a user (recharge or subscription grant).
  */
 export async function addCredits(userId, amount, type = "recharge", description = "", referenceId = "") {
-  const [users] = await query("SELECT credits FROM users WHERE id = ?", [userId]);
-  if (users.length === 0) throw new Error("User not found");
-
-  const newBalance = users[0].credits + amount;
-
-  await query("UPDATE users SET credits = ? WHERE id = ?", [newBalance, userId]);
-
-  await query(
-    "INSERT INTO credit_transactions (user_id, amount, type, description, reference_id, balance_after) VALUES (?, ?, ?, ?, ?, ?)",
-    [userId, amount, type, description, referenceId, newBalance]
-  );
-
-  return newBalance;
+  const value = Math.trunc(Number(amount));
+  return withTransaction((connection) => changeCredits(connection, userId, value, type, description, referenceId));
 }
 
 /**

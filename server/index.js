@@ -18,7 +18,9 @@ import { deductCredits, refundCredits } from "./credits.js";
 import { shouldApplyWatermark, addWatermark } from "./watermark.js";
 import authRoutes from "./routes/auth.js";
 import creditsRoutes from "./routes/credits.js";
+import billingRoutes from "./routes/billing.js";
 import { requestTitlePlans } from "./title-master.js";
+import { renderLegalPage } from "./legal.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -267,7 +269,12 @@ function configureArk() {
 }
 configureArk();
 
-app.use(express.json({ limit: "100mb" })); // 元素拼接多图上传，给足余量（前端已先压缩，正常远用不到）
+app.use(express.json({
+  limit: "100mb",
+  verify: (req, _res, buffer) => {
+    if (req.originalUrl?.startsWith("/api/billing/wechat/notify")) req.rawBody = buffer.toString("utf8");
+  },
+})); // 元素拼接多图上传，给足余量；支付回调同时保留原始报文用于验签
 app.use(express.urlencoded({ extended: false })); // 登录页表单提交用
 
 // 健康检查（云平台探活用，不经访问口令，必须放在口令中间件之前）。
@@ -286,6 +293,7 @@ app.get("/access-logout", (_req, res) => {
 const ACCESS_USER = process.env.ACCESS_USER || "";
 const ACCESS_PASSWORD = process.env.ACCESS_PASSWORD || "";
 const ADMIN_KEY = (ACCESS_USER || "admin").toLowerCase();
+const PUBLIC_SIGNUP_MODE = process.env.PUBLIC_SIGNUP_MODE === "1";
 
 const dataDir = join(__dirname, "..", "data");
 const accountsFile = join(dataDir, "accounts.json");
@@ -501,6 +509,8 @@ if (ACCESS_PASSWORD) {
   };
 
   app.use((req, res, next) => {
+    // 商业公开站：普通页面与用户 API 走手机号/JWT；旧口令只继续保护 /admin。
+    if (PUBLIC_SIGNUP_MODE && !req.path.startsWith("/admin") && req.path !== "/access-login") return next();
     // 登录页要显示 logo，放行
     if (req.path === "/logo.png" || req.path === "/favicon.ico") return next();
     // 已带有效 Cookie（值 = 用户名.签名）
@@ -823,6 +833,8 @@ if (ACCESS_PASSWORD) {
   console.log(`[Access] 登录保护已启用：管理员 + ${Object.keys(trialAccounts).length} 个体验账户，/admin 可管理。`);
 }
 
+app.get("/legal/:kind", (req, res) => res.type("html").send(renderLegalPage(req.params.kind)));
+
 // Initialize database connection (non-blocking, graceful if not configured)
 getPool();
 // 配了数据库就自动建表（幂等），省去手动执行 schema.sql
@@ -834,9 +846,10 @@ app.use(optionalAuth);
 // Mount auth and credits routes
 app.use("/api/auth", authRoutes);
 app.use("/api/credits", creditsRoutes);
+app.use("/api/billing", billingRoutes);
 
 // 标题大师连接层：只做服务端转发，模型、提示词和标题逻辑继续由原项目负责。
-app.post("/api/title-plans", async (req, res) => {
+app.post("/api/title-plans", requireAuth, async (req, res) => {
   try {
     const result = await requestTitlePlans({
       text: req.body?.text,
@@ -1677,9 +1690,15 @@ app.get("/api/download/:filename", (req, res) => {
   });
 });
 
-// 单张重生：某一张失败或不满意时，单独重生（可换引擎）。复用整条生成逻辑，普通 JSON 返回，不计费。
+// 单张重生：某一张失败或不满意时，单独重生（可换引擎）。商业账户按 1 张计费。
 app.post("/api/regenerate", async (req, res) => {
   const requestedEngineRaw = req.body?.engine || "image2";
+  const regenerateLocalFree = isLocalFreeMode(req);
+  let chargedCredits = 0;
+  const { isDbAvailable } = await import("./db.js");
+  if (isDbAvailable() && !regenerateLocalFree) {
+    if (!req.user) return res.status(401).json({ error: "请先登录", code: "AUTH_REQUIRED" });
+  }
   try {
     const {
       plan: requestedPlan,
@@ -1719,6 +1738,19 @@ app.post("/api/regenerate", async (req, res) => {
         return res.json({ error: "体验账户只能生成「小红书封面 3:4」。" });
       }
     }
+    if (isDbAvailable() && !regenerateLocalFree && req.user?.role !== "admin") {
+      try {
+        chargedCredits = getCreditsCost(1);
+        await deductCredits(req.user.id, chargedCredits, "单张重生封面", `regen-${Date.now()}`);
+      } catch (error) {
+        return res.status(402).json({
+          error: "积分不足",
+          code: "INSUFFICIENT_CREDITS",
+          required: getCreditsCost(1),
+          current: Number(error?.current ?? req.user?.credits ?? 0),
+        });
+      }
+    }
     // 计 1 张统计，失败在 catch 里退回
     if (req.accessAccount) reserveQuota(req.accessAccount.user, 1);
     let imageUrl;
@@ -1753,6 +1785,13 @@ app.post("/api/regenerate", async (req, res) => {
       ratio,
     });
   } catch (error) {
+    if (chargedCredits > 0 && req.user) {
+      try {
+        await refundCredits(req.user.id, chargedCredits, "单张重生失败，退回积分", `refund-${Date.now()}`);
+      } catch (refundError) {
+        console.error("[Credits] Regenerate refund failed:", refundError?.message || refundError);
+      }
+    }
     const engine = resolveEngine(normalizeEngine(requestedEngineRaw));
     console.warn(`[regenerate] 单张重生失败（${engine}）：${error?.message || error}`);
     return res.json({ error: friendlyProviderError(error, engine) });
@@ -1811,6 +1850,7 @@ app.post("/api/generate", async (req, res) => {
   const ratioRank = (r) => { const i = RATIO_ORDER.indexOf(r); return i < 0 ? 99 : i; };
   ratioGroups = [...ratioGroups].sort((a, b) => ratioRank(a.ratio) - ratioRank(b.ratio));
   const totalCount = ratioGroups.reduce((sum, item) => sum + item.count, 0);
+  let reservedCredits = 0;
 
   // 体验账户限制（须在开 SSE 流之前，才能返回明确的拒绝信息）：
   // ① 只能生成小红书 3:4；② 单次最多 quota 张（生成完可以再来，但一次不能薅太多）。
@@ -1829,6 +1869,26 @@ app.post("/api/generate", async (req, res) => {
   if (req.accessAccount) {
     reserveQuota(req.accessAccount.user, totalCount);
     reservedCount = totalCount;
+  }
+
+  // 商业账户先原子预扣，防止多个并发请求同时透支。最终按成功张数结算，多扣部分自动退回。
+  if (req.creditsCost > 0 && req.user) {
+    try {
+      await deductCredits(
+        req.user.id,
+        req.creditsCost,
+        `预扣生成 ${totalCount} 张封面（${engine}）`,
+        `gen-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      );
+      reservedCredits = req.creditsCost;
+    } catch (error) {
+      return res.status(402).json({
+        error: "积分不足",
+        code: "INSUFFICIENT_CREDITS",
+        required: req.creditsCost,
+        current: Number(error?.current ?? req.user.credits ?? 0),
+      });
+    }
   }
 
   res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
@@ -2056,18 +2116,18 @@ app.post("/api/generate", async (req, res) => {
       releaseQuota(req.accessAccount.user, totalCount - results.length);
     }
 
-    // ─── Deduct credits after successful generation ───
+    // ─── Settle reserved credits based on successful images ───
     const successCount = results.filter((r) => !r.error).length;
-    if (req.creditsCost > 0 && successCount > 0 && req.user) {
+    if (reservedCredits > 0 && req.user) {
       try {
-        await deductCredits(
-          req.user.id,
-          req.creditsCost,
-          `生成 ${successCount} 张封面（${engine}）`,
-          `gen-${Date.now()}`
-        );
+        const actualCost = successCount > 0 ? getCreditsCost(successCount) : 0;
+        const refundAmount = Math.max(0, reservedCredits - actualCost);
+        if (refundAmount > 0) {
+          await refundCredits(req.user.id, refundAmount, `未成功生成的封面退回积分`, `refund-${Date.now()}`);
+        }
+        reservedCredits = 0;
       } catch (err) {
-        console.error("[Credits] Deduction failed:", err.message);
+        console.error("[Credits] Settlement failed:", err.message);
       }
     }
 
@@ -2099,6 +2159,14 @@ app.post("/api/generate", async (req, res) => {
     if (req.accessAccount && reservedCount > 0) {
       releaseQuota(req.accessAccount.user, reservedCount);
       reservedCount = 0;
+    }
+    if (reservedCredits > 0 && req.user) {
+      try {
+        await refundCredits(req.user.id, reservedCredits, "生成未开始，退回预扣积分", `refund-${Date.now()}`);
+        reservedCredits = 0;
+      } catch (refundError) {
+        console.error("[Credits] Refund failed:", refundError?.message || refundError);
+      }
     }
 
     writeSse(res, {

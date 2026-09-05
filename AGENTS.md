@@ -29,3 +29,11 @@ Logo direction: use a macOS-style rounded-square app icon with four letters in a
 - A selected title plan may only fill the publishing title, cover main text, and cover subtitle before handing control back to the existing cover-generation pipeline.
 - Treat generated title plans as optional inspiration, never a forced choice. Keep editable fields for publishing title, cover main text, and cover subtitle; users may mix suggestions, rewrite them, or enter their own copy before continuing.
 - Final delivery should keep the generated cover image together with the publishing title and cover copy for the publishing team.
+
+## Commercial Launch Guardrails
+
+- Public mode uses phone/SMS registration, database-backed credits, and WeChat Native QR payments. Keep the old username/password gate only for `/admin` and private fallback access.
+- Prices come only from `server/pricing.js`; never hard-code a second price list in the frontend.
+- Credit deductions, refunds, payment callbacks, and fulfillment must remain transactional and idempotent. A repeated WeChat callback must never add credits twice.
+- Do not enable `PUBLIC_SIGNUP_MODE=1` until the database, SMS, JWT secret, WeChat Pay credentials, and legal operator information are all configured.
+- Commercial/account changes remain outside the established BAKABAKA generation and Title Master model pipelines.
