@@ -64,3 +64,24 @@ CREATE TABLE IF NOT EXISTS orders (
   INDEX idx_trade (trade_no),
   CONSTRAINT fk_od_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 模型成本流水：记录 OpenAI 返回的真实 token（有 usage 时）及供应商成本估算。
+CREATE TABLE IF NOT EXISTS provider_usage (
+  id                       BIGINT AUTO_INCREMENT PRIMARY KEY,
+  user_id                  BIGINT       NULL,
+  provider                 VARCHAR(30)  NOT NULL,
+  model                    VARCHAR(80)  NOT NULL,
+  operation                VARCHAR(30)  NOT NULL DEFAULT 'generate',
+  size                     VARCHAR(30)  NOT NULL DEFAULT '',
+  quality                  VARCHAR(20)  NOT NULL DEFAULT '',
+  input_image_count        INT          NOT NULL DEFAULT 0,
+  input_text_tokens        INT          NOT NULL DEFAULT 0,
+  input_image_tokens       INT          NOT NULL DEFAULT 0,
+  output_tokens            INT          NOT NULL DEFAULT 0,
+  estimated_cost_microuan  BIGINT       NOT NULL DEFAULT 0,
+  cost_basis               VARCHAR(40)  NOT NULL DEFAULT '',
+  created_at               DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_provider_time (provider, created_at),
+  INDEX idx_usage_user_time (user_id, created_at),
+  CONSTRAINT fk_pu_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -4,6 +4,9 @@
 
 import { verifyToken, getUserById, sanitizeUser } from "./auth.js";
 import { isDbAvailable } from "./db.js";
+import { getCreditsCost } from "./pricing.js";
+
+export { getCreditsCost } from "./pricing.js";
 
 /**
  * Auth middleware - extracts user from JWT token.
@@ -77,7 +80,15 @@ export function requireCredits(req, res, next) {
   }
 
   const count = Number(req.body.imageCount || req.body.count || 1);
-  const cost = getCreditsCost(count);
+  const sourceMode = String(req.body.sourceMode || "base");
+  const sourceImageCount = sourceMode === "elements"
+    ? (Array.isArray(req.body.elementImages) ? req.body.elementImages.filter(Boolean).length : 0)
+    : sourceMode === "base" && req.body.image ? 1 : 0;
+  const cost = getCreditsCost(count, {
+    engine: req.body.engine,
+    slotEngines: Array.isArray(req.body.slotEngines) ? req.body.slotEngines : [],
+    sourceImageCount,
+  });
   req.creditsCost = cost;
 
   if (req.user.credits < cost) {
@@ -90,32 +101,4 @@ export function requireCredits(req, res, next) {
   }
 
   next();
-}
-
-/**
- * Calculate credits cost based on image count (阶梯计费).
- *
- * 1 张   = 3 积分
- * 2 张   = 5 积分
- * 3-4 张 = 8 积分
- * 5-7 张 = 12 积分
- * 8-10 张 = 15 积分
- */
-// 积分单位：1 张封面 = 300 积分（数字够大气；1 积分 = ¥0.01）
-// 阶梯：张数越多每张越便宜（10 张 1500 分 = 每张 150 分，等于半价）
-function tierCost(count) {
-  if (count <= 0) return 0;
-  if (count === 1) return 300;
-  if (count === 2) return 500;
-  if (count <= 4) return 800;
-  if (count <= 7) return 1200;
-  return 1500;
-}
-
-export function getCreditsCost(imageCount) {
-  const count = Math.max(1, Math.floor(Number(imageCount) || 1));
-  // 1-10 张按阶梯；超过 10 张（多比例场景）按每满 10 张叠加一个 1500 分梯度 + 余数阶梯。
-  const fullTens = Math.floor(count / 10);
-  const remainder = count % 10;
-  return fullTens * 1500 + tierCost(remainder);
 }

@@ -5,6 +5,7 @@ import {
   fetchBillingOrder,
   fetchBillingProducts,
   type BillingProduct,
+  type CreditModel,
 } from "../lib/api";
 
 interface RechargeModalProps {
@@ -31,6 +32,7 @@ export function RechargeModal({ open, onClose, onPaid, currentCredits, requiredC
   const [packs, setPacks] = useState<BillingProduct[]>([]);
   const [subscriptions, setSubscriptions] = useState<BillingProduct[]>([]);
   const [paymentReady, setPaymentReady] = useState(true);
+  const [creditModel, setCreditModel] = useState<CreditModel | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [order, setOrder] = useState<PaymentOrder | null>(null);
@@ -47,6 +49,7 @@ export function RechargeModal({ open, onClose, onPaid, currentCredits, requiredC
         setPacks(data.packs || []);
         setSubscriptions(data.subscriptions || []);
         setPaymentReady(data.paymentReady !== false);
+        setCreditModel(data.creditModel || null);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "套餐加载失败"))
       .finally(() => setLoading(false));
@@ -167,7 +170,12 @@ export function RechargeModal({ open, onClose, onPaid, currentCredits, requiredC
             )}
             {!paymentReady && <p className="login-error">微信支付正在配置中，套餐可查看，暂时不能下单。</p>}
             {error && <p className="login-error">{error}</p>}
-            <div className="recharge-modal-footer"><p>微信支付 · 到账后可立即使用</p></div>
+            <div className="recharge-modal-footer">
+              {creditModel ? (
+                <p>Image2 {creditModel.perImage.image2} 积分/张 · Seedream {creditModel.perImage.seedream} 积分/张 · 标题 {creditModel.titleGeneration} 积分/次</p>
+              ) : null}
+              <p>只扣成功生成的图片 · 失败自动退回 · 微信支付到账后可立即使用</p>
+            </div>
           </>
         )}
       </div>

@@ -34,7 +34,17 @@ import type { CoverResult, CoverPlan, GenerateEvent, HistoryBatch, ImageEngine, 
 import { LoginModal } from "./components/LoginModal";
 import { CreditsBadge } from "./components/CreditsBadge";
 import { RechargeModal } from "./components/RechargeModal";
-import { fetchMe, logout as apiLogout, getToken, getCreditsCost, fetchBalance, generateTitlePlans, type UserInfo } from "./lib/api";
+import {
+  calculateCreditsCost,
+  fetchBalance,
+  fetchPublicPricing,
+  fetchMe,
+  generateTitlePlans,
+  getToken,
+  logout as apiLogout,
+  type CreditModel,
+  type UserInfo,
+} from "./lib/api";
 import "./components/auth-styles.css";
 
 /* ─── Constants ─── */
@@ -355,6 +365,8 @@ export function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [showRecharge, setShowRecharge] = useState(false);
   const [rechargeInfo, setRechargeInfo] = useState({ required: 0, current: 0 });
+  const [creditModel, setCreditModel] = useState<CreditModel | null>(null);
+  const [signupBonus, setSignupBonus] = useState(0);
   const refreshAccountCredits = useCallback(() => {
     fetchBalance()
       .then((balance) => {
@@ -555,8 +567,24 @@ export function App() {
     }
   }, []);
 
+  useEffect(() => {
+    if (!isLocalLipa) {
+      fetchPublicPricing()
+        .then((pricing) => {
+          setCreditModel(pricing.creditModel);
+          setSignupBonus(pricing.signupBonus);
+        })
+        .catch(() => setCreditModel(null));
+    }
+  }, []);
+
   // Computed: credits cost for current selection
-  const creditsCost = isLocalLipa ? 0 : getCreditsCost(requestedCount || 1);
+  const sourceImageCount = sourceMode === "elements" ? elementImages.length : sourceMode === "base" && imagePreview ? 1 : 0;
+  const creditsCost = isLocalLipa
+    ? 0
+    : creditModel
+      ? calculateCreditsCost(creditModel, requestedCount || 1, slotEngines, engine, sourceImageCount)
+      : null;
 
   /* ─── Ratio Helpers ─── */
   const toggleRatio = (id: AspectRatio) => {
@@ -638,9 +666,15 @@ export function App() {
       setTitlePlans(plans);
       setSelectedTitlePlan(null);
     } catch (error) {
+      const requestError = error as Error & { status?: number; required?: number; current?: number };
+      if (requestError.status === 402) {
+        setRechargeInfo({ required: requestError.required || creditModel?.titleGeneration || 0, current: requestError.current || 0 });
+        setShowRecharge(true);
+      }
       setTitlePlansError(error instanceof Error ? error.message : "标题生成失败，请稍后重试");
     } finally {
       setTitlePlansLoading(false);
+      if (!isLocalLipa && user) refreshAccountCredits();
     }
   };
 
@@ -1067,7 +1101,7 @@ export function App() {
       if (response.status === 401) { setShowLogin(true); setResults((prev) => prev.filter((c) => c.id !== newId)); return; }
       if (response.status === 402) {
         const shortage = await response.json();
-        setRechargeInfo({ required: shortage.required || 300, current: shortage.current || 0 });
+        setRechargeInfo({ required: shortage.required || creditsCost || 0, current: shortage.current || 0 });
         setShowRecharge(true);
         setResults((prev) => prev.filter((c) => c.id !== newId));
         return;
@@ -1127,7 +1161,7 @@ export function App() {
       if (response.status === 401) { setShowLogin(true); setResults((prev) => prev.filter((c) => c.id !== newId)); return; }
       if (response.status === 402) {
         const shortage = await response.json();
-        setRechargeInfo({ required: shortage.required || 300, current: shortage.current || 0 });
+        setRechargeInfo({ required: shortage.required || creditsCost || 0, current: shortage.current || 0 });
         setShowRecharge(true);
         setResults((prev) => prev.filter((c) => c.id !== newId));
         return;
@@ -1187,7 +1221,7 @@ export function App() {
       if (response.status === 401) { setShowLogin(true); setResults((prev) => prev.filter((c) => c.id !== newId)); return; }
       if (response.status === 402) {
         const shortage = await response.json();
-        setRechargeInfo({ required: shortage.required || 300, current: shortage.current || 0 });
+        setRechargeInfo({ required: shortage.required || creditsCost || 0, current: shortage.current || 0 });
         setShowRecharge(true);
         setResults((prev) => prev.filter((c) => c.id !== newId));
         return;
@@ -2518,9 +2552,24 @@ export function App() {
                 <div className="summary-item">
                   <span className="summary-label">消耗积分</span>
                   <span className="summary-value" style={{ color: "#fbbf24", fontWeight: 700 }}>
-                    {isLocalLipa ? "0（本地免费）" : user?.role === "admin" ? "0（管理员免费）" : `${creditsCost} 积分`}
+                    {isLocalLipa
+                      ? "0（本地免费）"
+                      : user?.role === "admin"
+                        ? "0（管理员免费）"
+                        : creditsCost == null
+                          ? "正在读取…"
+                          : `${creditsCost} 积分`}
                   </span>
                 </div>
+                {!isLocalLipa && creditModel && (
+                  <div className="summary-item">
+                    <span className="summary-label">计费规则</span>
+                    <span className="summary-value">
+                      Image2 {creditModel.perImage.image2}/张 · Seedream {creditModel.perImage.seedream}/张
+                      {sourceImageCount > 1 ? ` · Image2 多素材加 ${creditModel.image2ExtraReference}/张素材` : ""}
+                    </span>
+                  </div>
+                )}
               </div>
 
               <div className="style-controls">
@@ -2764,7 +2813,13 @@ export function App() {
       {/* Auth Modals */}
       {!isLocalLipa && (
         <>
-          <LoginModal open={showLogin} onClose={() => setShowLogin(false)} onLogin={setUser} />
+          <LoginModal
+            open={showLogin}
+            onClose={() => setShowLogin(false)}
+            onLogin={setUser}
+            signupBonus={signupBonus}
+            image2Credits={creditModel?.perImage.image2 || 0}
+          />
           <RechargeModal
             open={showRecharge}
             onClose={() => setShowRecharge(false)}

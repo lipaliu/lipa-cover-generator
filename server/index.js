@@ -21,6 +21,7 @@ import creditsRoutes from "./routes/credits.js";
 import billingRoutes from "./routes/billing.js";
 import { requestTitlePlans } from "./title-master.js";
 import { renderLegalPage } from "./legal.js";
+import { getProviderUsageSummary, recordProviderUsage } from "./provider-usage.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -571,12 +572,6 @@ if (ACCESS_PASSWORD) {
     });
   });
 
-  // 定价表（前端购买页读取；改价只需改 server/pricing.js）
-  app.get("/api/pricing", async (_req, res) => {
-    const { CREDIT_PACKS, SUBSCRIPTIONS, SIGNUP_BONUS_CREDITS } = await import("./pricing.js");
-    res.json({ packs: CREDIT_PACKS, subscriptions: SUBSCRIPTIONS, signupBonus: SIGNUP_BONUS_CREDITS });
-  });
-
   // 当前登录的是谁（前端用它决定要不要显示「管理后台」按钮）
   app.get("/api/whoami", (req, res) => {
     const a = req.accessAccount;
@@ -700,7 +695,11 @@ if (ACCESS_PASSWORD) {
           <p class="empty">未配置数据库，会员/积分功能暂未启用。配置 MYSQL_HOST 与 MYSQL_DATABASE 后自动建表启用。</p></div>`;
       } else {
         const { listUsers, recentOrders } = await import("./billing.js");
-        const [members, orders] = await Promise.all([listUsers(100), recentOrders(50)]);
+        const [members, orders, providerCosts] = await Promise.all([
+          listUsers(100),
+          recentOrders(50),
+          getProviderUsageSummary(30),
+        ]);
         const fmt = (d) => (d ? escapeHtml(new Date(d).toLocaleString("zh-CN", { hour12: false })) : "—");
         const memberRows = members.map((m) => {
           const active = m.subscription_plan !== "free" && m.subscription_expires_at && new Date(m.subscription_expires_at) > new Date();
@@ -711,6 +710,13 @@ if (ACCESS_PASSWORD) {
         const orderRows = orders.map((o) => `<tr><td>${fmt(o.created_at)}</td><td>${escapeHtml(o.phone)}</td><td>${escapeHtml(o.product_name)}</td>
           <td>¥${(o.amount_fen / 100).toFixed(0)}</td><td>${o.credits || 0}</td><td>${escapeHtml(o.channel)}${o.operator ? " · " + escapeHtml(o.operator) : ""}</td></tr>`).join("")
           || `<tr><td colspan="6" class="empty">还没有订单</td></tr>`;
+        const providerCostTotal = providerCosts.reduce((sum, row) => sum + Number(row.cost_microuan || 0), 0) / 1_000_000;
+        const providerCostRows = providerCosts.map((row) => `<tr>
+          <td>${escapeHtml(row.provider)}</td><td>${escapeHtml(row.model)}</td><td>${Number(row.calls || 0)}</td>
+          <td>¥${(Number(row.cost_microuan || 0) / 1_000_000).toFixed(2)}</td>
+          <td>${Number(row.input_image_tokens || 0).toLocaleString("zh-CN")}</td>
+          <td>${Number(row.output_tokens || 0).toLocaleString("zh-CN")}</td></tr>`).join("")
+          || `<tr><td colspan="6" class="empty">还没有模型调用记录</td></tr>`;
         membersHtml = `
         <div class="glass" id="members">
           <h2>会员 · 手动开通</h2>
@@ -735,6 +741,11 @@ if (ACCESS_PASSWORD) {
         <div class="glass">
           <h2>订单记录（最近 50）</h2>
           <table><thead><tr><th>时间</th><th>手机号</th><th>套餐</th><th>金额</th><th>积分</th><th>渠道</th></tr></thead><tbody>${orderRows}</tbody></table>
+        </div>
+        <div class="glass">
+          <h2>近 30 天模型成本 · 合计 ¥${providerCostTotal.toFixed(2)}</h2>
+          <table><thead><tr><th>供应商</th><th>模型</th><th>成功调用</th><th>估算成本</th><th>图片输入 token</th><th>图片输出 token</th></tr></thead><tbody>${providerCostRows}</tbody></table>
+          <p class="hint">OpenAI 响应带 usage 时按真实 token 计算；未返回 usage 时按当前官方价保守估算。这里是模型成本，不含短信、支付手续费、税费和服务器。</p>
         </div>`;
       }
     } catch (error) {
@@ -833,6 +844,17 @@ if (ACCESS_PASSWORD) {
   console.log(`[Access] 登录保护已启用：管理员 + ${Object.keys(trialAccounts).length} 个体验账户，/admin 可管理。`);
 }
 
+// 定价表必须在公开模式和无旧口令的本地预览中都可读取；价格只来自 server/pricing.js。
+app.get("/api/pricing", async (_req, res) => {
+  const { CREDIT_PACKS, SUBSCRIPTIONS, SIGNUP_BONUS_CREDITS, publicCreditModel } = await import("./pricing.js");
+  res.json({
+    packs: CREDIT_PACKS,
+    subscriptions: SUBSCRIPTIONS,
+    signupBonus: SIGNUP_BONUS_CREDITS,
+    creditModel: publicCreditModel(),
+  });
+});
+
 app.get("/legal/:kind", (req, res) => res.type("html").send(renderLegalPage(req.params.kind)));
 
 // Initialize database connection (non-blocking, graceful if not configured)
@@ -850,14 +872,39 @@ app.use("/api/billing", billingRoutes);
 
 // 标题大师连接层：只做服务端转发，模型、提示词和标题逻辑继续由原项目负责。
 app.post("/api/title-plans", requireAuth, async (req, res) => {
+  let chargedCredits = 0;
+  const referenceId = `title-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   try {
+    const { isDbAvailable } = await import("./db.js");
+    const { CREDIT_MODEL } = await import("./pricing.js");
+    if (isDbAvailable() && !isLocalFreeMode(req) && req.user?.role !== "admin") {
+      const titleCost = CREDIT_MODEL.titleGeneration;
+      await deductCredits(req.user.id, titleCost, "生成标题与封面文案", referenceId);
+      chargedCredits = titleCost;
+    }
     const result = await requestTitlePlans({
       text: req.body?.text,
       angle: req.body?.angle,
     });
     return res.json(result);
   } catch (error) {
+    if (chargedCredits > 0 && req.user) {
+      try {
+        await refundCredits(req.user.id, chargedCredits, "标题生成失败，退回积分", `refund-${referenceId}`);
+      } catch (refundError) {
+        console.error("[Credits] Title refund failed:", refundError?.message || refundError);
+      }
+    }
     console.warn(`[title-master] ${error?.message || error}`);
+    if (error?.code === "INSUFFICIENT_CREDITS") {
+      const { CREDIT_MODEL } = await import("./pricing.js");
+      return res.status(402).json({
+        error: "积分不足",
+        code: "INSUFFICIENT_CREDITS",
+        required: CREDIT_MODEL.titleGeneration,
+        current: Number(error?.current ?? req.user?.credits ?? 0),
+      });
+    }
     const status = /至少输入|不能超过/u.test(String(error?.message || "")) ? 400 : 502;
     return res.status(status).json({ error: error?.message || "标题生成失败，请稍后重试" });
   }
@@ -1035,6 +1082,14 @@ function getSourceImages({ sourceMode, image, elementImages }) {
   }
   if (sourceMode === "base" && image) return [image];
   return [];
+}
+
+function sourceImageCountForCredits(body = {}) {
+  const sourceMode = normalizeSourceMode(body.sourceMode || "base");
+  if (sourceMode === "elements") {
+    return Array.isArray(body.elementImages) ? body.elementImages.filter(Boolean).slice(0, 10).length : 0;
+  }
+  return sourceMode === "base" && body.image ? 1 : 0;
 }
 
 function validateGenerateInput({ sourceMode, image, elementImages, imageDescription, title }) {
@@ -1280,7 +1335,16 @@ async function imageResponseToDataUrl(response) {
   throw new Error("Image API returned no image data.");
 }
 
-async function generateImage2Cover(openai, { sourceMode, sourceImages, imageDescription, inspiration, plan, ratio }) {
+async function generateImage2Cover(openai, {
+  sourceMode,
+  sourceImages,
+  imageDescription,
+  inspiration,
+  plan,
+  ratio,
+  userId = null,
+  operation = "generate",
+}) {
   const prompt = buildImage2Prompt(plan, { sourceMode, imageDescription, ratio, inspiration, sourceCount: sourceImages.length });
   const size = image2SizeForRatio(ratio);
   // 生图 = 一次直接调用 Image2，给足时间（Image2 要多久就多久），不提前截断、不重试，避免额外耗时。
@@ -1295,6 +1359,16 @@ async function generateImage2Cover(openai, { sourceMode, sourceImages, imageDesc
       quality,
       moderation: "auto",
     }, requestOptions(timeoutMs));
+    await recordProviderUsage({
+      userId,
+      provider: "openai",
+      model: "gpt-image-2",
+      operation,
+      size,
+      quality,
+      inputImageCount: 0,
+      response,
+    });
     return imageResponseToDataUrl(response);
   }
 
@@ -1308,6 +1382,16 @@ async function generateImage2Cover(openai, { sourceMode, sourceImages, imageDesc
     size,
     quality,
   }, requestOptions(timeoutMs));
+  await recordProviderUsage({
+    userId,
+    provider: "openai",
+    model: "gpt-image-2",
+    operation,
+    size,
+    quality,
+    inputImageCount: sourceImages.length,
+    response,
+  });
   return imageResponseToDataUrl(response);
 }
 
@@ -1533,7 +1617,15 @@ async function generateSeedanceCover({ sourceMode, sourceImages, imageDescriptio
   }
 }
 
-async function generateSeedreamCover({ sourceMode, sourceImages, inspiration, plan, ratio }) {
+async function generateSeedreamCover({
+  sourceMode,
+  sourceImages,
+  inspiration,
+  plan,
+  ratio,
+  userId = null,
+  operation = "generate",
+}) {
   const apiKey = process.env.ARK_API_KEY;
   if (!apiKey) {
     throw new Error("缺少 ARK_API_KEY。请在 .env.local 配置火山方舟 API Key 后重启服务。");
@@ -1565,6 +1657,14 @@ async function generateSeedreamCover({ sourceMode, sourceImages, inspiration, pl
   if (!response.ok || json?.error) {
     throw new Error(json?.error?.message || `Seedream API 返回 ${response.status}`);
   }
+  await recordProviderUsage({
+    userId,
+    provider: "volcengine",
+    model,
+    operation,
+    size: body.size,
+    inputImageCount: sourceImages.length,
+  });
   const item = json?.data?.[0];
   if (item?.b64_json) return `data:image/png;base64,${item.b64_json}`;
   if (!item?.url) throw new Error("Seedream 未返回图片。");
@@ -1604,13 +1704,33 @@ async function toJpegDataUrl(dataUrl) {
   }
 }
 
-async function generateByEngine({ openai, engine, sourceMode, sourceImages, imageDescription, inspiration, plan, ratio }) {
+async function generateByEngine({
+  openai,
+  engine,
+  sourceMode,
+  sourceImages,
+  imageDescription,
+  inspiration,
+  plan,
+  ratio,
+  userId = null,
+  operation = "generate",
+}) {
   const timeoutMs = imageJobTimeoutMs(engine);
   const runOnce = async () => {
     if (engine === "image2") {
       if (!openai) throw new Error("OpenAI client is not configured.");
       return withTimeout(
-        generateImage2Cover(openai, { sourceMode, sourceImages, imageDescription, inspiration, plan, ratio }),
+        generateImage2Cover(openai, {
+          sourceMode,
+          sourceImages,
+          imageDescription,
+          inspiration,
+          plan,
+          ratio,
+          userId,
+          operation,
+        }),
         timeoutMs,
         `${engineLabels[engine]} 单张生成`,
       );
@@ -1624,7 +1744,7 @@ async function generateByEngine({ openai, engine, sourceMode, sourceImages, imag
     }
     if (engine === "seedream") {
       return withTimeout(
-        generateSeedreamCover({ sourceMode, sourceImages, inspiration, plan, ratio }),
+        generateSeedreamCover({ sourceMode, sourceImages, inspiration, plan, ratio, userId, operation }),
         timeoutMs,
         `${engineLabels[engine]} 单张生成`,
       );
@@ -1693,6 +1813,8 @@ app.get("/api/download/:filename", (req, res) => {
 // 单张重生：某一张失败或不满意时，单独重生（可换引擎）。商业账户按 1 张计费。
 app.post("/api/regenerate", async (req, res) => {
   const requestedEngineRaw = req.body?.engine || "image2";
+  const billingEngine = resolveEngine(normalizeEngine(requestedEngineRaw));
+  const billingSourceImageCount = sourceImageCountForCredits(req.body || {});
   const regenerateLocalFree = isLocalFreeMode(req);
   let chargedCredits = 0;
   const { isDbAvailable } = await import("./db.js");
@@ -1740,13 +1862,19 @@ app.post("/api/regenerate", async (req, res) => {
     }
     if (isDbAvailable() && !regenerateLocalFree && req.user?.role !== "admin") {
       try {
-        chargedCredits = getCreditsCost(1);
+        chargedCredits = getCreditsCost(1, {
+          engine: billingEngine,
+          sourceImageCount: billingSourceImageCount,
+        });
         await deductCredits(req.user.id, chargedCredits, "单张重生封面", `regen-${Date.now()}`);
       } catch (error) {
         return res.status(402).json({
           error: "积分不足",
           code: "INSUFFICIENT_CREDITS",
-          required: getCreditsCost(1),
+          required: getCreditsCost(1, {
+            engine: billingEngine,
+            sourceImageCount: billingSourceImageCount,
+          }),
           current: Number(error?.current ?? req.user?.credits ?? 0),
         });
       }
@@ -1766,6 +1894,8 @@ app.post("/api/regenerate", async (req, res) => {
         inspiration,
         plan,
         ratio,
+        userId: req.user?.id || null,
+        operation: "regenerate",
       });
     } catch (error) {
       if (req.accessAccount) releaseQuota(req.accessAccount.user, 1);
@@ -1807,7 +1937,11 @@ app.post("/api/generate", async (req, res) => {
       return res.status(401).json({ error: "请先登录", code: "AUTH_REQUIRED" });
     }
     const requestedCount = Number(req.body?.ratios?.reduce?.((s, r) => s + (r.count || 0), 0) || req.body?.count || 4);
-    const creditsCost = getCreditsCost(Math.max(1, requestedCount));
+    const creditsCost = getCreditsCost(Math.max(1, requestedCount), {
+      engine: req.body?.engine,
+      slotEngines: Array.isArray(req.body?.slotEngines) ? req.body.slotEngines : [],
+      sourceImageCount: sourceImageCountForCredits(req.body || {}),
+    });
     if (req.user.role !== "admin" && req.user.credits < creditsCost) {
       return res.status(402).json({
         error: "积分不足",
@@ -2062,6 +2196,8 @@ app.post("/api/generate", async (req, res) => {
           inspiration,
           plan,
           ratio,
+          userId: req.user?.id || null,
+          operation: "generate",
         });
         const result = {
           id: plan.id,
@@ -2120,7 +2256,12 @@ app.post("/api/generate", async (req, res) => {
     const successCount = results.filter((r) => !r.error).length;
     if (reservedCredits > 0 && req.user) {
       try {
-        const actualCost = successCount > 0 ? getCreditsCost(successCount) : 0;
+        const successfulResults = results.filter((r) => !r.error);
+        const actualCost = successCount > 0 ? getCreditsCost(successCount, {
+          engine,
+          slotEngines: successfulResults.map((result) => result.engine),
+          sourceImageCount: sourceImages.length,
+        }) : 0;
         const refundAmount = Math.max(0, reservedCredits - actualCost);
         if (refundAmount > 0) {
           await refundCredits(req.user.id, refundAmount, `未成功生成的封面退回积分`, `refund-${Date.now()}`);

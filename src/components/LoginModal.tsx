@@ -6,9 +6,11 @@ interface LoginModalProps {
   open: boolean;
   onClose: () => void;
   onLogin: (user: UserInfo) => void;
+  signupBonus: number;
+  image2Credits: number;
 }
 
-export function LoginModal({ open, onClose, onLogin }: LoginModalProps) {
+export function LoginModal({ open, onClose, onLogin, signupBonus, image2Credits }: LoginModalProps) {
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
   const [step, setStep] = useState<"phone" | "code">("phone");
@@ -155,7 +157,11 @@ export function LoginModal({ open, onClose, onLogin }: LoginModalProps) {
         </div>
 
         <div className="login-modal-footer">
-          <p>首次登录即完成注册，赠送 1200 积分（可生成 5 张封面）</p>
+          <p>
+            首次登录即完成注册
+            {signupBonus > 0 ? `，赠送 ${signupBonus} 积分` : ""}
+            {signupBonus > 0 && image2Credits > 0 ? `（可生成 ${Math.floor(signupBonus / image2Credits)} 张 Image2 封面）` : ""}
+          </p>
         </div>
       </div>
     </div>

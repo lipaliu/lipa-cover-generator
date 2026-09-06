@@ -3,7 +3,7 @@
 import crypto from "node:crypto";
 import { query, withTransaction } from "./db.js";
 import { addCredits, changeCreditsInTransaction } from "./credits.js";
-import { discountForPlan, findProduct } from "./pricing.js";
+import { discountForPlan, findProduct, publicCreditModel } from "./pricing.js";
 
 function makeOrderNo() {
   const stamp = new Date().toISOString().replace(/\D/gu, "").slice(2, 14);
@@ -31,7 +31,12 @@ export async function listPublicProducts(userId = null) {
     amountFen: product.plan ? product.amountFen : Math.round(product.amountFen * discount),
     originalAmountFen: product.amountFen,
   });
-  return { packs: CREDIT_PACKS.map(serialize), subscriptions: SUBSCRIPTIONS.map(serialize), discount };
+  return {
+    packs: CREDIT_PACKS.map(serialize),
+    subscriptions: SUBSCRIPTIONS.map(serialize),
+    discount,
+    creditModel: publicCreditModel(),
+  };
 }
 
 export async function createPendingOrder(userId, productId) {

@@ -3,12 +3,48 @@ import crypto from "node:crypto";
 import test from "node:test";
 import { decryptPaymentNotification, verifyWeChatSignature } from "../server/wechat-pay.js";
 import { getCreditsCost } from "../server/middleware.js";
+import { estimateOpenAIImageCost } from "../server/provider-usage.js";
+import { CREDIT_MODEL, SIGNUP_BONUS_CREDITS } from "../server/pricing.js";
 
-test("commercial credit tiers use the same large-unit pricing as the server", () => {
-  assert.equal(getCreditsCost(1), 300);
-  assert.equal(getCreditsCost(5), 1200);
-  assert.equal(getCreditsCost(10), 1500);
-  assert.equal(getCreditsCost(12), 2000);
+test("commercial credits are linear by engine", () => {
+  assert.equal(CREDIT_MODEL.titleGeneration, 20);
+  assert.equal(SIGNUP_BONUS_CREDITS, 2500);
+  assert.equal(getCreditsCost(1), 600);
+  assert.equal(getCreditsCost(5), 3000);
+  assert.equal(getCreditsCost(10, { engine: "seedream" }), 2000);
+  assert.equal(getCreditsCost(3, { slotEngines: ["image2", "seedream", "seedance"] }), 1100);
+});
+
+test("Image2 charges for additional high-fidelity references", () => {
+  assert.equal(getCreditsCost(1, { engine: "image2", sourceImageCount: 1 }), 600);
+  assert.equal(getCreditsCost(1, { engine: "image2", sourceImageCount: 3 }), 840);
+  assert.equal(getCreditsCost(2, {
+    slotEngines: ["image2", "seedream"],
+    sourceImageCount: 3,
+  }), 1040);
+});
+
+test("OpenAI cost ledger uses API-returned token usage", () => {
+  process.env.USD_CNY_RATE = "7.3";
+  const result = estimateOpenAIImageCost({
+    usage: {
+      input_tokens_details: { text_tokens: 100, image_tokens: 1000 },
+      output_tokens: 1500,
+    },
+  });
+  assert.equal(result.costBasis, "api_usage");
+  assert.equal(result.estimatedCostMicrouan, 390550);
+});
+
+test("OpenAI auto quality falls back to a conservative high-quality estimate", () => {
+  process.env.USD_CNY_RATE = "7.3";
+  const result = estimateOpenAIImageCost({}, {
+    requestedQuality: "auto",
+    requestedSize: "1152x1536",
+    inputImageCount: 1,
+  });
+  assert.equal(result.costBasis, "estimate_auto_as_high");
+  assert.equal(result.estimatedCostMicrouan, 1584100);
 });
 
 test("decrypts a WeChat Pay AES-256-GCM notification resource", () => {

@@ -34,7 +34,17 @@ export async function generateTitlePlans(
     body: JSON.stringify({ text, angle }),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error || "标题生成失败，请稍后重试");
+  if (!res.ok) {
+    const error = new Error(data.error || "标题生成失败，请稍后重试") as Error & {
+      status?: number;
+      required?: number;
+      current?: number;
+    };
+    error.status = res.status;
+    error.required = Number(data.required || 0);
+    error.current = Number(data.current || 0);
+    throw error;
+  }
   if (!Array.isArray(data.plans)) throw new Error("标题大师没有返回可用方案");
   return data.plans;
 }
@@ -158,16 +168,35 @@ export interface BillingProduct {
   perks?: string[];
 }
 
+export interface CreditModel {
+  version: string;
+  creditUnitYuan: number;
+  perImage: Record<"image2" | "seedream" | "seedance", number>;
+  image2ExtraReference: number;
+  titleGeneration: number;
+}
+
 export async function fetchBillingProducts(): Promise<{
   packs: BillingProduct[];
   subscriptions: BillingProduct[];
   discount: number;
   paymentReady: boolean;
+  creditModel: CreditModel;
 }> {
   const res = await fetch(`${API_BASE}/api/billing/products`, { headers: authHeaders() });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "套餐加载失败");
   return data;
+}
+
+export async function fetchPublicPricing(): Promise<{ creditModel: CreditModel; signupBonus: number }> {
+  const res = await fetch(`${API_BASE}/api/pricing`);
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || !data.creditModel) throw new Error(data.error || "积分规则加载失败");
+  return {
+    creditModel: data.creditModel as CreditModel,
+    signupBonus: Math.max(0, Number(data.signupBonus) || 0),
+  };
 }
 
 export async function createBillingOrder(productId: string): Promise<{
@@ -194,22 +223,20 @@ export async function fetchBillingOrder(orderNo: string): Promise<{
   return data;
 }
 
-// ─── Pricing constants (keep in sync with server/middleware.js) ───
-// 阶梯计费：1=300, 2=500, 3-4=800, 5-7=1200, 8-10=1500
-
-function tierCost(n: number): number {
-  if (n <= 0) return 0;
-  if (n === 1) return 300;
-  if (n === 2) return 500;
-  if (n <= 4) return 800;
-  if (n <= 7) return 1200;
-  return 1500;
-}
-
-export function getCreditsCost(count: number): number {
-  const n = Math.max(1, Math.floor(Number(count) || 1));
-  // 1-10 阶梯；超过 10 张按每满 10 张叠加 15 分 + 余数阶梯。
-  const fullTens = Math.floor(n / 10);
-  const remainder = n % 10;
-  return fullTens * 1500 + tierCost(remainder);
+export function calculateCreditsCost(
+  model: CreditModel,
+  count: number,
+  slotEngines: Array<"image2" | "seedream" | "seedance"> = [],
+  fallbackEngine: "image2" | "seedream" | "seedance" = "image2",
+  sourceImageCount = 0,
+): number {
+  const total = Math.max(1, Math.floor(Number(count) || 1));
+  const references = Math.max(0, Math.floor(Number(sourceImageCount) || 0));
+  return Array.from({ length: total }, (_, index) => {
+    const selected = slotEngines[index] || fallbackEngine;
+    const referenceSurcharge = selected === "image2" && references > 1
+      ? (references - 1) * model.image2ExtraReference
+      : 0;
+    return model.perImage[selected] + referenceSurcharge;
+  }).reduce((sum, value) => sum + value, 0);
 }
