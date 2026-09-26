@@ -34,6 +34,12 @@ Logo direction: use a macOS-style rounded-square app icon with four letters in a
 - Do not reintroduce the dark hero panel, giant repeated logo, decorative B, numbered two-card entry sheet, or independently reinterpret "premium". Use the screenshot as the visual authority.
 - The carousel is an example gallery; the real creation workflow, Title Master fields, all model options, credits, and back navigation remain functional.
 
+## Showcase content correction (2026-09-26)
+
+- User wants the homepage gallery to use previously supplied Xiaohongshu-style or 小Lin说 cover references, not newly generated lifestyle posters. Preserve the selected homepage layout while changing its content.
+- The corpus descriptions in `references/aesthetic-profile.md` are not the original images. Locate the actual supplied assets before replacing the gallery; do not pass unrelated generated samples off as the user's reference library.
+- User supplied two exact cover JPGs: 马尔代夫 VLOG and 三伏天养生. These replace the initial center portrait and adjacent mountain cover respectively; keep the remaining three samples until additional replacements are supplied. Use the supplied files without regenerating their artwork.
+
 ## Title Master Integration Guardrails
 
 - Keep BAKABAKA's Image2, Seedream, SeeDance, design-matrix, prompt, regeneration, and queue pipelines unchanged.

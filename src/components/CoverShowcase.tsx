@@ -2,8 +2,8 @@ import { ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { useState } from "react";
 
 const examples = [
-  { id: "portrait", label: "高级冷淡", title: "普通一天也值得记录" },
-  { id: "travel", label: "山野自由", title: "去看更大的世界" },
+  { id: "maldives-vlog", label: "旅行 VLOG", title: "马尔代夫 VLOG", source: "/showcase/maldives-vlog.jpg" },
+  { id: "summer-wellness", label: "生活养生", title: "三伏天养生", source: "/showcase/summer-wellness.jpg" },
   { id: "cat", label: "生活随笔", title: "让喜欢的慢慢发生" },
   { id: "city", label: "城市漫游", title: "把城市过成生活" },
   { id: "food", label: "日常烟火", title: "一餐一会" },
@@ -29,7 +29,7 @@ export function CoverShowcase({ onStartCover, onStartText }: Props) {
           return (
             <button key={offset} className={`showcase-cover position-${offset + 2}`} type="button"
               onClick={() => setActive(index)} aria-label={`查看${example.label}示例：${example.title}`} aria-pressed={offset === 0}>
-              <img src={`/showcase/${example.id}.webp`} alt={example.title} fetchPriority={offset === 0 ? "high" : "auto"} />
+              <img src={example.source ?? `/showcase/${example.id}.webp`} alt={example.title} fetchPriority={offset === 0 ? "high" : "auto"} />
             </button>
           );
         })}
