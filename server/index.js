@@ -436,50 +436,46 @@ if (ACCESS_PASSWORD) {
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
-    min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    font-family: -apple-system, system-ui, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+    position: relative; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    overflow: hidden; font-family: -apple-system, system-ui, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
     background:
-      radial-gradient(52% 46% at 14% 8%, rgba(167, 139, 250, 0.55) 0%, transparent 60%),
-      radial-gradient(50% 44% at 86% 6%, rgba(129, 140, 248, 0.5) 0%, transparent 60%),
-      radial-gradient(56% 50% at 88% 88%, rgba(147, 197, 253, 0.5) 0%, transparent 60%),
-      radial-gradient(50% 46% at 10% 90%, rgba(196, 181, 253, 0.45) 0%, transparent 60%),
-      linear-gradient(155deg, #cabcf7 0%, #b3bcf4 45%, #a9c6f0 100%);
-    color: #241a3d; padding: 20px;
+      radial-gradient(circle at 86% 8%, rgba(255,255,255,.3), transparent 28%),
+      linear-gradient(136deg, #c4bdf2 0%, #aaa1e8 52%, #bbb3ef 100%);
+    color: #1c1340; padding: 24px;
+  }
+  body::before {
+    content: "BAKABAKA"; position: fixed; right: -.06em; bottom: -.22em; pointer-events: none;
+    font: 700 clamp(170px, 30vw, 480px)/.82 Georgia, "Songti SC", serif;
+    color: rgba(28,19,64,.065); letter-spacing: -.08em;
   }
   .card {
-    width: min(420px, 92vw); padding: 40px 36px 34px; border-radius: 30px; text-align: center;
-    background: linear-gradient(160deg, rgba(255,255,255,0.55), rgba(255,255,255,0.3));
-    border: 1px solid rgba(255,255,255,0.7);
-    box-shadow: inset 0 1px 1px rgba(255,255,255,0.9), 0 24px 70px rgba(80,50,160,0.28);
-    -webkit-backdrop-filter: blur(26px) saturate(150%); backdrop-filter: blur(26px) saturate(150%);
+    position: relative; z-index: 1; width: min(430px, 94vw); padding: 44px 40px 34px; border-radius: 18px; text-align: left;
+    background: #f8f6ff; border: 1px solid rgba(28,19,64,.1);
+    box-shadow: 0 32px 90px rgba(28,19,64,.24);
   }
-  .logo { width: min(230px, 70%); height: auto; margin: 0 auto 6px; display: block;
-    filter: drop-shadow(0 6px 22px rgba(120, 100, 220, 0.35)); }
-  .logoLink { display: block; text-decoration: none; border-radius: 20px; }
-  .logoLink:focus-visible { outline: 3px solid rgba(139,112,240,0.35); outline-offset: 4px; }
-  .slogan { font-size: 13px; color: rgba(36,26,61,0.6); margin-bottom: 26px; letter-spacing: 0.02em; }
+  .logo { width: 230px; max-width: 100%; height: auto; display: block; }
+  .logoLink { display: inline-block; padding: 13px 18px; margin-bottom: 24px; text-decoration: none; border-radius: 10px; background: #1c1340; }
+  .logoLink:focus-visible { outline: 2px solid #5f47da; outline-offset: 4px; }
+  .slogan { font: 600 24px/1.25 Georgia, "Songti SC", serif; color: #1c1340; margin-bottom: 30px; }
+  .slogan::after { content: "INTERNAL ACCESS"; display: block; margin-top: 8px; font: 700 9px/1 -apple-system, system-ui, sans-serif; letter-spacing: .18em; color: #786e94; }
   .field { margin-bottom: 14px; text-align: left; }
-  .field label { display: block; font-size: 12px; font-weight: 600; color: rgba(36,26,61,0.65); margin: 0 0 6px 4px; }
+  .field label { display: block; font-size: 11px; font-weight: 700; color: #5e5874; margin: 0 0 7px; letter-spacing: .06em; }
   .field input {
-    width: 100%; padding: 13px 16px; font-size: 15px; color: #241a3d; border-radius: 16px;
-    background: linear-gradient(160deg, rgba(255,255,255,0.6), rgba(255,255,255,0.35));
-    border: 1px solid rgba(255,255,255,0.75);
-    box-shadow: inset 0 1px 1px rgba(255,255,255,0.8);
-    outline: none; -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+    width: 100%; padding: 13px 14px; font-size: 15px; color: #1c1340; border-radius: 8px;
+    background: #fff; border: 1px solid rgba(28,19,64,.2); box-shadow: none; outline: none;
   }
-  .field input:focus { border-color: rgba(139, 112, 240, 0.65); box-shadow: inset 0 1px 1px rgba(255,255,255,0.8), 0 0 0 3px rgba(139,112,240,0.18); }
+  .field input:focus { border-color: #5f47da; box-shadow: 0 0 0 3px rgba(95,71,218,.1); }
   .err { font-size: 13px; color: #d63384; margin: 2px 0 12px; ${showError ? "" : "display:none;"} }
   button {
-    width: 100%; padding: 14px; margin-top: 6px; font-size: 16px; font-weight: 700; color: #fff;
-    border: 1px solid rgba(255,255,255,0.6); border-radius: 999px; cursor: pointer;
-    background: linear-gradient(165deg, rgba(167,139,250,0.95), rgba(124,105,246,0.92));
-    box-shadow: inset 0 1px 1px rgba(255,255,255,0.55), 0 12px 30px rgba(110,90,230,0.4);
-    text-shadow: 0 1px 2px rgba(60,40,140,0.3);
-    transition: filter .2s ease, transform .2s ease;
+    width: 100%; padding: 14px; margin-top: 8px; font-size: 15px; font-weight: 700; color: #fff;
+    border: 1px solid #1c1340; border-radius: 8px; cursor: pointer; background: #1c1340;
+    box-shadow: none; text-shadow: none; transition: background .16s ease, transform .16s ease;
     font-family: inherit;
   }
-  button:hover { filter: brightness(1.06); transform: translateY(-1px); }
-  .foot { margin-top: 22px; font-size: 11px; color: rgba(36,26,61,0.45); }
+  button:hover { background: #5f47da; border-color: #5f47da; transform: translateY(-1px); }
+  .foot { margin-top: 24px; padding-top: 18px; border-top: 1px solid rgba(28,19,64,.1); font-size: 10px; color: #8e879f; text-align: center; }
+  @media (max-width: 520px) { body { padding: 14px; } .card { padding: 30px 22px 26px; } .logoLink { margin-bottom: 20px; } .slogan { font-size: 22px; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
 <body>
