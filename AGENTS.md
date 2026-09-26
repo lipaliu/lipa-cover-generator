@@ -27,6 +27,13 @@ Logo direction: use a macOS-style rounded-square app icon with four letters in a
 - For BAKABAKA, premium does not mean replacing its identity with a generic black-and-white luxury template. Preserve the purple brand field and the existing BAKABAKA logo, but reduce candy gradients, repeated glass cards, glow, and decorative chrome.
 - The discovery surface should read like an art-directed cover; the working surface should read like a calm professional creative console. Use bolder editorial scale, fewer visible containers, disciplined spacing, and one clear action per stage.
 
+## Selected visual supersedes the premium interpretation (2026-09-26)
+
+- The user rejected the dark purple hero and stacked entry sheet as ugly. The exact source of truth is `/Users/lipaliu/Downloads/Codex 图像 2026年9月26日 16_22_46.png`, linked from `https://chatgpt.com/s/cx_6ab78114edd08191ad8563fd43b8cb1b`.
+- Match the luminous pale lavender/blue field, floating original logo, centered bold Chinese serif headline, five photographic cover examples fanned across the page, round carousel controls, purple pill upload CTA, and underlined full-text entry.
+- Do not reintroduce the dark hero panel, giant repeated logo, decorative B, numbered two-card entry sheet, or independently reinterpret "premium". Use the screenshot as the visual authority.
+- The carousel is an example gallery; the real creation workflow, Title Master fields, all model options, credits, and back navigation remain functional.
+
 ## Title Master Integration Guardrails
 
 - Keep BAKABAKA's Image2, Seedream, SeeDance, design-matrix, prompt, regeneration, and queue pipelines unchanged.

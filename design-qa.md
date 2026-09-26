@@ -1,36 +1,42 @@
-**Findings**
-- No actionable P0/P1/P2 findings.
+# Selected-reference QA · 2026-09-26
 
-**Evidence**
-- Source visual truth path: `/Users/themoment/Documents/Codex/2026-06-14/files-mentioned-by-the-user-codex/work/lipa-cover-generator/public/samples/source-visual-target.png`
-- Implementation screenshot path: `/Users/themoment/Documents/Codex/2026-06-14/files-mentioned-by-the-user-codex/work/lipa-cover-generator/qa/implementation-mobile-500.png`
-- Full-view comparison evidence: `/Users/themoment/Documents/Codex/2026-06-14/files-mentioned-by-the-user-codex/work/lipa-cover-generator/qa/comparison.png`
-- Viewport/state: production build, mobile-like viewport, default in-progress demo state.
-- Browser evidence: in-app Browser DOM metrics at 390 x 844 reported document width 390, frame width 390, toolbar within x=244..378, and input zone within x=12..378. The in-app screenshot API timed out repeatedly, so Chrome headless screenshots were used for visual evidence.
-- Focused region comparison: header/input/progress/result regions were inspected in the comparison image. A separate focused crop was not needed because the relevant typography, controls, icon, and grid elements are readable in the full comparison.
+## Findings
 
-**Required Fidelity Surfaces**
-- Fonts and typography: implementation uses system Apple/SF/PingFang stack, matching the macOS utility direction. Hierarchy is close: bold title, compact labels, low-contrast metadata, readable controls.
-- Spacing and layout rhythm: implementation follows the selected Batch Console structure with top app bar, image/text input row, segmented count control, progress card, and 2-column result grid. It is slightly denser in the upper input area after adding the keyword field, but remains aligned and usable.
-- Colors and visual tokens: implementation uses graphite/dark surfaces, hairline borders, silver selected segmented control, off-white type, and muted gold action state consistent with the revised macOS/Margiela direction.
-- Image quality and asset fidelity: LIPA is a generated macOS-style rounded icon asset, not CSS art. Sample base photo and cover thumbnails are generated raster assets and fit their slots. PWA icon uses the same LIPA asset.
-- Copy and content: implementation includes title, subtitle, keyword field, 1/2/4/10 generation selector, analyzing/planning/generating step labels, result labels, history, download, settings, and local history empty state.
+No actionable P0/P1/P2 findings in the tested UI scope.
 
-**Interaction Verification**
-- Quantity selector changes state.
-- Settings panel opens and closes.
-- History view opens and displays the local-history empty state.
-- Sample cover opens a large preview modal and closes cleanly.
-- Missing `OPENAI_API_KEY` path shows a clear error instead of faking generated results.
+## Evidence
 
-**Follow-up Polish**
-- P3: Source visual target is taller than the 500 x 900 implementation screenshot, so fewer result rows are visible in the first captured viewport. The remaining cards are available by scrolling.
-- P3: Exact generated thumbnail typography naturally differs from the visual target because the app uses separately generated sample cover assets.
+- Visual source: `/Users/lipaliu/Downloads/Codex 图像 2026年9月26日 16_22_46.png`.
+- Shared link: https://chatgpt.com/s/cx_6ab78114edd08191ad8563fd43b8cb1b (body unavailable; supplied image is authoritative).
+- Desktop: `qa/reference-implementation-desktop.png`, 1487 × 1058, production build, initial gallery state.
+- Combined comparison: `qa/reference-comparison.png`, source left / browser render right; visually reviewed in full.
+- Mobile: `qa/reference-implementation-mobile.png`, 390 × 844.
+- Responsive browser checks: 320 × 740, 390 × 844, 768 × 1024 and 1487 × 1058.
 
-**Patches Made Since QA**
-- Added optional keyword input to match the selected visual target.
-- Widened responsive mobile handling and verified 390px DOM metrics with in-app Browser.
-- Fixed Express 5 production fallback routing.
-- Resized local sample assets to keep the PWA lighter.
+## Required fidelity surfaces
 
-final result: passed
+- Typography: centered dark Chinese serif heading, spaced eyebrow, quiet sans-serif supporting copy; title, subtitle and CTA copy match the selected source.
+- Layout: floating original logo and top navigation, five perspective cover cards, central portrait, round carousel controls, pagination, pill upload CTA and underlined text-entry route.
+- Colors: pale lavender-to-blue field, dark purple ink, translucent light work surfaces and purple primary action. Removed the rejected dark hero and two-entry card sheet.
+- Images: five separately generated WebP posters follow the source themes, composition and cover text. These are regenerated artworks, not exact source-image crops.
+- Responsive: small screens center the main cover with adjacent covers visible; all five examples remain accessible via arrows/dots. Fixed center offset, hidden Favorites label and 320px CTA wrapping.
+
+## Interaction verification
+
+- Next carousel arrow changes active example and label.
+- Full-text entry opens the existing Title Master form.
+- Custom publishing title and cover main text enable entry into the existing image workflow.
+- Return selection returns to the gallery; re-entering Title Master preserves the entered publishing title.
+- Logo returns to homepage.
+- Upload CTA opens the existing source/ratio selection step; return selection works.
+- Browser console: no captured errors in the tested local session.
+- Typecheck, production build and all 10 existing tests pass.
+- No paid model generation, SMS, payment or account mutation was triggered during UI checks. This QA does not claim those external services were exercised.
+
+## Remaining P3 differences
+
+- Generated photographs and embedded typography are close to, but not pixel-identical with, the reference.
+- Background uses a soft CSS light field, not the reference's exact reflective-floor artwork.
+- Chinese serif rendering depends on installed system fonts.
+
+final result: passed (selected-reference visual and navigation scope)

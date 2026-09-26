@@ -14,6 +14,7 @@ import {
   Upload,
   Palette,
   Settings2,
+  Settings,
   History,
   Trash2,
   Archive,
@@ -34,6 +35,7 @@ import type { CoverResult, CoverPlan, GenerateEvent, HistoryBatch, ImageEngine, 
 import { LoginModal } from "./components/LoginModal";
 import { CreditsBadge } from "./components/CreditsBadge";
 import { RechargeModal } from "./components/RechargeModal";
+import { CoverShowcase } from "./components/CoverShowcase";
 import {
   calculateCreditsCost,
   fetchBalance,
@@ -1619,24 +1621,26 @@ export function App() {
 
   /* ─── Render ─── */
   return (
-    <main className="app-shell">
+    <main className={cn("app-shell", entryFlow === "choose" ? "is-discovery" : "is-studio")}>
       <div className="bg-gradient" aria-hidden="true" />
 
       {/* Header */}
       <header className="site-header">
         <div className="header-brand">
           <button type="button" className="brand-plate brand-home" title="回主页" onClick={goHome}>
-            <img src="/logo.png" alt="巴卡巴卡 BAKABAKA" className="brand-logo" />
+            <span className="brand-symbol"><img src="/logo.png" alt="巴卡巴卡" className="brand-logo" /></span>
+            <span className="brand-wordmark">BAKA BAKA</span>
+            <span className="brand-tagline">让内容先被看见</span>
           </button>
           <small className="brand-copyright">Copyright © 畅导吃枸杞</small>
           {!isLocalLipa && <a className="brand-legal" href="/legal/terms" target="_blank" rel="noreferrer">经营主体与服务协议</a>}
         </div>
         <nav className="header-nav">
-          <button type="button" className="nav-btn" title="回到第一步" onClick={goHome}>
+          <button type="button" className={cn("nav-btn", "nav-create", !showHistory && !showFavorites && !showSettings && "is-active")} title="回到首页" onClick={goHome}>
             <Home size={18} />
-            <span>首页</span>
+            <span>创作</span>
           </button>
-          <button type="button" className={cn("nav-btn", "nav-btn-history", showHistory && "is-active")} onClick={() => setShowHistory(!showHistory)}>
+          <button type="button" aria-label="我的作品" className={cn("nav-btn", "nav-btn-history", showHistory && "is-active")} onClick={() => setShowHistory(!showHistory)}>
             <History size={18} />
             <span>我的作品{history.length > 0 ? `（${history.length}）` : ""}</span>
           </button>
@@ -1644,8 +1648,8 @@ export function App() {
             <Heart size={18} />
             <span>收藏夹{favorites.length > 0 ? `（${favorites.length}）` : ""}</span>
           </button>
-          <button type="button" className={cn("nav-btn", showSettings && "is-active")} onClick={() => setShowSettings(!showSettings)}>
-            <Settings2 size={18} />
+          <button type="button" aria-label="设置" className={cn("nav-btn", "nav-settings", showSettings && "is-active")} onClick={() => setShowSettings(!showSettings)}>
+            <Settings size={18} />
             <span>设置</span>
           </button>
           {isAdminAccount && (
@@ -1789,36 +1793,17 @@ export function App() {
       )}
 
       {/* Hero Section */}
-      <section className="hero">
+      {entryFlow !== "choose" && <section className="hero">
         <button type="button" className="hero-logo-plate" title="回到首页" onClick={goHome}>
           <img src="/logo.png" alt="巴卡巴卡 BAKABAKA" className="hero-logo" />
         </button>
         <p className="hero-slogan">自媒体封面之王 · King of Cover</p>
         <p className="hero-subtitle">上传一张底图，AI 按爆款审美自动排版花字、多引擎多风格一次出图，一眼挑出最吸睛的封面。</p>
-      </section>
+      </section>}
 
       {entryFlow === "choose" && (
-        <section className="entry-panel fade-in">
-          <div className="entry-heading">
-            <span>开始之前</span>
-            <h2>你现在有完整原文吗？</h2>
-            <p>有原文就先生成标题和封面字；没有原文就直接进入巴咔巴咔。</p>
-          </div>
-          <div className="entry-options">
-            <button type="button" className="entry-option is-primary" onClick={() => setEntryFlow("title")}>
-              <span className="entry-option-icon"><Type size={24} /></span>
-              <strong>我有原文</strong>
-              <p>粘贴原文，先生成发布标题、封面主字和副标题</p>
-              <em>先生成文案 <ArrowRight size={15} /></em>
-            </button>
-            <button type="button" className="entry-option" onClick={() => { setEntryFlow("cover"); setStep(1); }}>
-              <span className="entry-option-icon"><ImagePlus size={24} /></span>
-              <strong>我没有原文</strong>
-              <p>跳过标题生成，直接进入原来的巴咔巴咔生图流程</p>
-              <em>直接做封面 <ArrowRight size={15} /></em>
-            </button>
-          </div>
-        </section>
+        <CoverShowcase onStartCover={() => { setEntryFlow("cover"); setStep(1); window.scrollTo({ top: 0 }); }}
+          onStartText={() => { setEntryFlow("title"); window.scrollTo({ top: 0 }); }} />
       )}
 
       {entryFlow === "title" && (
