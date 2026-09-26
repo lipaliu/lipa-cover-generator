@@ -21,6 +21,12 @@ Selected direction: macOS-native minimal editorial. The UI should feel like a pr
 
 Logo direction: use a macOS-style rounded-square app icon with four letters in a 2x2 grid: L I on the first row, P A on the second row. Dark background (#1d1d1f), white text. Use it for the header logo and PWA icon.
 
+## Durable visual feedback (2026-09-26)
+
+- The user explicitly wants the complete BAKABAKA website to feel more like a major premium brand (“更具大牌感”) through the Lipa UI system.
+- For BAKABAKA, premium does not mean replacing its identity with a generic black-and-white luxury template. Preserve the purple brand field and the existing BAKABAKA logo, but reduce candy gradients, repeated glass cards, glow, and decorative chrome.
+- The discovery surface should read like an art-directed cover; the working surface should read like a calm professional creative console. Use bolder editorial scale, fewer visible containers, disciplined spacing, and one clear action per stage.
+
 ## Title Master Integration Guardrails
 
 - Keep BAKABAKA's Image2, Seedream, SeeDance, design-matrix, prompt, regeneration, and queue pipelines unchanged.
