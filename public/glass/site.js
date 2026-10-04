@@ -1,4 +1,5 @@
-/* Login page: same moving background and liquid-glass card as the homepage.
+/* Server-rendered pages (login, admin, legal, messages): same moving background
+   and liquid-glass surfaces as the app.
    Glass filter ported from nikdelvin/liquid-glass (MIT); fluid layer from
    PavelDoGreat/WebGL-Fluid-Simulation (MIT). Licences in /glass/licenses/. */
 (function () {

@@ -21,6 +21,7 @@ import creditsRoutes from "./routes/credits.js";
 import billingRoutes from "./routes/billing.js";
 import { requestTitlePlans } from "./title-master.js";
 import { renderLegalPage } from "./legal.js";
+import { glassPage, glassMessage } from "./glass-page.js";
 import { getProviderUsageSummary, recordProviderUsage } from "./provider-usage.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -504,7 +505,7 @@ if (ACCESS_PASSWORD) {
     </div>
     <span class="flt"><span class="box"></span></span>
   </form>
-  <script src="/glass/login.js" defer></script>
+  <script src="/glass/site.js" defer></script>
 </body>
 </html>`;
 
@@ -518,7 +519,7 @@ if (ACCESS_PASSWORD) {
   // 未登录也能看的：展示首页（单页应用入口）、静态资源、登录页本身，以及首页要读的两个只读接口。
   // 生成、作品、收藏、管理后台等一切 API 仍然需要登录。
   const PUBLIC_FILES = new Set(["/", "/index.html", "/manifest.json", "/sw.js", "/logo.png", "/favicon.ico", "/api/whoami", "/api/style-options"]);
-  const isPublicPath = (p) => PUBLIC_FILES.has(p) || /^\/(assets|glass|icons|showcase|samples)\//u.test(p);
+  const isPublicPath = (p) => PUBLIC_FILES.has(p) || /^\/(assets|glass|icons|showcase|samples|legal)\//u.test(p);
   const safeNextOf = (v) => (/^\/(?!\/)/u.test(String(v || "")) ? String(v) : "/");
 
   app.use((req, res, next) => {
@@ -600,11 +601,14 @@ if (ACCESS_PASSWORD) {
   const escapeHtml = (s) => String(s).replace(/[&<>"']/gu, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
   const requireAdmin = (req, res) => {
     if (!req.accessAccount || req.accessAccount.role !== "admin") {
-      res.status(403).send("仅管理员可访问");
+      res.status(403).type("html").send(glassMessage({ title: "仅管理员可访问", message: "这个页面只对管理员开放。换管理员账号登录，或回到创作页继续做封面。", backHref: "/", backLabel: "回到创作", nav: ["create", "logout"] }));
       return false;
     }
     return true;
   };
+  // 后台表单出错时给一张同风格的提示页，而不是一行裸文字
+  const adminError = (res, status, message) =>
+    res.status(status).type("html").send(glassMessage({ title: "没有保存", message, backHref: "/admin", backLabel: "回到管理后台" }));
 
   // 新增/修改体验账户
   app.post("/admin/accounts", (req, res) => {
@@ -612,9 +616,9 @@ if (ACCESS_PASSWORD) {
     const user = String(req.body?.user || "").trim().toLowerCase();
     const password = String(req.body?.password || "").trim();
     const quota = Math.max(1, Math.min(999, Number(req.body?.quota) || 2));
-    if (!/^[a-z0-9_-]{2,24}$/u.test(user)) return res.status(400).send("用户名只能是 2-24 位字母/数字/下划线/短横线");
-    if (user === ADMIN_KEY) return res.status(400).send("不能占用管理员用户名");
-    if (!password) return res.status(400).send("密码不能为空");
+    if (!/^[a-z0-9_-]{2,24}$/u.test(user)) return adminError(res, 400, "用户名只能是 2-24 位字母/数字/下划线/短横线");
+    if (user === ADMIN_KEY) return adminError(res, 400, "不能占用管理员用户名");
+    if (!password) return adminError(res, 400, "密码不能为空");
     trialAccounts[user] = { password, quota };
     scheduleAccountsSave();
     return res.redirect("/admin");
@@ -646,10 +650,10 @@ if (ACCESS_PASSWORD) {
     if (!requireAdmin(req, res)) return;
     try {
       const { isDbAvailable } = await import("./db.js");
-      if (!isDbAvailable()) return res.status(400).send("未配置数据库，会员体系未启用");
+      if (!isDbAvailable()) return adminError(res, 400, "未配置数据库，会员体系未启用");
       const { findUserByPhone, fulfillOrder } = await import("./billing.js");
       const user = await findUserByPhone(req.body?.phone);
-      if (!user) return res.status(404).send("没有这个手机号的用户（需对方先注册登录一次）");
+      if (!user) return adminError(res, 404, "没有这个手机号的用户（需对方先注册登录一次）");
       const result = await fulfillOrder({
         userId: user.id,
         productId: String(req.body?.productId || ""),
@@ -657,7 +661,7 @@ if (ACCESS_PASSWORD) {
         tradeNo: String(req.body?.tradeNo || "").trim(),
         operator: req.accessAccount.user,
       });
-      if (!result.ok) return res.status(400).send(result.error || "开通失败");
+      if (!result.ok) return adminError(res, 400, result.error || "开通失败");
       return res.redirect("/admin#members");
     } catch (error) {
       console.error("[Admin] fulfill error:", error);
@@ -669,12 +673,12 @@ if (ACCESS_PASSWORD) {
     if (!requireAdmin(req, res)) return;
     try {
       const { isDbAvailable } = await import("./db.js");
-      if (!isDbAvailable()) return res.status(400).send("未配置数据库，会员体系未启用");
+      if (!isDbAvailable()) return adminError(res, 400, "未配置数据库，会员体系未启用");
       const { findUserByPhone, adminAdjustCredits } = await import("./billing.js");
       const user = await findUserByPhone(req.body?.phone);
-      if (!user) return res.status(404).send("没有这个手机号的用户");
+      if (!user) return adminError(res, 404, "没有这个手机号的用户");
       const result = await adminAdjustCredits(user.id, req.body?.amount, String(req.body?.reason || ""), req.accessAccount.user);
-      if (!result.ok) return res.status(400).send(result.error || "调整失败");
+      if (!result.ok) return adminError(res, 400, result.error || "调整失败");
       return res.redirect("/admin#members");
     } catch (error) {
       console.error("[Admin] adjust error:", error);
@@ -688,7 +692,7 @@ if (ACCESS_PASSWORD) {
     const file = String(req.params.file || "");
     if (!/^[\w.-]+$/u.test(file) || file.includes("..")) return res.status(400).send("bad name");
     const filePath = join(coversDir, file);
-    if (!existsSync(filePath)) return res.status(404).send("这张的原图已被清理（重新部署会清空记录）");
+    if (!existsSync(filePath)) return adminError(res, 404, "这张的原图已被清理（重新部署会清空记录）");
     return res.sendFile(filePath);
   });
 
@@ -715,7 +719,7 @@ if (ACCESS_PASSWORD) {
         const fmt = (d) => (d ? escapeHtml(new Date(d).toLocaleString("zh-CN", { hour12: false })) : "—");
         const memberRows = members.map((m) => {
           const active = m.subscription_plan !== "free" && m.subscription_expires_at && new Date(m.subscription_expires_at) > new Date();
-          return `<tr><td>${escapeHtml(m.phone)}</td><td>${m.role === "admin" ? "管理员" : "用户"}</td><td><b>${m.credits}</b></td>
+          return `<tr><td>${escapeHtml(m.phone)}</td><td><span class="tag${m.role === "admin" ? " admin" : ""}">${m.role === "admin" ? "管理员" : "用户"}</span></td><td><b>${m.credits}</b></td>
             <td>${active ? `${escapeHtml(m.subscription_plan)} · 到期 ${fmt(m.subscription_expires_at)}` : "免费用户"}</td>
             <td>${fmt(m.created_at)}</td></tr>`;
         }).join("") || `<tr><td colspan="5" class="empty">还没有注册用户</td></tr>`;
@@ -734,29 +738,29 @@ if (ACCESS_PASSWORD) {
           <h2>会员 · 手动开通</h2>
           <form class="addform" method="POST" action="/admin/members/fulfill">
             <input name="phone" placeholder="用户手机号" required />
-            <select name="productId" style="padding:10px 14px;border-radius:14px;border:1px solid rgba(255,255,255,.75);font-family:inherit;font-size:14px;background:rgba(255,255,255,.5);color:#241a3d">${productOptions}</select>
-            <input name="tradeNo" placeholder="收款单号/备注（选填）" style="width:200px" />
+            <select name="productId">${productOptions}</select>
+            <input name="tradeNo" class="w-lg" placeholder="收款单号/备注（选填）" />
             <button type="submit">确认开通</button>
           </form>
           <p class="hint">用户扫码付款后，你在这里按手机号给他开通（会自动加积分/续会员并留下订单记录）。以后接了微信/支付宝，这一步就自动完成。</p>
-          <form class="addform" method="POST" action="/admin/members/adjust" style="margin-top:14px">
+          <form class="addform" method="POST" action="/admin/members/adjust">
             <input name="phone" placeholder="用户手机号" required />
-            <input name="amount" type="number" placeholder="积分±" required style="width:110px" />
-            <input name="reason" placeholder="原因（选填）" style="width:200px" />
+            <input name="amount" class="w-sm" type="number" placeholder="积分±" required />
+            <input name="reason" class="w-lg" placeholder="原因（选填）" />
             <button type="submit">调整积分</button>
           </form>
         </div>
         <div class="glass">
           <h2>注册用户（最近 100）</h2>
-          <table><thead><tr><th>手机号</th><th>身份</th><th>积分</th><th>会员</th><th>注册时间</th></tr></thead><tbody>${memberRows}</tbody></table>
+          <div class="table-wrap"><table><thead><tr><th>手机号</th><th>身份</th><th>积分</th><th>会员</th><th>注册时间</th></tr></thead><tbody>${memberRows}</tbody></table></div>
         </div>
         <div class="glass">
           <h2>订单记录（最近 50）</h2>
-          <table><thead><tr><th>时间</th><th>手机号</th><th>套餐</th><th>金额</th><th>积分</th><th>渠道</th></tr></thead><tbody>${orderRows}</tbody></table>
+          <div class="table-wrap"><table><thead><tr><th>时间</th><th>手机号</th><th>套餐</th><th>金额</th><th>积分</th><th>渠道</th></tr></thead><tbody>${orderRows}</tbody></table></div>
         </div>
         <div class="glass">
           <h2>近 30 天模型成本 · 合计 ¥${providerCostTotal.toFixed(2)}</h2>
-          <table><thead><tr><th>供应商</th><th>模型</th><th>成功调用</th><th>估算成本</th><th>图片输入 token</th><th>图片输出 token</th></tr></thead><tbody>${providerCostRows}</tbody></table>
+          <div class="table-wrap"><table><thead><tr><th>供应商</th><th>模型</th><th>成功调用</th><th>估算成本</th><th>图片输入 token</th><th>图片输出 token</th></tr></thead><tbody>${providerCostRows}</tbody></table></div>
           <p class="hint">OpenAI 响应带 usage 时按真实 token 计算；未返回 usage 时按当前官方价保守估算。这里是模型成本，不含短信、支付手续费、税费和服务器。</p>
         </div>`;
       }
@@ -777,7 +781,7 @@ if (ACCESS_PASSWORD) {
       const pass = a.role === "admin" ? "······" : escapeHtml(a.password);
       const roleLabel = a.role === "admin" ? "管理员" : a.role === "vip" ? "会员" : "体验";
       const quotaLabel = a.role === "admin" || a.role === "vip" ? "不限" : `${quota} 张/次`;
-      return `<tr><td><b>${escapeHtml(a.user)}</b></td><td>${roleLabel}</td><td>${pass}</td><td>${used}</td><td>${quotaLabel}</td><td>${last ? escapeHtml(new Date(last).toLocaleString("zh-CN", { hour12: false })) : "—"}</td><td class="ops">${ops}</td></tr>`;
+      return `<tr><td><b>${escapeHtml(a.user)}</b></td><td><span class="tag${a.role === "admin" ? " admin" : ""}">${roleLabel}</span></td><td>${pass}</td><td>${used}</td><td>${quotaLabel}</td><td>${last ? escapeHtml(new Date(last).toLocaleString("zh-CN", { hour12: false })) : "—"}</td><td class="ops">${ops}</td></tr>`;
     }).join("");
     const cards = Object.entries(usageStore)
       .flatMap(([user, entry]) => (entry.records || []).map((r) => ({ user, ...r })))
@@ -789,68 +793,29 @@ if (ACCESS_PASSWORD) {
         return `<figure class="shot">${body}<figcaption><b>${escapeHtml(r.user)}</b> · ${escapeHtml(r.engine || "")} · ${escapeHtml(r.ratio || "")}<br/>${escapeHtml(r.title || "（无标题）")}<br/><small>${escapeHtml(new Date(r.time).toLocaleString("zh-CN", { hour12: false }))}</small></figcaption></figure>`;
       })
       .join("");
-    res.type("html").send(`<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>管理后台 · BAKABAKA</title>
-<style>
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body { font-family: -apple-system, system-ui, "SF Pro Text", "PingFang SC", sans-serif; color: #241a3d; padding: 32px 4vw 60px;
-    min-height: 100vh;
-    background: radial-gradient(52% 46% at 14% 8%, rgba(167,139,250,.5) 0%, transparent 60%),
-      radial-gradient(50% 44% at 86% 6%, rgba(129,140,248,.45) 0%, transparent 60%),
-      radial-gradient(56% 50% at 88% 88%, rgba(147,197,253,.45) 0%, transparent 60%),
-      linear-gradient(155deg, #cabcf7 0%, #b3bcf4 45%, #a9c6f0 100%); }
-  h1 { font-size: 22px; margin-bottom: 4px; }
-  h2 { font-size: 15px; margin-bottom: 12px; }
-  .sub { font-size: 13px; color: rgba(36,26,61,.6); margin-bottom: 24px; }
-  .sub a { color: #5b4bc4; }
-  .glass { background: linear-gradient(160deg, rgba(255,255,255,.55), rgba(255,255,255,.3)); border: 1px solid rgba(255,255,255,.7);
-    box-shadow: inset 0 1px 1px rgba(255,255,255,.9), 0 18px 50px rgba(80,50,160,.22); border-radius: 24px;
-    -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); padding: 22px 24px; margin-bottom: 26px; }
-  table { width: 100%; border-collapse: collapse; font-size: 14px; }
-  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid rgba(255,255,255,.5); }
-  th { font-size: 12px; color: rgba(36,26,61,.55); font-weight: 600; }
-  .inline { display: inline-block; margin-right: 6px; }
-  .mini { font-size: 12px; padding: 5px 12px; border-radius: 999px; border: 1px solid rgba(255,255,255,.75); cursor: pointer;
-    background: linear-gradient(160deg, rgba(255,255,255,.6), rgba(255,255,255,.35)); color: #241a3d; font-family: inherit; }
-  .mini.danger { color: #c02662; }
-  .mini:hover { filter: brightness(1.05); }
-  .addform { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-  .addform input { padding: 10px 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,.75); font-size: 14px;
-    background: linear-gradient(160deg, rgba(255,255,255,.6), rgba(255,255,255,.35)); color: #241a3d; outline: none; font-family: inherit; }
-  .addform input[name="user"] { width: 160px; } .addform input[name="password"] { width: 160px; } .addform input[name="quota"] { width: 90px; }
-  .addform button { padding: 10px 22px; border-radius: 999px; border: 1px solid rgba(255,255,255,.6); cursor: pointer; font-weight: 700; color: #fff;
-    background: linear-gradient(165deg, rgba(167,139,250,.95), rgba(124,105,246,.92)); font-family: inherit; }
-  .hint { font-size: 12px; color: rgba(36,26,61,.55); margin-top: 10px; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; }
-  .shot { background: rgba(255,255,255,.4); border: 1px solid rgba(255,255,255,.65); border-radius: 16px; overflow: hidden; }
-  .shot img { width: 100%; display: block; }
-  .noimg { width: 100%; aspect-ratio: 3/4; display: flex; align-items: center; justify-content: center; color: rgba(36,26,61,.4); font-size: 12px; }
-  figcaption { padding: 8px 10px; font-size: 11.5px; line-height: 1.5; color: rgba(36,26,61,.75); }
-  .empty { color: rgba(36,26,61,.5); font-size: 14px; }
-</style></head>
-<body>
-  <h1>巴卡巴卡 · 管理后台</h1>
-  <p class="sub">账户管理与生成记录 · <a href="/">返回生成器</a> · <a href="/access-logout">退出登录</a></p>
-  <div class="glass">
-    <h2>账户</h2>
-    <table><thead><tr><th>账户</th><th>类型</th><th>密码</th><th>累计生成</th><th>单次上限</th><th>最近生成</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table>
-    <div style="margin-top:16px">
-      <form class="addform" method="POST" action="/admin/accounts">
-        <input name="user" placeholder="用户名（字母数字）" required />
-        <input name="password" placeholder="密码" required />
-        <input name="quota" type="number" min="1" max="999" value="2" title="单次最多生成几张" />
+    res.type("html").send(glassPage({
+      title: "管理后台",
+      active: "admin",
+      body: `
+    <h1 class="page-title">管理后台</h1>
+    <p class="sub">账户管理、会员与生成记录</p>
+    <section class="glass">
+      <h2>账户</h2>
+      <div class="table-wrap"><table><thead><tr><th>账户</th><th>类型</th><th>密码</th><th>累计生成</th><th>单次上限</th><th>最近生成</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>
+      <form class="addform" method="POST" action="/admin/accounts" style="margin-top:18px">
+        <input name="user" class="w-md" placeholder="用户名（字母数字）" required />
+        <input name="password" class="w-md" placeholder="密码" required />
+        <input name="quota" class="w-sm" type="number" min="1" max="999" value="2" title="单次最多生成几张" />
         <button type="submit">添加 / 修改账户</button>
       </form>
       <p class="hint">同名提交 = 修改密码/单次上限。体验账户只能生成 小红书 3:4，一次最多「单次上限」张，生成完可再来。累计生成与记录存在服务器磁盘，免费档重启/重新部署会清零（要永久保存需付费磁盘）。</p>
-    </div>
-  </div>
-  ${membersHtml}
-  <div class="glass">
-    <h2>生成记录（点缩略图看原图）</h2>
-    ${cards ? `<div class="grid">${cards}</div>` : `<p class="empty">还没有生成记录。</p>`}
-  </div>
-</body></html>`);
+    </section>
+    ${membersHtml}
+    <section class="glass">
+      <h2>生成记录（点缩略图看原图）</h2>
+      ${cards ? `<div class="grid">${cards}</div>` : `<p class="empty">还没有生成记录。</p>`}
+    </section>`,
+    }));
   });
 
   console.log(`[Access] 登录保护已启用：管理员 + ${Object.keys(trialAccounts).length} 个体验账户，/admin 可管理。`);

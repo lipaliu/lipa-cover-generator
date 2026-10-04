@@ -1,3 +1,4 @@
+import { glassPage } from "./glass-page.js";
 const VERSION = process.env.LEGAL_TERMS_VERSION || "2026-09-05";
 
 function escapeHtml(value) {
@@ -53,6 +54,13 @@ const documents = {
 export function renderLegalPage(kind) {
   const document = documents[kind] || documents.terms;
   const op = operator();
-  return `<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${document.title}</title><style>
-    *{box-sizing:border-box}body{margin:0;background:#f5f5f7;color:#1d1d1f;font-family:-apple-system,BlinkMacSystemFont,"PingFang SC",sans-serif;line-height:1.75}.wrap{width:min(820px,calc(100% - 32px));margin:40px auto;padding:36px;background:rgba(255,255,255,.88);border:1px solid rgba(0,0,0,.06);border-radius:20px;box-shadow:0 18px 50px rgba(0,0,0,.07)}a{color:#0071e3;text-decoration:none}h1{font-family:Georgia,"Noto Serif SC",serif;font-size:30px;margin:8px 0}h2{font-size:17px;margin:28px 0 8px}p{color:#515154;margin:0}.meta{color:#86868b;font-size:13px;margin-bottom:26px}.back{display:inline-block;margin-bottom:12px}@media(max-width:600px){.wrap{margin:16px auto;padding:24px}h1{font-size:25px}}</style></head><body><main class="wrap"><a class="back" href="/">← 返回 BAKABAKA</a><h1>${document.title}</h1><p class="meta">版本 ${VERSION}</p>${document.body(op)}</main></body></html>`;
+  return glassPage({
+    title: document.title,
+    nav: ["home"],
+    body: `<article class="glass prose">
+      <h1 class="page-title" style="margin-top:4px">${document.title}</h1>
+      <p class="meta">版本 ${VERSION}</p>
+      ${document.body(op)}
+    </article>`,
+  });
 }
