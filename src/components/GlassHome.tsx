@@ -33,7 +33,6 @@ export function GlassHome({ onStartCover, onStartText }: Props) {
 
   return (
     <section className="glass-home" ref={ref} aria-labelledby="gh-title">
-      <div className="gh-bd" aria-hidden="true" />
       <div className="gh-col">
         <Glass as="h1" className="gh-slab" id="gh-title" aria-label="巴卡巴卡" data-cab="2" data-blur="3">
           <img className="gh-logo" src="/glass/logo-white.png" alt="" />

@@ -427,74 +427,84 @@ if (ACCESS_PASSWORD) {
   const signUser = (user) => createHash("sha256").update(`${accessSecret}|${user}`).digest("hex").slice(0, 40);
   const ACCESS_COOKIE = "baka_access";
 
+  // 登录页：与首页同一套珊瑚红液态玻璃（流动背景 + 玻璃卡片）。资源都在 /glass/ 下，未登录也能加载。
   const loginPage = (showError, nextPath = "/") => `<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#b8274f" />
 <title>登录 · BAKABAKA 巴卡巴卡</title>
+<link rel="icon" type="image/png" href="/icons/lipa-icon.png" />
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: #b8274f; }
   body {
-    position: relative; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    overflow: hidden; font-family: -apple-system, system-ui, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
-    background:
-      radial-gradient(circle at 86% 8%, rgba(255,255,255,.3), transparent 28%),
-      linear-gradient(136deg, #c4bdf2 0%, #aaa1e8 52%, #bbb3ef 100%);
-    color: #1c1340; padding: 24px;
+    min-height: 100svh; display: flex; align-items: center; justify-content: center; padding: 88px 16px 40px;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Noto Sans SC", "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased; color: rgba(250,250,250,.9); overflow-x: hidden;
   }
-  body::before {
-    content: "BAKABAKA"; position: fixed; right: -.06em; bottom: -.22em; pointer-events: none;
-    font: 700 clamp(170px, 30vw, 480px)/.82 Georgia, "Songti SC", serif;
-    color: rgba(28,19,64,.065); letter-spacing: -.08em;
+  .bd { position: fixed; inset: -3%; width: 106%; height: 106%; z-index: 0; background: #b8274f url(/glass/bg-flow.jpg) center / cover; will-change: transform; }
+  .bd.on { background-image: none; }
+  .bd > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .home { position: fixed; top: 16px; left: clamp(16px, 3vw, 36px); z-index: 2; padding: 9px 18px; border-radius: 999px; font-size: 14px; color: rgba(255,255,255,.88); text-decoration: none;
+    background: rgba(10,20,40,.22); -webkit-backdrop-filter: blur(16px) saturate(160%); backdrop-filter: blur(16px) saturate(160%); box-shadow: inset 0 0 0 .5px rgba(255,255,255,.35); }
+  .home:hover { color: #fff; }
+  .lg { position: relative; overflow: hidden; isolation: isolate; }
+  .lg > .tint { position: absolute; inset: 0; z-index: 1; border-radius: inherit; background: rgba(0,0,0,.45); }
+  .lg > .flt { position: absolute; inset: 0; z-index: 2; border-radius: inherit; }
+  .lg > .flt > .box { display: block; width: 100%; height: 100%; border-radius: inherit; background: #09090b00; box-shadow: inset 0 0 4px 0 #fafafa80; }
+  .lg > .content { position: relative; z-index: 3; }
+  .card { position: relative; z-index: 1; width: min(440px, 100%); border-radius: 44px; animation: rise 1.1s cubic-bezier(.16,1,.3,1) backwards; }
+  .card > .content { display: flex; flex-direction: column; gap: 18px; padding: 40px 36px 30px; }
+  @keyframes rise { from { opacity: 0; transform: translateY(36px); } }
+  .logo { display: block; width: 190px; max-width: 70%; height: auto; margin: 0 auto 4px; }
+  h1 { font-size: 34px; font-weight: 300; letter-spacing: -.01em; text-align: center; color: rgba(250,250,250,.92); }
+  .sub { margin-top: -10px; text-align: center; font-size: 14px; color: rgba(250,250,250,.62); }
+  label { display: block; margin: 0 0 7px 4px; font-size: 12px; letter-spacing: .06em; color: rgba(250,250,250,.7); }
+  input {
+    width: 100%; padding: 14px 18px; font: inherit; font-size: 16px; color: #fff; border-radius: 18px; outline: none;
+    background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.24); transition: border-color .2s, background .2s;
   }
-  .card {
-    position: relative; z-index: 1; width: min(430px, 94vw); padding: 44px 40px 34px; border-radius: 18px; text-align: left;
-    background: #f8f6ff; border: 1px solid rgba(28,19,64,.1);
-    box-shadow: 0 32px 90px rgba(28,19,64,.24);
-  }
-  .logo { width: 230px; max-width: 100%; height: auto; display: block; }
-  .logoLink { display: inline-block; padding: 13px 18px; margin-bottom: 24px; text-decoration: none; border-radius: 10px; background: #1c1340; }
-  .logoLink:focus-visible { outline: 2px solid #5f47da; outline-offset: 4px; }
-  .slogan { font: 600 24px/1.25 Georgia, "Songti SC", serif; color: #1c1340; margin-bottom: 30px; }
-  .slogan::after { content: "INTERNAL ACCESS"; display: block; margin-top: 8px; font: 700 9px/1 -apple-system, system-ui, sans-serif; letter-spacing: .18em; color: #786e94; }
-  .field { margin-bottom: 14px; text-align: left; }
-  .field label { display: block; font-size: 11px; font-weight: 700; color: #5e5874; margin: 0 0 7px; letter-spacing: .06em; }
-  .field input {
-    width: 100%; padding: 13px 14px; font-size: 15px; color: #1c1340; border-radius: 8px;
-    background: #fff; border: 1px solid rgba(28,19,64,.2); box-shadow: none; outline: none;
-  }
-  .field input:focus { border-color: #5f47da; box-shadow: 0 0 0 3px rgba(95,71,218,.1); }
-  .err { font-size: 13px; color: #d63384; margin: 2px 0 12px; ${showError ? "" : "display:none;"} }
+  input:focus { border-color: rgba(255,255,255,.75); background: rgba(255,255,255,.16); }
+  .err { font-size: 13px; color: #ffd1dc; text-align: center; ${showError ? "" : "display:none;"} }
   button {
-    width: 100%; padding: 14px; margin-top: 8px; font-size: 15px; font-weight: 700; color: #fff;
-    border: 1px solid #1c1340; border-radius: 8px; cursor: pointer; background: #1c1340;
-    box-shadow: none; text-shadow: none; transition: background .16s ease, transform .16s ease;
-    font-family: inherit;
+    width: 100%; margin-top: 6px; padding: 15px 18px; border: 0; border-radius: 999px; cursor: pointer; font: inherit; font-size: 17px; font-weight: 500;
+    color: #09090b; background: rgba(250,250,250,.92); box-shadow: 0 0 1px #fff; transition: transform .3s ease-out, background .2s;
   }
-  button:hover { background: #5f47da; border-color: #5f47da; transform: translateY(-1px); }
-  .foot { margin-top: 24px; padding-top: 18px; border-top: 1px solid rgba(28,19,64,.1); font-size: 10px; color: #8e879f; text-align: center; }
-  @media (max-width: 520px) { body { padding: 14px; } .card { padding: 30px 22px 26px; } .logoLink { margin-bottom: 20px; } .slogan { font-size: 22px; } }
-  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  button:hover { transform: scale(1.03); background: #fff; }
+  button:active { transform: scale(.98); }
+  :focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+  .foot { margin-top: 6px; font-size: 11px; color: rgba(250,250,250,.45); text-align: center; }
+  @media (max-width: 520px) { .card { border-radius: 36px; } .card > .content { padding: 32px 22px 24px; } h1 { font-size: 30px; } }
+  @media (prefers-reduced-motion: reduce) { .card { animation: none; } button { transition: none; } }
 </style>
 </head>
 <body>
-  <form class="card" method="POST" action="/access-login">
-    <input type="hidden" name="next" value="${escapeHtml(nextPath)}" />
-    <a class="logoLink" href="/" aria-label="回到首页"><img class="logo" src="/logo.png" alt="巴卡巴卡 BAKABAKA" /></a>
-    <p class="slogan">自媒体封面之王 · King of Cover</p>
-    <div class="field">
-      <label>用户名</label>
-      <input name="user" type="text" autocomplete="username" autofocus />
+  <div class="bd" id="bd" aria-hidden="true"></div>
+  <a class="home" href="/">← 返回首页</a>
+  <form class="card lg" method="POST" action="/access-login" data-glass data-blur="8" data-cab="2">
+    <span class="tint"></span>
+    <div class="content">
+      <input type="hidden" name="next" value="${escapeHtml(nextPath)}" />
+      <img class="logo" src="/glass/logo-white.png" alt="巴卡巴卡 BAKABAKA" />
+      <h1>登录</h1>
+      <p class="sub">内部账号登录后开始做封面</p>
+      <div>
+        <label for="user">用户名</label>
+        <input id="user" name="user" type="text" autocomplete="username" autocapitalize="none" autofocus />
+      </div>
+      <div>
+        <label for="password">密码</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" />
+      </div>
+      <p class="err" role="alert">用户名或密码不对，再试一次</p>
+      <button type="submit">进入 BAKABAKA</button>
+      <p class="foot">Copyright © 畅导吃枸杞</p>
     </div>
-    <div class="field">
-      <label>密码</label>
-      <input name="password" type="password" autocomplete="current-password" />
-    </div>
-    <p class="err">用户名或密码不对，再试一次</p>
-    <button type="submit">进入 BAKABAKA</button>
-    <p class="foot">Copyright © 畅导吃枸杞</p>
+    <span class="flt"><span class="box"></span></span>
   </form>
+  <script src="/glass/login.js" defer></script>
 </body>
 </html>`;
 
@@ -505,12 +515,17 @@ if (ACCESS_PASSWORD) {
     return account && account.password === String(password) ? account : null;
   };
 
+  // 未登录也能看的：展示首页（单页应用入口）、静态资源、登录页本身，以及首页要读的两个只读接口。
+  // 生成、作品、收藏、管理后台等一切 API 仍然需要登录。
+  const PUBLIC_FILES = new Set(["/", "/index.html", "/manifest.json", "/sw.js", "/logo.png", "/favicon.ico", "/api/whoami", "/api/style-options"]);
+  const isPublicPath = (p) => PUBLIC_FILES.has(p) || /^\/(assets|glass|icons|showcase|samples)\//u.test(p);
+  const safeNextOf = (v) => (/^\/(?!\/)/u.test(String(v || "")) ? String(v) : "/");
+
   app.use((req, res, next) => {
     // 商业公开站：普通页面与用户 API 走手机号/JWT；旧口令只继续保护 /admin。
     if (PUBLIC_SIGNUP_MODE && !req.path.startsWith("/admin") && req.path !== "/access-login") return next();
-    // 登录页要显示 logo，放行
-    if (req.path === "/logo.png" || req.path === "/favicon.ico") return next();
-    // 已带有效 Cookie（值 = 用户名.签名）
+    // 已带有效 Cookie（值 = 用户名.签名），或 Basic 头（curl/脚本）
+    let account = null;
     const cookies = String(req.headers.cookie || "").split(/;\s*/u);
     for (const c of cookies) {
       if (!c.startsWith(`${ACCESS_COOKIE}=`)) continue;
@@ -518,40 +533,41 @@ if (ACCESS_PASSWORD) {
       const dot = value.lastIndexOf(".");
       if (dot <= 0) continue;
       const user = decodeURIComponent(value.slice(0, dot));
-      const account = value.slice(dot + 1) === signUser(user) ? accountByKey(user) : null;
-      if (account) {
-        req.accessAccount = account;
-        return next();
-      }
+      account = value.slice(dot + 1) === signUser(user) ? accountByKey(user) : null;
+      if (account) break;
     }
-    // Basic 头兼容（curl/脚本）
     const header = req.headers.authorization || "";
-    if (header.startsWith("Basic ")) {
+    if (!account && header.startsWith("Basic ")) {
       const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
       const idx = decoded.indexOf(":");
-      const account = resolveAccount(decoded.slice(0, idx), decoded.slice(idx + 1));
-      if (account) {
-        req.accessAccount = account;
-        return next();
-      }
+      account = resolveAccount(decoded.slice(0, idx), decoded.slice(idx + 1));
     }
-    // 登录表单提交（登录成功后跳回原本要去的页面，比如 /admin）
+    const isRead = req.method === "GET" || req.method === "HEAD";
+    if (account) {
+      req.accessAccount = account;
+      // 已登录还打开登录页：直接去原本要去的地方
+      if (isRead && req.path === "/login") return res.redirect(safeNextOf(req.query.next));
+      return next();
+    }
+    // 登录表单提交（登录成功后跳回原本要去的页面，比如生成页 /?start=cover 或 /admin）
     if (req.method === "POST" && req.path === "/access-login") {
-      const { user = "", password = "", next = "/" } = req.body || {};
-      const safeNext = /^\/(?!\/)/u.test(String(next)) ? String(next) : "/";
-      const account = resolveAccount(user, password);
-      if (account) {
+      const { user = "", password = "", next: nextPath = "/" } = req.body || {};
+      const safeNext = safeNextOf(nextPath);
+      const found = resolveAccount(user, password);
+      if (found) {
         res.setHeader(
           "Set-Cookie",
-          `${ACCESS_COOKIE}=${encodeURIComponent(account.user)}.${signUser(account.user)}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax`,
+          `${ACCESS_COOKIE}=${encodeURIComponent(found.user)}.${signUser(found.user)}; Path=/; Max-Age=2592000; HttpOnly; SameSite=Lax`,
         );
-        return res.redirect(safeNext);
+        return res.redirect(303, safeNext);
       }
       return res.status(401).type("html").send(loginPage(true, safeNext));
     }
-    // API 请求返回 JSON，页面请求给登录页（记住原目标，登录后跳回）
+    if (isRead && req.path === "/login") return res.type("html").send(loginPage(false, safeNextOf(req.query.next)));
+    if (isRead && isPublicPath(req.path)) return next();
+    // API 请求返回 JSON；其它页面先去登录（记住原目标，登录后跳回）
     if (req.path.startsWith("/api/")) return res.status(401).json({ error: "需要登录" });
-    return res.status(401).type("html").send(loginPage(false, req.path));
+    return res.redirect(`/login?next=${encodeURIComponent(req.originalUrl || req.path)}`);
   });
 
   // 审美库里的可选项（字体/色彩风格），给前端「风格定制」下拉用；库丰富后自动跟着变

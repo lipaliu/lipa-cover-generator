@@ -1,0 +1,192 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   巴卡巴卡 liquid-glass theme for the whole site (2026-10-04).
+   Same material as the homepage: the coral flowing-glass backdrop shows through
+   dark frosted panels, text is white, choices are translucent glass, the main
+   action is a white pill with dark text. Loaded after reference-theme.css.
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  color-scheme: dark;
+  --bg-primary: #b8274f;
+  --bg-secondary: rgba(30, 8, 20, .5);
+  --bg-card: rgba(255, 255, 255, .08);
+  --bg-card-hover: rgba(255, 255, 255, .14);
+  --bg-elevated: rgba(255, 255, 255, .1);
+  --border: rgba(255, 255, 255, .16);
+  --border-strong: rgba(255, 255, 255, .32);
+  --glass-brd: rgba(255, 255, 255, .3);
+  --ink-primary: rgba(255, 255, 255, .94);
+  --ink-secondary: rgba(255, 255, 255, .7);
+  --ink-tertiary: rgba(255, 255, 255, .5);
+  --accent: #ffffff;
+  --accent-hover: #ffffff;
+  --accent-glow: rgba(255, 255, 255, .14);
+  --error: #ffc2cf;
+  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Noto Sans SC", "Helvetica Neue", sans-serif;
+  --font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans SC", "Helvetica Neue", sans-serif;
+  --shadow-sm: none;
+  --shadow-md: 0 30px 80px -36px rgba(40, 0, 15, .5);
+  --shadow-lg: 0 40px 100px -40px rgba(40, 0, 15, .6);
+  --gl-panel: rgba(26, 6, 16, .42);
+  --gl-panel-strong: rgba(22, 4, 14, .62);
+  --gl-blur: blur(26px) saturate(160%);
+  --gl-edge: inset 0 0 0 .5px rgba(255, 255, 255, .32), inset 0 1px 0 rgba(255, 255, 255, .14);
+  --gl-pill: rgba(250, 250, 250, .92);
+  --gl-pill-ink: #09090b;
+}
+html, body { background: #b8274f; color: var(--ink-primary); }
+::selection { background: rgba(255, 255, 255, .35); color: #fff; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+.bg-gradient { display: none; }
+
+/* moving backdrop: fixed, behind everything inside the app shell */
+.gh-bd {
+  position: fixed;
+  inset: -3%;
+  z-index: -1;
+  width: 106%;
+  height: 106%;
+  overflow: hidden;
+  background: #b8274f url(/glass/bg-flow.jpg) center / cover;
+  will-change: transform;
+}
+.gh-bd.on { background-image: none; }
+.gh-bd > canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* ─── header: white logo, frosted pill navigation (all pages) ─── */
+.site-header { position: relative; z-index: 30; }
+.brand-logo { filter: drop-shadow(0 2px 10px rgba(60, 0, 20, .25)); }
+.brand-wordmark, .brand-tagline { color: rgba(255, 255, 255, .78); }
+.header-nav { padding: 6px 18px; border-radius: 999px; background: rgba(10, 20, 40, .22); -webkit-backdrop-filter: blur(16px) saturate(160%); backdrop-filter: blur(16px) saturate(160%); box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .35); }
+.header-nav.is-pending { visibility: hidden; }
+.nav-btn, .nav-btn-history, .nav-btn:hover, .nav-btn-history:hover, .nav-btn.is-active { color: rgba(255, 255, 255, .86); padding-bottom: 8px; background: transparent; border: 0; }
+.nav-btn:hover, .nav-btn.is-active { color: #fff; }
+.nav-btn.is-active::after { background: #fff; bottom: 2px; }
+.nav-settings { border-left-color: rgba(255, 255, 255, .35); }
+.nav-settings svg { color: #fff; }
+.header-nav.is-guest { padding: 0; background: none; box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+.nav-login { display: inline-flex; align-items: center; padding: 10px 26px; border-radius: 999px; font-size: 16px; font-weight: 500; text-decoration: none; color: var(--gl-pill-ink); background: var(--gl-pill); box-shadow: 0 0 1px #fff, 0 10px 30px -14px rgba(40, 0, 15, .5); transition: transform .3s ease-out; }
+.nav-login:hover { transform: scale(1.05) rotate(-1deg); }
+.credits-badge--login { color: var(--gl-pill-ink); background: var(--gl-pill); border-color: transparent; }
+
+/* ─── panels: dark frosted glass over the moving background ─── */
+.step-content,
+.is-studio .entry-panel,
+.overlay-panel,
+.queue-panel,
+.title-bridge,
+.title-compose,
+.login-modal,
+.recharge-modal {
+  color: var(--ink-primary);
+  background: var(--gl-panel);
+  border: 0;
+  box-shadow: var(--gl-edge), var(--shadow-md);
+  -webkit-backdrop-filter: var(--gl-blur);
+  backdrop-filter: var(--gl-blur);
+}
+.step-content { border-radius: 40px; padding: 32px; }
+.is-studio .entry-panel { border-radius: 40px; }
+.overlay-panel { background: var(--gl-panel-strong); border-left: 0; }
+.title-compose { background: rgba(255, 255, 255, .06); }
+.entry-heading h2, .step-header h2, .overlay-header h2, .login-modal-header h2, .recharge-modal-header h2 { font-family: var(--font-display); font-weight: 300; letter-spacing: -.01em; color: rgba(250, 250, 250, .94); }
+.step-number { color: rgba(255, 255, 255, .5); font-family: var(--font-display); font-weight: 300; }
+
+/* ─── choices: translucent glass, the picked one brightens with a white edge ─── */
+.mode-card, .engine-card, .ratio-card, .summary-card, .engine-section, .upload-zone, .upload-zone.magazine-style, .elements-zone, .recent-banner, .gen-progress, .result-card, .pv-card, .tc-chip, .scene-toggle, .style-custom, .setting-item, .task-group, .history-item, .title-plan-grid > * {
+  color: var(--ink-primary);
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .16);
+  box-shadow: none;
+}
+.mode-card:hover, .engine-card:hover, .ratio-card:hover, .result-card:hover, .recent-banner:hover, .pv-card:hover, .history-item:hover {
+  background: rgba(255, 255, 255, .14);
+  border-color: rgba(255, 255, 255, .3);
+  box-shadow: none;
+}
+.mode-card.is-active, .engine-card.is-active, .ratio-card.is-selected, .pv-card.is-on, .tc-chip.is-on, .scene-toggle.is-on {
+  background: rgba(255, 255, 255, .2);
+  border-color: rgba(255, 255, 255, .85);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35), 0 10px 30px -18px rgba(40, 0, 15, .5);
+}
+.mode-icon, .engine-card svg, .mode-card svg { color: #fff; }
+
+/* inputs */
+.form-field input, .form-field textarea, .describe-zone textarea, .inspire-zone textarea, .setting-item select, .select-wrap select, .style-select, input[type="text"], input[type="number"], textarea, select {
+  color: #fff;
+  background: rgba(255, 255, 255, .1);
+  border: 1px solid rgba(255, 255, 255, .24);
+  border-radius: 16px;
+}
+input::placeholder, textarea::placeholder { color: rgba(255, 255, 255, .45); }
+select option { color: #111; }
+
+/* ─── step indicator ─── */
+.step-icon { color: #fff; background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .28); box-shadow: none; -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.step-dot.is-current .step-icon { color: var(--gl-pill-ink); background: var(--gl-pill); border-color: transparent; }
+.step-dot.is-done .step-icon { color: #fff; background: rgba(255, 255, 255, .26); }
+.step-label { color: rgba(255, 255, 255, .7); }
+.step-dot.is-current .step-label { color: #fff; }
+.step-line { background: rgba(255, 255, 255, .22); }
+
+/* ─── actions: the main action is a white pill, secondary actions are glass ─── */
+.nav-next, .nav-next:not(:disabled), .generate-btn, .title-generate-btn, .title-plan-actions button.is-primary, .platform-toggle button.is-active, .queue-chip-idx, .batch-toggle.is-on, .batch-act.is-on, .rrp-apply .result-act-ratio {
+  color: var(--gl-pill-ink);
+  background: var(--gl-pill);
+  border: 0;
+  border-radius: 999px;
+  text-shadow: none;
+  box-shadow: 0 0 1px #fff, 0 12px 30px -16px rgba(40, 0, 15, .55);
+}
+.nav-next:hover:not(:disabled), .generate-btn:hover, .title-generate-btn:hover { background: #fff; transform: scale(1.03); }
+.nav-prev, .nav-queue, .stop-btn, .entry-back, .result-act, .close-btn, .icon-btn, .fav-remove {
+  color: rgba(255, 255, 255, .9);
+  background: rgba(255, 255, 255, .1);
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 999px;
+  box-shadow: none;
+}
+.nav-prev:hover:not(:disabled), .nav-queue:hover, .stop-btn:hover, .entry-back:hover, .result-act:hover, .close-btn:hover, .icon-btn:hover { color: #fff; background: rgba(255, 255, 255, .18); }
+.step-nav { color: var(--ink-primary); }
+.step-nav-hint { color: rgba(255, 255, 255, .62); }
+
+/* lavender leftovers from the previous theme */
+.is-studio .summary-value[style] { color: #fff !important; }
+.slot-engine-section button { color: #fff !important; border-color: rgba(255, 255, 255, .3) !important; }
+.slot-engine-section span { color: rgba(255, 255, 255, .7) !important; }
+.slot-engine-section button[style*="rgb(251, 191, 36)"] { color: var(--gl-pill-ink) !important; background: var(--gl-pill) !important; }
+.recharge-card { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .2); }
+.recharge-credits, .recharge-modal-header strong, .recharge-plan-name { color: #fff; }
+.login-btn-primary { color: var(--gl-pill-ink); background: var(--gl-pill); }
+.login-modal-close, .login-input-icon, .login-modal-footer p, .login-phone-display { color: rgba(255, 255, 255, .7); }
+
+/* remaining purple/light details from the older themes */
+.step-line::after { background: #fff; }
+.upload-zone { border: 1.5px dashed rgba(255, 255, 255, .45); }
+.upload-zone:hover { border-color: rgba(255, 255, 255, .85); }
+.element-add { border: 2px dashed rgba(255, 255, 255, .4); color: rgba(255, 255, 255, .7); }
+.element-add:hover { border-color: #fff; color: #fff; }
+.count-selector button, .ratio-counter button { color: #fff; background: rgba(255, 255, 255, .12); border: 1px solid rgba(255, 255, 255, .28); box-shadow: none; }
+.count-selector button.is-selected { color: var(--gl-pill-ink); background: var(--gl-pill); border-color: transparent; }
+.delivery-card, .task-group-delivery { background: rgba(255, 255, 255, .08); border: 1px solid rgba(255, 255, 255, .18); }
+.delivery-card span { color: rgba(255, 255, 255, .7); }
+.delivery-actions button, .task-group-delivery button { color: #fff; background: rgba(255, 255, 255, .1); border: 1px solid rgba(255, 255, 255, .24); }
+.credits-badge--logged-in { background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .24); }
+.credits-badge-amount, .credits-badge-crown { color: #ffd88a; }
+.local-mode-badge { color: #fff; background: rgba(255, 255, 255, .1); border-color: rgba(255, 255, 255, .24); }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, .28); background-clip: content-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, .45); background-clip: content-box; }
+
+/* cover preview */
+.lightbox-overlay { background: rgba(30, 6, 16, .72) !important; -webkit-backdrop-filter: blur(24px) saturate(150%) !important; backdrop-filter: blur(24px) saturate(150%) !important; }
+.lightbox-overlay > img { border-radius: 20px !important; }
+.lightbox-overlay > div { padding: 8px 8px 8px 20px; border-radius: 999px; background: rgba(255, 255, 255, .1); box-shadow: var(--gl-edge); }
+.lightbox-overlay > div span { color: rgba(255, 255, 255, .82) !important; }
+.lightbox-overlay button { color: var(--gl-pill-ink) !important; background: var(--gl-pill) !important; font-weight: 500 !important; }
+
+/* phones: logo on its own line, the navigation pill below it and scrollable if it is long */
+@media (max-width: 540px) {
+  .site-header { height: auto; flex-wrap: wrap; gap: 10px; padding-bottom: 6px; }
+  .header-nav { max-width: 100%; overflow-x: auto; flex-wrap: nowrap; scrollbar-width: none; }
+  .header-nav::-webkit-scrollbar { display: none; }
+  .is-studio .header-nav { width: 100%; justify-content: center; }
+}

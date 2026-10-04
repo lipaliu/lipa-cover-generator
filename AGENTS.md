@@ -46,7 +46,8 @@ Logo direction: use a macOS-style rounded-square app icon with four letters in a
 - Colour: coral red (palette `blush`) is the default; the dock also offers Tahoe blue, mint, iris and silver, remembered per browser.
 - Background: our flowing-glass shader plus the fluid-glow layer adapted from PavelDoGreat/WebGL-Fluid-Simulation (MIT). The pointer drags glowing fluid, wisps drift in on their own, a tap bursts light.
 - Code: `src/components/GlassHome.tsx`, `src/glass/glassHome.ts`, `src/glass/glass-home.css`, static scripts and licences in `public/glass/`. The two buttons call the existing cover and Title Master flows unchanged. `CoverShowcase.tsx` is kept but no longer rendered.
-- Only the homepage has changed so far; the creation steps, results, login and recharge screens still use the lavender theme until the user approves their redesign.
+- Whole site follows the same material (user, 2026-10-04 19:13: the inner pages must match too): `src/glass/glass-theme.css` loads after `reference-theme.css` and turns every screen into dark frosted glass over the same moving backdrop (`GlassBackdrop`, mounted once in `App`), white text, translucent glass choices, white pill for the main action. Do not reintroduce the lavender surfaces.
+- Visitor flow (user, 2026-10-04 19:12): the showcase homepage is public; a guest sees only a 「登录」 pill top-right. 「登录」 and both start buttons go to `/login` (server-rendered, same coral glass, script `public/glass/login.js`); after login the user lands straight in the generation page (`/?start=cover`, or `/?start=title` from 「从完整原文开始」). The server gate keeps every API except `/api/whoami` and `/api/style-options` behind login.
 
 ## Title Master Integration Guardrails
 

@@ -36,6 +36,7 @@ import { LoginModal } from "./components/LoginModal";
 import { CreditsBadge } from "./components/CreditsBadge";
 import { RechargeModal } from "./components/RechargeModal";
 import { GlassHome } from "./components/GlassHome";
+import { GlassBackdrop } from "./components/GlassBackdrop";
 import {
   calculateCreditsCost,
   fetchBalance,
@@ -391,11 +392,28 @@ export function App() {
   const [smartScene, setSmartScene] = useState(false);
   // 当前登录账户是否是管理员（决定是否显示「管理后台」按钮）
   const [isAdminAccount, setIsAdminAccount] = useState(false);
+  // 访问状态：内部口令站点上，未登录的人只看到展示首页 + 右上角「登录」；登录后才进生成页面。
+  // 没开口令的本机开发环境 /api/whoami 不存在，按已登录处理。
+  const [access, setAccess] = useState<"unknown" | "guest" | "member">("unknown");
   useEffect(() => {
     fetch("/api/whoami")
-      .then((r) => r.json())
-      .then((d) => setIsAdminAccount(d?.role === "admin"))
-      .catch(() => {});
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        setIsAdminAccount(d?.role === "admin");
+        setAccess(isLocalLipa && d && d.user === null && d.role === "none" ? "guest" : "member");
+      })
+      .catch(() => setAccess("member"));
+  }, []);
+  const goLogin = (start: "cover" | "title") => {
+    window.location.href = `/login?next=${encodeURIComponent(`/?start=${start}`)}`;
+  };
+  // 登录页登录成功后会带 ?start=cover|title 回来：直接进对应的生成流程。
+  useEffect(() => {
+    const start = new URLSearchParams(window.location.search).get("start");
+    if (start !== "cover" && start !== "title") return;
+    setEntryFlow(start);
+    if (start === "cover") setStep(1);
+    window.history.replaceState(null, "", window.location.pathname);
   }, []);
 
   // 风格定制（都选填）：锁定字体 / 色彩风格 / 字体颜色；空 = 库内随机、AI 自选
@@ -1622,19 +1640,24 @@ export function App() {
   /* ─── Render ─── */
   return (
     <main className={cn("app-shell", entryFlow === "choose" ? "is-discovery" : "is-studio")}>
-      <div className="bg-gradient" aria-hidden="true" />
+      <GlassBackdrop />
 
       {/* Header */}
       <header className="site-header">
         <div className="header-brand">
           <button type="button" className="brand-plate brand-home" title="回主页" onClick={goHome}>
-            <span className="brand-symbol"><img src="/logo.png" alt="巴卡巴卡" className="brand-logo" /></span>
+            <span className="brand-symbol"><img src="/glass/logo-white.png" alt="巴卡巴卡" className="brand-logo" /></span>
             <span className="brand-wordmark">BAKA BAKA</span>
             <span className="brand-tagline">让内容先被看见</span>
           </button>
           <small className="brand-copyright">Copyright © 畅导吃枸杞</small>
           {!isLocalLipa && <a className="brand-legal" href="/legal/terms" target="_blank" rel="noreferrer">经营主体与服务协议</a>}
         </div>
+        {access === "guest" ? (
+          <nav className="header-nav is-guest">
+            <a className="nav-login" href={`/login?next=${encodeURIComponent("/?start=cover")}`}>登录</a>
+          </nav>
+        ) : access === "unknown" ? <nav className="header-nav is-pending" aria-hidden="true" /> : (
         <nav className="header-nav">
           <button type="button" className={cn("nav-btn", "nav-create", !showHistory && !showFavorites && !showSettings && "is-active")} title="回到首页" onClick={goHome}>
             <Home size={18} />
@@ -1676,6 +1699,7 @@ export function App() {
             />
           )}
         </nav>
+        )}
       </header>
 
       {/* History Overlay */}
@@ -1802,8 +1826,9 @@ export function App() {
       </section>}
 
       {entryFlow === "choose" && (
-        <GlassHome onStartCover={() => { setEntryFlow("cover"); setStep(1); window.scrollTo({ top: 0 }); }}
-          onStartText={() => { setEntryFlow("title"); window.scrollTo({ top: 0 }); }} />
+        <GlassHome
+          onStartCover={() => { if (access === "guest") return goLogin("cover"); setEntryFlow("cover"); setStep(1); window.scrollTo({ top: 0 }); }}
+          onStartText={() => { if (access === "guest") return goLogin("title"); setEntryFlow("title"); window.scrollTo({ top: 0 }); }} />
       )}
 
       {entryFlow === "title" && (

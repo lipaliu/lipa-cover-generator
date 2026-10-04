@@ -77,7 +77,7 @@ const supportsUrl = (() => {
   return /url/.test(t.style.backdropFilter);
 })();
 
-function drawGlass(g: HTMLElement) {
+export function drawGlass(g: HTMLElement) {
   const box = g.querySelector<HTMLElement>(":scope > .gh-flt > .gh-box");
   if (!box) return;
   const w = Math.round(g.offsetWidth), h = Math.round(g.offsetHeight);
@@ -108,36 +108,107 @@ function loseContext(c: HTMLCanvasElement) {
   } catch { /* ignore */ }
 }
 
-export function mountGlassHome(root: HTMLElement): () => void {
+/* ── backdrop: one per page, shared by every screen ── */
+type Backdrop = { setPalette(n: string): void };
+let activeBackdrop: Backdrop | null = null;
+
+const fluidColorsFor = (w: GlassWindow, n: string) => {
+  const P = w.FlowGlass?.COLORS[n] || w.FlowGlass?.COLORS.blush;
+  if (!P) return [];
+  return [P.light, P.mid, mix(P.light, "#ffffff", 0.55), mix(P.mid, P.light, 0.5)];
+};
+
+export function mountBackdrop(bd: HTMLElement): () => void {
   const w = window as GlassWindow;
   const still = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const small = innerWidth < 700;
-  const bd = root.querySelector<HTMLElement>(".gh-bd");
   let disposed = false;
-  let pal = readPalette();
   let flow: Engine | null = null, fluid: Engine | null = null;
   const canvases: HTMLCanvasElement[] = [];
+  const layer = () => { const c = document.createElement("canvas"); bd.appendChild(c); canvases.push(c); return c; };
 
-  /* glass */
+  const api: Backdrop = {
+    setPalette(n) { flow?.palette?.(n); fluid?.colors?.(fluidColorsFor(w, n)); },
+  };
+  activeBackdrop = api;
+
+  (async () => {
+    try {
+      const pal = readPalette();
+      await loadScript(BASE + "flow-glass.js");
+      if (disposed || !w.FlowGlass) return;
+      flow = w.FlowGlass.create(layer(), { palette: pal, scale: small ? 0.45 : 0.55 });
+      if (!flow) return;
+      bd.classList.add("on");
+      document.dispatchEvent(new CustomEvent("glass:ready"));
+      if (still) { flow.draw?.(); return; }
+      flow.start();
+      await loadScript(BASE + "fluid.js");
+      if (disposed || !w.FluidBG) return;
+      fluid = w.FluidBG.create(layer(), {
+        colors: fluidColorsFor(w, readPalette()), intensity: 0.2, dither: BASE + "LDR_LLL1_0.png", maxPixelRatio: 1, initialSplats: 5, ambient: 2.4,
+        config: { TRANSPARENT: true, DYE_RESOLUTION: small ? 512 : 768, SIM_RESOLUTION: 128, DENSITY_DISSIPATION: 1.4, VELOCITY_DISSIPATION: 0.35, CURL: 24, SPLAT_RADIUS: 0.22, SPLAT_FORCE: 5200, BLOOM_INTENSITY: 0.55, BLOOM_THRESHOLD: 0.45, SUNRAYS_WEIGHT: 0.9, COLOR_UPDATE_SPEED: 4 },
+      });
+      fluid.start();
+    } catch {
+      /* no WebGL or a script failed: the still image stays, the page keeps working */
+    }
+  })();
+
+  /* pointer: parallax of the whole backdrop, waves bend, fluid follows; tap on empty space bursts light */
+  let tx = 0, ty = 0, px = 0, py = 0, raf = 0;
+  const onMove = (e: PointerEvent) => {
+    tx = (e.clientX / innerWidth - 0.5) * -24;
+    ty = (e.clientY / innerHeight - 0.5) * -18;
+    flow?.pointer(e.clientX, e.clientY, 0);
+    fluid?.pointer(e.clientX, e.clientY);
+  };
+  const loop = () => {
+    px += (tx - px) * 0.05; py += (ty - py) * 0.05;
+    bd.style.transform = `translate3d(${px.toFixed(2)}px,${py.toFixed(2)}px,0)`;
+    raf = requestAnimationFrame(loop);
+  };
+  const onDown = (e: PointerEvent) => {
+    const t = e.target as HTMLElement;
+    const empty = t === document.body || t.classList.contains("app-shell") || t.classList.contains("glass-home") || t.classList.contains("gh-col");
+    if (empty) fluid?.tap?.(e.clientX, e.clientY);
+  };
+  const onVis = () => {
+    if (document.hidden) { flow?.stop(); fluid?.stop(); }
+    else if (!still) { flow?.start(); fluid?.start(); }
+  };
+  if (!still) {
+    addEventListener("pointermove", onMove, { passive: true });
+    addEventListener("pointerdown", onDown);
+    raf = requestAnimationFrame(loop);
+  }
+  document.addEventListener("visibilitychange", onVis);
+
+  return () => {
+    disposed = true;
+    if (activeBackdrop === api) activeBackdrop = null;
+    removeEventListener("pointermove", onMove);
+    removeEventListener("pointerdown", onDown);
+    document.removeEventListener("visibilitychange", onVis);
+    cancelAnimationFrame(raf);
+    flow?.stop();
+    fluid?.destroy?.();
+    canvases.forEach((c) => { loseContext(c); c.remove(); });
+    bd.classList.remove("on");
+    flow = fluid = null;
+  };
+}
+
+/* ── homepage glass: refracting slabs/pills and the palette dock ── */
+export function mountGlassHome(root: HTMLElement): () => void {
+  const w = window as GlassWindow;
+  let disposed = false;
   const glasses = Array.from(root.querySelectorAll<HTMLElement>("[data-glass]"));
   const ro = new ResizeObserver((es) => es.forEach((e) => drawGlass(e.target as HTMLElement)));
   glasses.forEach((g) => { ro.observe(g); drawGlass(g); });
 
-  const layer = () => {
-    const c = document.createElement("canvas");
-    bd?.appendChild(c);
-    canvases.push(c);
-    return c;
-  };
-  const fluidColors = (n: string) => {
-    const P = w.FlowGlass?.COLORS[n] || w.FlowGlass?.COLORS.blush;
-    if (!P) return [];
-    return [P.light, P.mid, mix(P.light, "#ffffff", 0.55), mix(P.mid, P.light, 0.5)];
-  };
-
-  /* dock thumbnails: one still frame of each palette, cropped */
   function renderThumbs() {
-    if (!w.FlowGlass) return;
+    if (disposed || !w.FlowGlass) return;
     const c = document.createElement("canvas");
     c.style.cssText = "position:fixed;left:-9999px;top:0;width:480px;height:300px";
     document.body.appendChild(c);
@@ -161,6 +232,7 @@ export function mountGlassHome(root: HTMLElement): () => void {
     loseContext(c);
     c.remove();
   }
+  loadScript(BASE + "flow-glass.js").then(renderThumbs).catch(() => {});
 
   function setPaletteUI(n: string) {
     root.querySelectorAll<HTMLButtonElement>("[data-palette]").forEach((b) => {
@@ -170,82 +242,20 @@ export function mountGlassHome(root: HTMLElement): () => void {
       if (box) box.className = "gh-box " + (on ? "white" : "clear");
     });
   }
-  setPaletteUI(pal);
+  setPaletteUI(readPalette());
 
   const onPick = (e: Event) => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-palette]");
     if (!b || !b.dataset.palette) return;
-    pal = b.dataset.palette;
-    savePalette(pal);
-    setPaletteUI(pal);
-    flow?.palette?.(pal);
-    fluid?.colors?.(fluidColors(pal));
+    savePalette(b.dataset.palette);
+    setPaletteUI(b.dataset.palette);
+    activeBackdrop?.setPalette(b.dataset.palette);
   };
   root.addEventListener("click", onPick);
-
-  /* background */
-  (async () => {
-    try {
-      await loadScript(BASE + "flow-glass.js");
-      if (disposed || !bd || !w.FlowGlass) return;
-      flow = w.FlowGlass.create(layer(), { palette: pal, scale: small ? 0.45 : 0.55 });
-      if (!flow) return;
-      bd.classList.add("on");
-      renderThumbs();
-      if (still) { flow.draw?.(); return; }
-      flow.start();
-      await loadScript(BASE + "fluid.js");
-      if (disposed || !w.FluidBG) return;
-      fluid = w.FluidBG.create(layer(), {
-        colors: fluidColors(pal), intensity: 0.2, dither: BASE + "LDR_LLL1_0.png", maxPixelRatio: 1, initialSplats: 5, ambient: 2.4,
-        config: { TRANSPARENT: true, DYE_RESOLUTION: small ? 512 : 768, SIM_RESOLUTION: 128, DENSITY_DISSIPATION: 1.4, VELOCITY_DISSIPATION: 0.35, CURL: 24, SPLAT_RADIUS: 0.22, SPLAT_FORCE: 5200, BLOOM_INTENSITY: 0.55, BLOOM_THRESHOLD: 0.45, SUNRAYS_WEIGHT: 0.9, COLOR_UPDATE_SPEED: 4 },
-      });
-      fluid.start();
-    } catch {
-      /* no WebGL or a script failed: the still image behind stays, the page keeps working */
-    }
-  })();
-
-  /* pointer: parallax of the whole backdrop, waves bend, fluid follows */
-  let tx = 0, ty = 0, px = 0, py = 0, raf = 0;
-  const onMove = (e: PointerEvent) => {
-    tx = (e.clientX / innerWidth - 0.5) * -24;
-    ty = (e.clientY / innerHeight - 0.5) * -18;
-    flow?.pointer(e.clientX, e.clientY, 0);
-    fluid?.pointer(e.clientX, e.clientY);
-  };
-  const loop = () => {
-    px += (tx - px) * 0.05; py += (ty - py) * 0.05;
-    if (bd) bd.style.transform = `translate3d(${px.toFixed(2)}px,${py.toFixed(2)}px,0)`;
-    raf = requestAnimationFrame(loop);
-  };
-  const onDown = (e: PointerEvent) => {
-    if ((e.target as HTMLElement).closest("button, a, input, label, textarea, select, .site-header, .gh-dock")) return;
-    fluid?.tap?.(e.clientX, e.clientY);
-  };
-  const onVis = () => {
-    if (document.hidden) { flow?.stop(); fluid?.stop(); }
-    else if (!still) { flow?.start(); fluid?.start(); }
-  };
-  if (!still) {
-    addEventListener("pointermove", onMove, { passive: true });
-    addEventListener("pointerdown", onDown);
-    raf = requestAnimationFrame(loop);
-  }
-  document.addEventListener("visibilitychange", onVis);
 
   return () => {
     disposed = true;
     ro.disconnect();
     root.removeEventListener("click", onPick);
-    removeEventListener("pointermove", onMove);
-    removeEventListener("pointerdown", onDown);
-    document.removeEventListener("visibilitychange", onVis);
-    cancelAnimationFrame(raf);
-    flow?.stop();
-    fluid?.destroy?.();
-    canvases.forEach((c) => { loseContext(c); c.remove(); });
-    bd?.classList.remove("on");
-    flow = fluid = null;
   };
 }
