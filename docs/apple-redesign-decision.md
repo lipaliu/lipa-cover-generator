@@ -113,5 +113,7 @@
 - 用户最终选择（15:40）：1 流体光晕。首页 artifact 版本 6 默认改为流体光晕；左下角「背景方案」保留全部选项（1、0、2、3、3′、4、5、6）便于继续对照。对比页 v2 更正了 3 号的许可说明。
 - 是否通过：已选定 1，待用户试用后确认细节。
 
+- 公网发布（2026-10-04 17:30）：原型推到 gh-pages 分支并由 GitHub Pages 发布：首页 https://lipaliu.github.io/lipa-cover-generator/ ，背景对比 https://lipaliu.github.io/lipa-cover-generator/compare/ 。线上产品（Render）未改动。
+
 ## 下一步验收画面
 选定后：首页、制作第 1 步，桌面 1440 与手机 390 同内容对照。
