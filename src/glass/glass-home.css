@@ -73,6 +73,7 @@
 @keyframes gh-spin { to { transform: translate(-50%, -50%) rotate(360deg); } }
 
 /* header over the glass home: logo lives in the centre slab, nav becomes a frosted pill */
+.app-shell.is-discovery { padding-bottom: 0; }
 .app-shell.is-discovery .site-header { position: relative; z-index: 5; }
 .app-shell.is-discovery .header-brand { visibility: hidden; }
 .app-shell.is-discovery .header-nav { padding: 6px 18px; border-radius: 999px; background: rgba(10, 20, 40, .22); -webkit-backdrop-filter: blur(16px) saturate(160%); backdrop-filter: blur(16px) saturate(160%); box-shadow: inset 0 0 0 .5px rgba(255, 255, 255, .35); }
@@ -95,6 +96,14 @@
   .gh-btn > .gh-content { font-size: 17px; padding: 14px 24px; }
   .app-shell.is-discovery .header-brand { display: none; }
   .app-shell.is-discovery .site-header { justify-content: center; }
+}
+@media (min-width: 641px) and (max-height: 820px) {
+  .glass-home { padding-bottom: 100px; }
+  .gh-col { gap: 22px; }
+  .gh-logo { height: min(12vw, 110px); }
+  .gh-slab > .gh-content { padding: 24px 40px; }
+  .gh-sub > .gh-content { padding: 20px 40px; font-size: clamp(24px, 4vw, 46px); }
+  .gh-btns { gap: 16px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .gh-col > *, .gh-dock { animation: none; }
