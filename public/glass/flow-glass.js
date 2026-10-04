@@ -118,7 +118,7 @@ void main(){
     const loc = gl.getAttribLocation(pr, 'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0);
     const U = n => gl.getUniformLocation(pr, n);
     const u = { res: U('uRes'), time: U('uTime'), now: U('uNow'), mouse: U('uMouse'), skyA: U('uSkyA'), skyB: U('uSkyB'), deep: U('uDeep'), mid: U('uMid'), light: U('uLight'), drops: U('uDrops'), R: U('uR') };
-    const scale = opts.scale || .6;
+    let scale = opts.scale || .6;
     const S = { t: opts.t0 || 6, now: 0, pal: PALETTES[opts.palette || 'tahoe'], running: false, mx: -1e4, my: -1e4, tx: -1e4, ty: -1e4, ripples: [], ri: 0, lastRip: 0 };
     const Rf = new Float32Array(NR * 4);
     function size() { const w = Math.max(2, Math.round(canvas.clientWidth * scale)), h = Math.max(2, Math.round(canvas.clientHeight * scale)); if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; } gl.viewport(0, 0, w, h); }
@@ -134,7 +134,7 @@ void main(){
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
     let last = 0;
-    const minGap = opts.fps ? 1000 / opts.fps - 4 : 0; /* optional frame cap (phones) */
+    let minGap = opts.fps ? 1000 / opts.fps - 4 : 0; /* optional frame cap, also settable later via setFps */
     function loop(ts) { if (!S.running) return; if (last && ts - last < minGap) { requestAnimationFrame(loop); return; } const dt = last ? Math.min(.05, (ts - last) / 1000) : 0; last = ts; S.now += dt; S.t += dt * .35; frame(); requestAnimationFrame(loop); }
     function toCanvas(x, y) { const r = canvas.getBoundingClientRect(); return [(x - r.left) * (canvas.width / r.width), (r.height - (y - r.top)) * (canvas.height / r.height)]; }
     function addRipple(x, y, a) { S.ripples[S.ri % NR] = { x, y, t: S.now, a }; S.ri++; }
@@ -142,6 +142,8 @@ void main(){
       start() { if (S.running) return; S.running = true; last = 0; requestAnimationFrame(loop); },
       stop() { S.running = false; },
       tick(dt) { S.now += dt; S.t += dt * .35; frame(); },
+      setFps(n) { minGap = n ? 1000 / n - 4 : 0; },
+      setScale(v) { scale = v; },
       draw: () => frame(),
       palette(name) { S.pal = PALETTES[name] || PALETTES.tahoe; if (!S.running) frame(); },
       pointer(x, y, speed) { const [cx, cy] = toCanvas(x, y); S.tx = cx; S.ty = cy; if (speed > 6 && S.now - S.lastRip > .12) { S.lastRip = S.now; addRipple(cx, cy, Math.min(1, speed / 40) * .55); } },

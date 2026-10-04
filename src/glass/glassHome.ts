@@ -8,6 +8,8 @@
    Plain DOM/WebGL work, mounted from a React effect and fully cleaned up on unmount. */
 
 type Engine = {
+  setFps?(n: number): void;
+  setScale?(v: number): void;
   start(): void;
   stop(): void;
   draw?(): void;
@@ -32,9 +34,10 @@ export const GLASS_PALETTES = [
 ] as const;
 
 const PALETTE_KEY = "baka-glass-palette";
-/* Phones and small/low-core devices get a lighter version of the same look: half-resolution
-   fluid, lower-resolution waves, 30 fps, no parallax, plain blur on the small dock swatches,
-   and the animation pauses while the page is scrolling. */
+/* Phones and small/low-core devices start from a lighter version of the same look
+   (half-resolution fluid without sunrays, lower-resolution waves, no parallax, plain blur
+   on the small dock swatches). Every device then runs an adaptive check: if the page can't
+   hold ~50 fps it steps down until it can, so motion stays fluid instead of stuttering. */
 export const LITE = typeof window !== "undefined" && (
   matchMedia("(pointer: coarse)").matches || innerWidth < 760 || (navigator.hardwareConcurrency || 8) <= 4
 );
@@ -84,6 +87,27 @@ const supportsUrl = (() => {
   return /url/.test(t.style.backdropFilter);
 })();
 
+/* the quality level this device settled on is remembered for a day, so the next page starts there */
+const LEVEL_KEY = "baka-glass-level";
+function readLevel(): number {
+  try {
+    const v = JSON.parse(localStorage.getItem(LEVEL_KEY) || "null");
+    if (v && Date.now() - v.at < 864e5) return Math.max(0, Math.min(4, v.level | 0));
+  } catch { /* storage unavailable */ }
+  return 0;
+}
+function saveLevel(level: number) {
+  try { localStorage.setItem(LEVEL_KEY, JSON.stringify({ level, at: Date.now() })); } catch { /* storage unavailable */ }
+}
+
+let glassPlain = false;
+/** Switch every glass surface on the page between the refraction filter and a plain frosted blur. */
+export function setGlassPlain(v: boolean) {
+  if (glassPlain === v) return;
+  glassPlain = v;
+  document.querySelectorAll<HTMLElement>("[data-glass]").forEach(drawGlass);
+}
+
 export function drawGlass(g: HTMLElement) {
   const box = g.querySelector<HTMLElement>(":scope > .gh-flt > .gh-box");
   if (!box) return;
@@ -94,7 +118,7 @@ export function drawGlass(g: HTMLElement) {
   const btn = g.hasAttribute("data-btn"), sat = btn ? 1.2 : 1.5, bri = btn ? 1.6 : 1.1;
   const img = g.querySelector<HTMLImageElement>(":scope > .gh-inner img");
   if (img && img.getAttribute("src")) { img.style.width = w + "px"; img.style.height = w + "px"; }
-  const plain = LITE && g.hasAttribute("data-strength");
+  const plain = glassPlain || (LITE && g.hasAttribute("data-strength"));
   if (supportsUrl && !plain) {
     const fr = +(g.dataset.blur || 0);
     box.style.backdropFilter = `blur(${fr / 2}px) url('${dispFilter(w, h, r, d, s, cab)}') blur(${fr}px) brightness(${bri}) saturate(${sat})`;
@@ -135,6 +159,9 @@ export function mountBackdrop(bd: HTMLElement): () => void {
   let flow: Engine | null = null, fluid: Engine | null = null;
   const canvases: HTMLCanvasElement[] = [];
   const layer = () => { const c = document.createElement("canvas"); bd.appendChild(c); canvases.push(c); return c; };
+  /* adaptive-quality state (see the monitor below); start from the level this device settled on before */
+  let level = readLevel(), slow = 0, good = 0, mraf = 0, mLast = 0;
+  if (level >= 1) setGlassPlain(true);
 
   const api: Backdrop = {
     setPalette(n) { flow?.palette?.(n); fluid?.colors?.(fluidColorsFor(w, n)); },
@@ -146,22 +173,26 @@ export function mountBackdrop(bd: HTMLElement): () => void {
       const pal = readPalette();
       await loadScript(BASE + "flow-glass.js");
       if (disposed || !w.FlowGlass) return;
-      flow = w.FlowGlass.create(layer(), LITE ? { palette: pal, scale: 0.32, fps: 30 } : { palette: pal, scale: small ? 0.45 : 0.55 });
+      flow = w.FlowGlass.create(layer(), LITE ? { palette: pal, scale: 0.32 } : { palette: pal, scale: small ? 0.45 : 0.55 });
       if (!flow) return;
+      if (level >= 2) flow.setScale?.(0.24);
+      if (level >= 4) flow.setFps?.(30);
       bd.classList.add("on");
       document.dispatchEvent(new CustomEvent("glass:ready"));
       if (still) { flow.draw?.(); return; }
       flow.start();
+      if (level >= 3) { window.setTimeout(startMonitor, 1200); return; }
       await loadScript(BASE + "fluid.js");
       if (disposed || !w.FluidBG) return;
       fluid = w.FluidBG.create(layer(), LITE ? {
-        colors: fluidColorsFor(w, readPalette()), intensity: 0.22, dither: BASE + "LDR_LLL1_0.png", maxPixelRatio: 0.5, initialSplats: 4, ambient: 3.2, fps: 30, maxDt: 0.034,
+        colors: fluidColorsFor(w, readPalette()), intensity: 0.22, dither: BASE + "LDR_LLL1_0.png", maxPixelRatio: 0.5, initialSplats: 4, ambient: 3.2, maxDt: 0.034,
         config: { TRANSPARENT: true, DYE_RESOLUTION: 256, SIM_RESOLUTION: 64, PRESSURE_ITERATIONS: 12, DENSITY_DISSIPATION: 1.4, VELOCITY_DISSIPATION: 0.35, CURL: 24, SPLAT_RADIUS: 0.26, SPLAT_FORCE: 5200, BLOOM_ITERATIONS: 4, BLOOM_RESOLUTION: 128, BLOOM_INTENSITY: 0.6, BLOOM_THRESHOLD: 0.45, SUNRAYS: false, COLOR_UPDATE_SPEED: 4 },
       } : {
         colors: fluidColorsFor(w, readPalette()), intensity: 0.2, dither: BASE + "LDR_LLL1_0.png", maxPixelRatio: 1, initialSplats: 5, ambient: 2.4,
         config: { TRANSPARENT: true, DYE_RESOLUTION: small ? 512 : 768, SIM_RESOLUTION: 128, DENSITY_DISSIPATION: 1.4, VELOCITY_DISSIPATION: 0.35, CURL: 24, SPLAT_RADIUS: 0.22, SPLAT_FORCE: 5200, BLOOM_INTENSITY: 0.55, BLOOM_THRESHOLD: 0.45, SUNRAYS_WEIGHT: 0.9, COLOR_UPDATE_SPEED: 4 },
       });
       fluid.start();
+      window.setTimeout(startMonitor, 1200); /* let the first frames and shader compiles settle */
     } catch {
       /* no WebGL or a script failed: the still image stays, the page keeps working */
     }
@@ -184,13 +215,38 @@ export function mountBackdrop(bd: HTMLElement): () => void {
     flow?.pointer(e.clientX, e.clientY, 0);
     fluid?.pointer(e.clientX, e.clientY);
   };
-  /* while the page scrolls, hold the animation so scrolling stays smooth */
-  let scrollTimer = 0, scrolling = false;
-  const onScroll = () => {
-    if (!scrolling) { scrolling = true; flow?.stop(); fluid?.stop(); }
-    clearTimeout(scrollTimer);
-    scrollTimer = window.setTimeout(() => { scrolling = false; if (!document.hidden && !still) { flow?.start(); fluid?.start(); } }, 180);
-  };
+  /* adaptive quality: watch the real frame rate and step down until motion is fluid.
+     1 plain frosted glass instead of the refraction filter → 2 waves at lower resolution →
+     3 drop the fluid layer → 4 waves at an even 30 fps. */
+  const deltas: number[] = [];
+  function stepDown() {
+    level++;
+    saveLevel(level);
+    if (level === 1) setGlassPlain(true);
+    else if (level === 2) flow?.setScale?.(0.24);
+    else if (level === 3) {
+      if (fluid) { fluid.destroy?.(); const c = canvases.pop(); c?.remove(); fluid = null; }
+    } else if (level === 4) flow?.setFps?.(30);
+  }
+  function monitor(ts: number) {
+    if (disposed) return;
+    if (mLast && !document.hidden) {
+      const d = ts - mLast;
+      if (d < 250) deltas.push(d);
+    }
+    mLast = ts;
+    if (deltas.length >= 60) {
+      const fps = 1000 / (deltas.reduce((a, b) => a + b, 0) / deltas.length);
+      deltas.length = 0;
+      /* clearly too slow: step at once; borderline: only after two windows in a row */
+      if (fps < 40) { slow = 0; good = 0; stepDown(); }
+      else if (fps < 50) { slow++; good = 0; if (slow >= 2) { slow = 0; stepDown(); } }
+      else { good++; slow = 0; }
+      if (level >= 4 || good >= 4) return; /* settled */
+    }
+    mraf = requestAnimationFrame(monitor);
+  }
+  function startMonitor() { if (!mraf && !still) { mLast = 0; mraf = requestAnimationFrame(monitor); } }
   const onDown = (e: PointerEvent) => {
     const t = e.target as HTMLElement;
     const empty = t === document.body || t.classList.contains("app-shell") || t.classList.contains("glass-home") || t.classList.contains("gh-col");
@@ -198,12 +254,11 @@ export function mountBackdrop(bd: HTMLElement): () => void {
   };
   const onVis = () => {
     if (document.hidden) { flow?.stop(); fluid?.stop(); }
-    else if (!still && !scrolling) { flow?.start(); fluid?.start(); }
+    else if (!still) { flow?.start(); fluid?.start(); }
   };
   if (!still) {
     addEventListener("pointermove", onMove, { passive: true });
     addEventListener("pointerdown", onDown);
-    if (LITE) addEventListener("scroll", onScroll, { passive: true });
   }
   document.addEventListener("visibilitychange", onVis);
 
@@ -212,8 +267,7 @@ export function mountBackdrop(bd: HTMLElement): () => void {
     if (activeBackdrop === api) activeBackdrop = null;
     removeEventListener("pointermove", onMove);
     removeEventListener("pointerdown", onDown);
-    removeEventListener("scroll", onScroll);
-    clearTimeout(scrollTimer);
+    cancelAnimationFrame(mraf);
     document.removeEventListener("visibilitychange", onVis);
     cancelAnimationFrame(raf);
     flow?.stop();
