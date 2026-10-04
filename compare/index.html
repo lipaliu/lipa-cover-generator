@@ -1,0 +1,216 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>
+<title>巴卡巴卡 流动背景</title>
+<style>
+/* Layout: one reading column; a quick comparison table, then one numbered card per option with the original demo beside the 巴卡巴卡 homepage version. */
+:root{
+  --bg:#f5f5f7; --card:#ffffff; --fg:#1d1d1f; --fg-2:#6e6e73; --hair:#e5e5ea;
+  --brand:#c8234c; --brand-soft:#fbe8ed; --good:#16724d; --good-soft:#e7f4ee; --warn:#8a5a00; --warn-soft:#fbf1dc;
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","PingFang SC","Noto Sans SC",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#000000; --card:#1c1c1e; --fg:#f5f5f7; --fg-2:#a1a1a6; --hair:#38383a;
+  --brand:#ff6b8b; --brand-soft:#3d1621; --good:#5fd39b; --good-soft:#163527; --warn:#f2c46b; --warn-soft:#3a2f14; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#000000; --card:#1c1c1e; --fg:#f5f5f7; --fg-2:#a1a1a6; --hair:#38383a;
+  --brand:#ff6b8b; --brand-soft:#3d1621; --good:#5fd39b; --good-soft:#163527; --warn:#f2c46b; --warn-soft:#3a2f14; color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:var(--font);-webkit-font-smoothing:antialiased;line-height:1.55}
+a{color:var(--brand)}
+.wrap{max-width:1120px;margin:0 auto;padding-inline:16px;padding-block:48px 80px;display:flex;flex-direction:column;gap:28px}
+header h1{margin:0;font-size:clamp(30px,4.4vw,48px);line-height:1.1;font-weight:700;letter-spacing:-.01em;text-wrap:balance}
+header p{margin:12px 0 0;color:var(--fg-2);font-size:17px;max-width:72ch}
+.panel{background:var(--card);border-radius:22px;padding:24px;display:flex;flex-direction:column;gap:12px}
+.panel h2{margin:0;font-size:20px}
+.panel p,.panel li{margin:0;font-size:15px;max-width:74ch}
+.panel ul{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px}
+.combo{display:flex;flex-wrap:wrap;gap:8px}
+.combo span{background:var(--brand-soft);color:var(--brand);font-weight:600;font-size:14px;padding:6px 12px;border-radius:999px}
+.note{font-size:14px;color:var(--fg-2)}
+.tbl{overflow-x:auto;margin:0 -4px}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+th,td{text-align:left;padding:10px 8px;border-bottom:1px solid var(--hair);white-space:nowrap}
+th{color:var(--fg-2);font-weight:500;font-size:13px}
+td b{font-variant-numeric:tabular-nums;color:var(--brand)}
+.lv{display:inline-block;min-width:2.2em;text-align:center;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600}
+.lv.h{background:var(--good-soft);color:var(--good)} .lv.m{background:var(--hair);color:var(--fg)} .lv.l{background:var(--warn-soft);color:var(--warn)}
+.cand{background:var(--card);border-radius:22px;padding:24px;display:flex;flex-direction:column;gap:16px;scroll-margin-top:16px}
+.head{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+.num{font-size:40px;font-weight:700;color:var(--brand);font-variant-numeric:tabular-nums;line-height:1}
+.head h3{margin:0;font-size:22px}
+.tag{font-size:12px;font-weight:600;padding:4px 10px;border-radius:999px}
+.tag.rec{background:var(--good-soft);color:var(--good)}
+.tag.alt{background:var(--brand-soft);color:var(--brand)}
+.tag.no{background:var(--hair);color:var(--fg-2)}
+.lead{margin:0;font-size:16px;max-width:74ch}
+.media{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.35fr) minmax(0,.42fr);gap:14px;align-items:start}
+.media.two{grid-template-columns:minmax(0,1.35fr) minmax(0,.42fr)}
+figure{margin:0;display:flex;flex-direction:column;gap:6px;min-width:0}
+figure img{width:100%;max-width:100%;border-radius:14px;display:block;background:var(--hair)}
+figure img.w{aspect-ratio:16/10;object-fit:cover}
+figure img.p{aspect-ratio:390/844;object-fit:cover}
+figcaption{font-size:13px;color:var(--fg-2)}
+dl{margin:0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 16px;font-size:14px}
+dt{color:var(--fg-2)}dd{margin:0;min-width:0;overflow-wrap:anywhere}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.92em}
+.toc{display:flex;flex-wrap:wrap;gap:8px}
+.toc a{text-decoration:none;font-size:14px;padding:6px 12px;border-radius:999px;background:var(--card);color:var(--fg)}
+.toc a:hover{background:var(--brand-soft);color:var(--brand)}
+@media (max-width:760px){.media,.media.two{grid-template-columns:1fr}figure img.p{max-width:220px}}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>巴卡巴卡 · 流动背景 0–6</h1>
+    <p>你要的是：背景一直在流动、鼠标/手指能和它互动、光会跟着变。我在 GitHub 上找了 6 个开源实现。每个方案依次给出三张图：作者自己的 demo 原样跑、接到你认可的珊瑚红液态玻璃首页上的样子、手机竖屏。0 号是现在这版，用来对照。</p>
+    <p>动图里的鼠标移动和点击是脚本模拟的。录制环境是没有显卡的软件渲染，所以是逐帧推进录的，真机上会更顺。</p>
+  </header>
+
+  <section class="panel" aria-labelledby="rec-h">
+    <h2 id="rec-h">我的推荐</h2>
+    <div class="combo"><span>首选 2 水波折光</span><span>备选 1 流体光晕</span><span>想要更强的光 5 光束渐变</span></div>
+    <ul>
+      <li><b>2 水波折光</b>：保留你说「红色这个比较好」的那版流光玻璃，在它上面加一层真正的水面。鼠标划过留下水纹，点击是一圈大波，没人动时也会自己落几滴「雨」；水面的高光方向跟着鼠标转，光会在波纹上滑动。改动最小，最像同一张壁纸活过来了。</li>
+      <li><b>1 流体光晕</b>：同样保留流光玻璃，鼠标划过会拖出一缕会发光的流体，带泛光和体积光，比 2 更「哇」，但也更抢标题，手机上最吃性能。</li>
+      <li><b>5 光束渐变</b>：光效最强，一束束光从上方洒下来，光源跟着鼠标走，点击会亮一下。不过背景从「玻璃」变成了「色场 + 光」，和液态玻璃的关系弱一些。</li>
+      <li>3 云海日光很美但是另一种风景；4 光泽水面是低多边形的晶面，不是苹果的语言；6 网格流光最省电，但本身不会和鼠标互动。</li>
+    </ul>
+    <p class="note">你可以直接说编号，比如「2」或「2 + 5 的光」。在「巴卡巴卡 液态玻璃」页面左侧有「背景方案 0–6」，点一下就能现场切换着试（手机上在顶部横排），底部圆点仍然切配色。</p>
+  </section>
+
+  <section class="panel" aria-labelledby="tbl-h">
+    <h2 id="tbl-h">一眼对比</h2>
+    <div class="tbl"><table>
+      <thead><tr><th>编号</th><th>名称</th><th>流动</th><th>互动</th><th>光效变化</th><th>性能负担</th><th>来源 · 许可</th></tr></thead>
+      <tbody>
+        <tr><td><b>0</b></td><td>流光玻璃（现版）</td><td><span class="lv m">中</span></td><td><span class="lv m">中</span></td><td><span class="lv l">弱</span></td><td><span class="lv h">低</span></td><td>自研</td></tr>
+        <tr><td><b>1</b></td><td>流体光晕</td><td><span class="lv m">中</span></td><td><span class="lv h">强</span></td><td><span class="lv h">强</span></td><td><span class="lv l">高</span></td><td>WebGL-Fluid-Simulation · MIT</td></tr>
+        <tr><td><b>2</b></td><td>水波折光</td><td><span class="lv m">中</span></td><td><span class="lv h">强</span></td><td><span class="lv m">中</span></td><td><span class="lv m">中</span></td><td>jquery.ripples · MIT</td></tr>
+        <tr><td><b>3</b></td><td>云海日光</td><td><span class="lv h">强</span></td><td><span class="lv m">中</span></td><td><span class="lv h">强</span></td><td><span class="lv l">高</span></td><td>Vanta Clouds · 着色器 CC BY-NC-SA</td></tr>
+        <tr><td><b>4</b></td><td>光泽水面</td><td><span class="lv m">中</span></td><td><span class="lv m">中</span></td><td><span class="lv m">中</span></td><td><span class="lv m">中</span></td><td>Vanta Waves · MIT</td></tr>
+        <tr><td><b>5</b></td><td>光束渐变</td><td><span class="lv h">强</span></td><td><span class="lv m">中</span></td><td><span class="lv h">强</span></td><td><span class="lv m">中</span></td><td>Paper Shaders · Apache-2.0</td></tr>
+        <tr><td><b>6</b></td><td>网格流光</td><td><span class="lv h">强</span></td><td><span class="lv l">弱</span></td><td><span class="lv l">弱</span></td><td><span class="lv h">低</span></td><td>mesh-gradient · MIT</td></tr>
+      </tbody>
+    </table></div>
+  </section>
+
+  <nav class="toc" aria-label="候选目录">
+    <a href="#c0">0 流光玻璃</a><a href="#c1">1 流体光晕</a><a href="#c2">2 水波折光</a><a href="#c3">3 云海日光</a><a href="#c4">4 光泽水面</a><a href="#c5">5 光束渐变</a><a href="#c6">6 网格流光</a>
+  </nav>
+
+  <article class="cand" id="c0">
+    <div class="head"><span class="num">0</span><h3>流光玻璃（现版，对照）</h3><span class="tag no">基线</span></div>
+    <p class="lead">你上一轮选定的珊瑚红版本：四层玻璃波浪缓慢流动，鼠标附近波浪会弯，划过和点击有水波纹，闪光微粒漂浮。</p>
+    <div class="media two">
+      <figure><img class="w" src="media/h-flow.webp" alt="现版流光玻璃首页动效，鼠标划过产生水纹" loading="lazy"><figcaption>首页 · 桌面</figcaption></figure>
+      <figure><img class="p" src="media/m-flow.jpg" alt="现版手机竖屏" loading="lazy"><figcaption>手机</figcaption></figure>
+    </div>
+    <dl><dt>来源</dt><dd>自研 WebGL 着色器，无第三方依赖</dd><dt>顾虑</dt><dd>光效偏弱：只有玻璃亮边和微粒，没有「光在变」的感觉</dd></dl>
+  </article>
+
+  <article class="cand" id="c1">
+    <div class="head"><span class="num">1</span><h3>流体光晕</h3><span class="tag alt">备选</span></div>
+    <p class="lead">实时流体模拟。原版是黑底彩色烟雾；接到首页后改成透明一层叠在流光玻璃上，颜色取当前配色，鼠标悬停划过就会拖出发光的流体（原版要按住拖），带泛光（bloom）和体积光（sunrays），每两三秒还会自己从两侧飘进一缕。</p>
+    <div class="media">
+      <figure><img class="w" src="media/o1-fluid.webp" alt="原版 WebGL 流体演示，黑底彩色烟雾" loading="lazy"><figcaption>原版 demo（默认参数）</figcaption></figure>
+      <figure><img class="w" src="media/h-fluid.webp" alt="首页上的流体光晕，鼠标拖出发光流体" loading="lazy"><figcaption>巴卡巴卡首页</figcaption></figure>
+      <figure><img class="p" src="media/m-fluid.jpg" alt="流体光晕手机竖屏" loading="lazy"><figcaption>手机</figcaption></figure>
+    </div>
+    <dl>
+      <dt>仓库</dt><dd><a href="https://github.com/PavelDoGreat/WebGL-Fluid-Simulation">PavelDoGreat/WebGL-Fluid-Simulation</a></dd>
+      <dt>版本</dt><dd><code>a2d2929</code>（2024-11-12）</dd>
+      <dt>许可</dt><dd>MIT，可商用，保留版权声明</dd>
+      <dt>我改了</dt><dd>包成可调用的模块；去掉调参面板、推广弹窗、统计代码；透明叠加；悬停即绘制；配色跟随底部圆点</dd>
+      <dt>顾虑</dt><dd>两层 WebGL 同时跑，流体每帧要解算几十次，手机发热最明显；光迹较亮，会和标题抢视线</dd>
+    </dl>
+  </article>
+
+  <article class="cand" id="c2">
+    <div class="head"><span class="num">2</span><h3>水波折光</h3><span class="tag rec">推荐</span></div>
+    <p class="lead">真实的二维水面模拟：每个像素记录水面高度，波会传播、反射、衰减，水下的画面按波面折射。原版是把一张静态图变成水面；我改成水下是实时流动的玻璃背景，所以「流动」和「水纹」同时存在。高光方向会跟着鼠标转，并随时间缓慢摆动，光在波纹上滑过。</p>
+    <div class="media">
+      <figure><img class="w" src="media/o2-ripples.webp" alt="原版 jQuery Ripples 演示" loading="lazy"><figcaption>原版 demo（作者的演示页）</figcaption></figure>
+      <figure><img class="w" src="media/h-ripples.webp" alt="首页上的水波折光，鼠标划过留下水纹" loading="lazy"><figcaption>巴卡巴卡首页</figcaption></figure>
+      <figure><img class="p" src="media/m-ripples.jpg" alt="水波折光手机竖屏" loading="lazy"><figcaption>手机</figcaption></figure>
+    </div>
+    <dl>
+      <dt>仓库</dt><dd><a href="https://github.com/sirxemic/jquery.ripples">sirxemic/jquery.ripples</a></dd>
+      <dt>版本</dt><dd><code>e90bd54</code>（2019-09-15，算法成熟，作者已不常更新）</dd>
+      <dt>许可</dt><dd>MIT</dd>
+      <dt>我改了</dt><dd>去掉 jQuery 改为原生；背景从静态图换成每帧刷新的流光玻璃；高光方向跟随鼠标、颜色跟随配色；自动落雨滴</dd>
+      <dt>顾虑</dt><dd>效果偏含蓄，截图里不如动起来明显；需要浮点纹理，极老的手机会退回 0 号</dd>
+    </dl>
+  </article>
+
+  <article class="cand" id="c3">
+    <div class="head"><span class="num">3</span><h3>云海日光</h3><span class="tag no">不太合适</span></div>
+    <p class="lead">体积云 + 太阳。云一直在飘，鼠标会转动视角，太阳和光晕跟着移动，是这几个里「光在变」最自然的。我把天空、云、太阳都换成珊瑚色晚霞。</p>
+    <div class="media">
+      <figure><img class="w" src="media/o3-clouds.webp" alt="原版 Vanta Clouds 演示" loading="lazy"><figcaption>原版（默认参数）</figcaption></figure>
+      <figure><img class="w" src="media/h-clouds.webp" alt="首页上的珊瑚色云海" loading="lazy"><figcaption>巴卡巴卡首页</figcaption></figure>
+      <figure><img class="p" src="media/m-clouds.jpg" alt="云海日光手机竖屏" loading="lazy"><figcaption>手机</figcaption></figure>
+    </div>
+    <dl>
+      <dt>仓库</dt><dd><a href="https://github.com/tengbao/vanta">tengbao/vanta</a> · 依赖 three.js r134（MIT）</dd>
+      <dt>版本</dt><dd><code>f8b3519</code>（2023-01-12）</dd>
+      <dt>许可</dt><dd>Vanta 库是 MIT，但云的着色器来自 Inigo Quilez 的 Shadertoy「Clouds」（XslGRr），许可为 CC BY-NC-SA 3.0：内部、非商用可以用，需署名；将来对外收费需换成自研版（首页里的「3′ 云海 · 自研」）</dd>
+      <dt>顾虑</dt><dd>是「天空」不是「玻璃」，和液态玻璃按钮放一起风格不统一；光线步进很吃显卡；需多加载约 600KB 的 three.js</dd>
+    </dl>
+  </article>
+
+  <article class="cand" id="c4">
+    <div class="head"><span class="num">4</span><h3>光泽水面</h3><span class="tag no">不推荐</span></div>
+    <p class="lead">三维水面，镜头跟着鼠标移动，高光在起伏的面上滑动。颜色压成深珊瑚，提高了光泽度。</p>
+    <div class="media">
+      <figure><img class="w" src="media/o4-waves.webp" alt="原版 Vanta Waves 演示，蓝色水面" loading="lazy"><figcaption>原版（默认参数）</figcaption></figure>
+      <figure><img class="w" src="media/h-waves.webp" alt="首页上的深珊瑚色光泽水面" loading="lazy"><figcaption>巴卡巴卡首页</figcaption></figure>
+      <figure><img class="p" src="media/m-waves.jpg" alt="光泽水面手机竖屏" loading="lazy"><figcaption>手机</figcaption></figure>
+    </div>
+    <dl>
+      <dt>仓库</dt><dd><a href="https://github.com/tengbao/vanta">tengbao/vanta</a>（同 3）</dd>
+      <dt>许可</dt><dd>MIT</dd>
+      <dt>顾虑</dt><dd>原生就是低多边形的晶面，碎、亮，背在文字后面很花，也不是苹果的视觉语言</dd>
+    </dl>
+  </article>
+
+  <article class="cand" id="c5">
+    <div class="head"><span class="num">5</span><h3>光束渐变</h3><span class="tag alt">光效最强</span></div>
+    <p class="lead">两层着色器叠加：底下是缓慢流动的网格渐变色场，上面是一束束「上帝光」，用滤色叠上去。光源跟着鼠标在上方移动，点击时光强闪一下再回落。</p>
+    <div class="media">
+      <figure><img class="w" src="media/o5-godrays.webp" alt="原版 Paper Shaders God Rays 演示" loading="lazy"><figcaption>原版 God Rays（默认参数）</figcaption></figure>
+      <figure><img class="w" src="media/h-rays.webp" alt="首页上的光束渐变，光源跟随鼠标" loading="lazy"><figcaption>巴卡巴卡首页</figcaption></figure>
+      <figure><img class="p" src="media/m-rays.jpg" alt="光束渐变手机竖屏" loading="lazy"><figcaption>手机</figcaption></figure>
+    </div>
+    <dl>
+      <dt>仓库</dt><dd><a href="https://github.com/paper-design/shaders">paper-design/shaders</a>（设计工具 Paper 团队）</dd>
+      <dt>版本</dt><dd><code>43cd68d</code>（2026-09-17）· npm 0.0.81</dd>
+      <dt>许可</dt><dd>Apache-2.0，可商用，需附许可证与 NOTICE（已放在 licenses/）</dd>
+      <dt>顾虑</dt><dd>光很强时玻璃按钮里折射的是白光，按钮会偏亮；画面离「流动玻璃」较远</dd>
+    </dl>
+  </article>
+
+  <article class="cand" id="c6">
+    <div class="head"><span class="num">6</span><h3>网格流光</h3><span class="tag no">不太合适</span></div>
+    <p class="lead">Stripe 官网、SwiftUI MeshGradient 那种大色块缓慢流动。库本身不响应鼠标，我加了一个跟随鼠标的柔光斑和点击光环。</p>
+    <div class="media">
+      <figure><img class="w" src="media/o6-mesh.webp" alt="原版 mesh-gradient 演示，蓝色网格渐变" loading="lazy"><figcaption>原版（文档首页配色）</figcaption></figure>
+      <figure><img class="w" src="media/h-mesh.webp" alt="首页上的珊瑚色网格流光" loading="lazy"><figcaption>巴卡巴卡首页</figcaption></figure>
+      <figure><img class="p" src="media/m-mesh.jpg" alt="网格流光手机竖屏" loading="lazy"><figcaption>手机</figcaption></figure>
+    </div>
+    <dl>
+      <dt>仓库</dt><dd><a href="https://github.com/mikhailmogilnikov/mesh-gradient">mikhailmogilnikov/mesh-gradient</a></dd>
+      <dt>版本</dt><dd><code>83ff215</code> · npm 2.0.2</dd>
+      <dt>许可</dt><dd>MIT</dd>
+      <dt>顾虑</dt><dd>最省电，但互动和光效都靠我加的光斑，库本身只会流动</dd>
+    </dl>
+  </article>
+
+  <section class="panel" aria-labelledby="skip-h">
+    <h2 id="skip-h">看过但没放进来</h2>
+    <ul>
+      <li><a href="https://github.com/ruucm/shadergradient">ruucm/shadergradient</a>：三维流动渐变带灯光，很好看，但依赖 React + three.js 全家桶，且仓库根目录没有许可证文件（只有子包标了 MIT），先不用。</li>
+      <li><a href="https://github.com/sa3dany/wave-gradient">sa3dany/wave-gradient</a>（MIT）：和 6 一样是 Stripe 式渐变，重复。</li>
+      <li>Vanta FOG（MIT）：珊瑚色烟雾很柔，但着色器根本不读鼠标，没有互动，换成了同仓库的 3 云海。</li>
+    </ul>
+    <p class="note">所有候选都在本地 Chromium 实际跑过；许可证全文随首页一起放在 licenses/ 目录。</p>
+  </section>
+</div>

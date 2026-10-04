@@ -1,0 +1,334 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#b8274f"><style>[hidden]{display:none!important}</style></head><body>
+<title>巴卡巴卡 液态玻璃</title>
+<style>
+/* Layout: a faithful plain-HTML port of nikdelvin/liquid-glass (MIT): one full-bleed backdrop, a centred stack of
+   refracting glass slabs (logo, headline), two glass pills, and a glass theme dock at the bottom. Single dark look. */
+:root{
+  --ink:#b8274f; --fg:rgba(250,250,250,.85); --fg-dim:rgba(250,250,250,.6); --dark-fg:rgba(9,9,11,.85);
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Display","PingFang SC","Noto Sans SC","Helvetica Neue",sans-serif;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html,body{height:100%;background:var(--ink);color:var(--fg)}
+body{margin:0;font-family:var(--font);-webkit-font-smoothing:antialiased;overflow:hidden}
+a{color:inherit;text-decoration:none}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+:focus-visible{outline:2px solid #fff;outline-offset:4px;border-radius:30px}
+
+.bd{position:fixed;inset:-3%;z-index:0;width:106%;height:106%;display:block;overflow:hidden;background:#b8274f url(assets/bg-flow.jpg) center/cover;will-change:transform}
+.bd.on{background-image:none}
+.bd>canvas,.bd>div{position:absolute;inset:0;width:100%;height:100%}
+/* over the bright cloud sea the slabs take a rose tint instead of grey, so white text keeps its contrast */
+body[data-bg^=cloud] .slab>.tint{background:rgba(128,14,52,.34)}
+
+/* glass (ported from LiquidGlass.astro) */
+.lg{position:relative;overflow:hidden;isolation:isolate;width:max-content;max-width:100%}
+.lg>.tint{position:absolute;inset:0;z-index:1;background:rgba(0,0,0,.3);border-radius:inherit}
+.lg.btn>.tint{background:rgba(255,255,255,.1)}
+.lg>.inner{position:absolute;inset:0;z-index:0;overflow:hidden;display:none}
+.lg>.inner img{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);will-change:transform,filter}
+.lg>.content{position:relative;z-index:3;display:flex;align-items:center;justify-content:center;text-align:center;width:100%}
+.lg>.flt{position:absolute;inset:0;z-index:2}
+.lg>.flt{border-radius:inherit}
+.lg>.flt>.box{display:block;width:100%;height:100%;border-radius:inherit}
+.box.black{background:#09090b80;box-shadow:inset 0 0 4px 0 #fafafa80;filter:brightness(.6)}
+.box.white{background:#fafafa80;box-shadow:inset 0 0 4px 0 #fafafa80}
+.box.clear{background:#09090b00;box-shadow:inset 0 0 4px 0 #fafafa80}
+.lg.btn{box-shadow:0 0 1px #fff;transition:scale .3s ease-out,rotate .3s ease-out;transform-origin:top center;cursor:pointer}
+.lg.btn:hover{scale:1.05;rotate:-1deg}
+.lg.btn:active{scale:.98;rotate:0deg}
+
+/* layout */
+.top{position:fixed;top:0;left:0;right:0;z-index:20;display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px clamp(16px,3vw,36px);font-size:14px;color:rgba(255,255,255,.82)}
+.top>span,.top nav{padding:8px 16px;border-radius:999px;background:rgba(10,20,40,.22);-webkit-backdrop-filter:blur(16px) saturate(160%);backdrop-filter:blur(16px) saturate(160%);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.35)}
+.top nav{display:flex;gap:22px}
+.top a:hover,.top a[aria-current]{color:#fff}
+.stage{position:fixed;inset:0;z-index:5;display:flex;align-items:center;justify-content:center;padding:80px 16px 120px}
+.col{display:flex;flex-direction:column;align-items:center;gap:clamp(24px,5vh,64px)}
+.slab{border-radius:50px}
+.slab .content{padding:32px 44px}
+.logo{display:block;height:clamp(64px,12vw,150px);width:auto}
+.slab.sub{border-radius:50px}
+.slab.sub .content{padding:26px 44px;font-size:clamp(24px,4.4vw,60px);font-weight:300;line-height:1.05;letter-spacing:-.01em;color:var(--fg)}
+.btns{display:flex;flex-direction:column;gap:clamp(16px,3vh,32px);width:max-content;max-width:100%}
+.btns .lg{width:100%;border-radius:30px}
+.btns .content{padding:16px 32px;font-size:20px;gap:14px}
+.btns .dark .content{color:var(--fg)}
+.btns .light .content{color:var(--dark-fg)}
+.dot{width:28px;height:28px;border-radius:50%;background:#09090b;box-shadow:inset 0 0 0 1px rgba(255,255,255,.25),inset 0 2px 6px rgba(255,255,255,.2);display:grid;place-items:center}
+
+.dock{position:fixed;bottom:0;left:50%;z-index:20;transform:translateX(-50%);display:flex;gap:16px;padding:12px 12px calc(12px + env(safe-area-inset-bottom,0px));border-radius:32px 32px 0 0;background:rgba(24,24,27,.5);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px)}
+.dock .lg{display:block;border-radius:50%}
+.dock .content{width:48px;height:48px}
+.dock button{border-radius:50%}
+
+/* background options (review tool) */
+.fx{position:fixed;left:clamp(12px,2vw,28px);bottom:clamp(12px,2vw,24px);z-index:21;display:flex;flex-direction:column;gap:6px;padding:10px;border-radius:24px;background:rgba(10,12,20,.28);-webkit-backdrop-filter:blur(16px) saturate(160%);backdrop-filter:blur(16px) saturate(160%);box-shadow:inset 0 0 0 .5px rgba(255,255,255,.3)}
+.fx>b{font-size:11px;font-weight:500;letter-spacing:.08em;color:rgba(255,255,255,.6);padding:2px 8px 4px}
+.fx button{display:flex;align-items:center;gap:9px;padding:7px 12px 7px 7px;border-radius:999px;font-size:13px;color:rgba(255,255,255,.82);text-align:left;white-space:nowrap;transition:background .2s,color .2s}
+.fx button i{font-style:normal;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font-size:12px;background:rgba(255,255,255,.14)}
+.fx button:hover{background:rgba(255,255,255,.12)}
+.fx button[aria-pressed="true"]{background:rgba(250,250,250,.9);color:#09090b}
+.fx button[aria-pressed="true"] i{background:#09090b;color:#fff}
+.fx button[aria-busy="true"] i{animation:fxp .8s ease-in-out infinite alternate}
+.fx button span{display:flex;flex-direction:column;line-height:1.25}
+.fx button small{font-size:11px;opacity:.62}
+@keyframes fxp{to{opacity:.3}}
+/* upload step */
+.step{position:fixed;inset:0;z-index:6;display:flex;align-items:center;justify-content:center;padding:80px 16px 120px;visibility:hidden}
+.panel{border-radius:44px;max-width:min(760px,100%)}
+.panel>.tint{background:rgba(0,0,0,.5)}
+.panel .content{flex-direction:column;align-items:stretch;gap:22px;padding:36px 40px;text-align:left;width:min(760px,calc(100vw - 32px))}
+.panel h2{margin:0;font-size:clamp(34px,5vw,56px);font-weight:300;letter-spacing:-.01em;color:var(--fg)}
+.panel p{margin:0;color:var(--fg-dim);font-size:16px}
+.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:150px;border-radius:28px;border:1.5px dashed rgba(250,250,250,.45);cursor:pointer;color:var(--fg);transition:background .25s}
+.drop:hover,.drop.over{background:rgba(255,255,255,.08)}
+.drop small{color:var(--fg-dim)}
+.drop img{max-height:220px;border-radius:18px}
+.opts{display:flex;flex-direction:column;gap:10px}
+.opts span{font-size:13px;color:var(--fg-dim)}
+.chips{display:flex;flex-wrap:wrap;gap:8px}
+.chip{padding:9px 16px;border-radius:999px;font-size:14px;color:var(--fg);background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px rgba(255,255,255,.18);transition:background .2s,color .2s}
+.chip[aria-pressed="true"]{background:rgba(250,250,250,.9);color:#09090b}
+.actions{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+.go{padding:14px 28px;border-radius:999px;background:rgba(250,250,250,.92);color:#09090b;font-size:17px;transition:transform .3s}
+.go:hover{transform:scale(1.04)}
+.back{padding:14px 20px;color:var(--fg-dim);font-size:15px}
+.back:hover{color:#fff}
+.note{font-size:12px;color:var(--fg-dim)}
+
+@media (max-width:640px){
+  .top nav{gap:14px}
+  .slab .content{padding:20px 22px}
+  .slab.sub .content{padding:16px 22px}
+  .btns .content{font-size:17px;padding:14px 24px}
+  .panel .content{padding:24px 20px}
+  .fx{top:62px;bottom:auto;left:8px;right:8px;transform:none;flex-direction:row;overflow-x:auto;padding:6px;gap:4px;border-radius:999px;scrollbar-width:none}
+  .fx::-webkit-scrollbar{display:none}
+  .fx>b{display:none}
+  .fx button{padding:5px 10px 5px 5px;font-size:12px}
+  .stage{padding-top:110px}
+}
+@media (prefers-reduced-motion:reduce){.lg.btn{transition:none}.lg.btn:hover{scale:1;rotate:0deg}}
+</style>
+
+<div class="bd" id="bd" aria-hidden="true"></div>
+
+<header class="top">
+  <span>积分 [余额]</span>
+  <nav aria-label="主导航"><a href="#" aria-current="page">创作</a><a href="#">我的作品</a><a href="#">收藏夹</a><a href="#">设置</a></nav>
+</header>
+
+<main class="stage" id="home">
+  <div class="col">
+    <h1 class="lg slab" data-glass data-cab="2" data-blur="3" style="margin:0" aria-label="巴卡巴卡">
+      <span class="tint"></span><span class="inner"><img alt=""></span>
+      <span class="content"><img class="logo" src="assets/logo-white.png" alt=""></span>
+      <span class="flt"><span class="box clear"></span></span>
+    </h1>
+    <div class="lg slab sub" data-glass data-cab="2" data-blur="3">
+      <span class="tint"></span><span class="inner"><img alt=""></span>
+      <span class="content">下一张封面，换一种可能。</span>
+      <span class="flt"><span class="box clear"></span></span>
+    </div>
+    <div class="btns">
+      <button class="lg btn dark" data-glass data-cab="2" data-blur="2" data-btn id="toUpload">
+        <span class="tint"></span><span class="inner"><img alt=""></span>
+        <span class="content">上传底图，做我的封面<span class="dot" aria-hidden="true"><svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="#fafafa" stroke-width="1.6" stroke-linecap="round"><path d="M6 10V2M2.5 5.5 6 2l3.5 3.5"/></svg></span></span>
+        <span class="flt"><span class="box black"></span></span>
+      </button>
+      <button class="lg btn light" data-glass data-cab="2" data-blur="2" data-btn id="toScript">
+        <span class="tint"></span><span class="inner"><img alt=""></span>
+        <span class="content">从完整原文开始</span>
+        <span class="flt"><span class="box white"></span></span>
+      </button>
+    </div>
+  </div>
+</main>
+
+<section class="step" id="step" aria-labelledby="stepTitle">
+  <div class="lg panel" data-glass data-cab="2" data-blur="8">
+    <span class="tint"></span><span class="inner"><img alt=""></span>
+    <div class="content">
+      <h2 id="stepTitle">上传底图</h2>
+      <p id="stepDesc">一张完整底图，AI 在上面排版。保留原片，只加字和轻装饰。</p>
+      <label class="drop" id="drop" for="file"><span id="dropText">拖进来，或点一下选择图片</span><small>JPG · PNG · WebP</small></label>
+      <input type="file" id="file" accept="image/*" hidden>
+      <div class="opts"><span>比例</span><div class="chips" data-chips><button class="chip" aria-pressed="true">小红书 3:4</button><button class="chip" aria-pressed="false">竖版 9:16</button><button class="chip" aria-pressed="false">B站 16:9</button><button class="chip" aria-pressed="false">横版 16:9</button><button class="chip" aria-pressed="false">4:3</button><button class="chip" aria-pressed="false">1:1</button></div></div>
+      <div class="opts"><span>引擎</span><div class="chips" data-chips><button class="chip" aria-pressed="true">Image2</button><button class="chip" aria-pressed="false">Seedream</button><button class="chip" aria-pressed="false">SeeDance</button></div></div>
+      <div class="actions"><button class="go" id="next">下一步：文案</button><button class="back" id="back">返回</button><span class="note" id="note">原型：不会上传或扣积分。</span></div>
+    </div>
+    <span class="flt"><span class="box clear"></span></span>
+  </div>
+</section>
+
+<nav class="fx" id="fx" aria-label="背景方案"><b>背景方案</b></nav>
+
+<nav class="dock" aria-label="背景配色">
+  <button data-theme-pick="blush" aria-label="珊瑚红" aria-pressed="true"><span class="lg" data-glass data-strength="10" data-cab="1"><span class="tint"></span><span class="inner"><img alt=""></span><span class="content"></span><span class="flt"><span class="box white"></span></span></span></button>
+  <button data-theme-pick="tahoe" aria-label="Tahoe 蓝" aria-pressed="false"><span class="lg" data-glass data-strength="10" data-cab="1"><span class="tint"></span><span class="inner"><img alt=""></span><span class="content"></span><span class="flt"><span class="box clear"></span></span></span></button>
+  <button data-theme-pick="mint" aria-label="薄荷" aria-pressed="false"><span class="lg" data-glass data-strength="10" data-cab="1"><span class="tint"></span><span class="inner"><img alt=""></span><span class="content"></span><span class="flt"><span class="box clear"></span></span></span></button>
+  <button data-theme-pick="iris" aria-label="虹彩" aria-pressed="false"><span class="lg" data-glass data-strength="10" data-cab="1"><span class="tint"></span><span class="inner"><img alt=""></span><span class="content"></span><span class="flt"><span class="box clear"></span></span></span></button>
+  <button data-theme-pick="silver" aria-label="银" aria-pressed="false"><span class="lg" data-glass data-strength="10" data-cab="1"><span class="tint"></span><span class="inner"><img alt=""></span><span class="content"></span><span class="flt"><span class="box clear"></span></span></span></button>
+</nav>
+
+<script src="lib/gsap.min.js"></script>
+<script src="shader.js"></script>
+<script src="bg/engines.js"></script>
+<script>
+/* Liquid glass: displacement map + per-channel chromatic aberration, ported from nikdelvin/liquid-glass (MIT, 4925186). */
+(function(){
+const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const enc = s => 'data:image/svg+xml;utf8,' + encodeURIComponent(s);
+function dispMap(w, h, r, d){
+  return enc(`<svg height="${h}" width="${w}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg"><style>.mix{mix-blend-mode:screen}</style><defs><linearGradient id="Y" x1="0" x2="0" y1="${Math.ceil(r/h*15)}%" y2="${Math.floor(100-r/h*15)}%"><stop offset="0%" stop-color="#0F0"/><stop offset="100%" stop-color="#000"/></linearGradient><linearGradient id="X" x1="${Math.ceil(r/w*15)}%" x2="${Math.floor(100-r/w*15)}%" y1="0" y2="0"><stop offset="0%" stop-color="#F00"/><stop offset="100%" stop-color="#000"/></linearGradient></defs><rect x="0" y="0" height="${h}" width="${w}" fill="#808080"/><g filter="blur(2px)"><rect x="0" y="0" height="${h}" width="${w}" fill="#000080"/><rect x="0" y="0" height="${h}" width="${w}" fill="url(#Y)" class="mix"/><rect x="0" y="0" height="${h}" width="${w}" fill="url(#X)" class="mix"/><rect x="${d}" y="${d}" height="${h-2*d}" width="${w-2*d}" fill="#808080" rx="${r}" ry="${r}" filter="blur(${d}px)"/></g></svg>`);
+}
+function dispFilter(w, h, r, d, s, cab){
+  const ch = (k, m) => `<feDisplacementMap in="SourceGraphic" in2="map" scale="${s + cab*k}" xChannelSelector="R" yChannelSelector="G"/><feColorMatrix type="matrix" values="${m}" result="c${k}"/>`;
+  return enc(`<svg height="${h}" width="${w}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg"><defs><filter id="displace" color-interpolation-filters="sRGB"><feImage x="0" y="0" height="${h}" width="${w}" href="${dispMap(w,h,r,d)}" result="map"/>${ch(2,'1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0')}${ch(1,'0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 0')}${ch(0,'0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 0')}<feBlend in="c2" in2="c1" mode="screen"/><feBlend in2="c0" mode="screen"/></filter></defs></svg>`) + '#displace';
+}
+const supportsUrl = (() => { const t = document.createElement('div'); t.style.cssText = 'backdrop-filter:url(#t)'; return /url/.test(t.style.backdropFilter); })();
+
+function draw(g){
+  const box = g.querySelector(':scope > .flt > .box'), content = g.querySelector(':scope > .content');
+  const w = Math.round(g.offsetWidth), h = Math.round(g.offsetHeight);
+  if (!w || !h) return;
+  const r = Math.min(parseFloat(getComputedStyle(g).borderTopLeftRadius) || 0, w / 2, h / 2);
+  const d = +(g.dataset.depth || 10), s = +(g.dataset.strength || 100), cab = +(g.dataset.cab || 0);
+  const btn = g.hasAttribute('data-btn'), sat = btn ? 1.2 : 1.5, bri = btn ? 1.6 : 1.1;
+  const img = g.querySelector(':scope > .inner img');
+  if (img && img.getAttribute('src')) { img.style.width = w + 'px'; img.style.height = w + 'px'; }
+  if (supportsUrl) {
+    const fr = +(g.dataset.blur || 0);
+    box.style.backdropFilter = `blur(${fr / 2}px) url('${dispFilter(w, h, r, d, s, cab)}') blur(${fr}px) brightness(${bri}) saturate(${sat})`;
+  } else {
+    box.style.webkitBackdropFilter = box.style.backdropFilter = `blur(${Math.round(w / 10)}px) saturate(180%)`;
+    if (img && img.getAttribute('src')) img.style.filter = `blur(${w / 50}px) saturate(180%)`;
+  }
+}
+const glasses = [...document.querySelectorAll('[data-glass]')];
+const ro = new ResizeObserver(es => es.forEach(e => draw(e.target)));
+glasses.forEach(g => { ro.observe(g); draw(g); });
+
+/* backdrop: our own flowing glass waves (shader.js); dock thumbnails are stills of each palette */
+const bd = document.getElementById('bd');
+let slick = null, palName = 'blush', engName = null, mounting = 0;
+const fxBar = document.getElementById('fx');
+const pickFromUrl = () => { const m = (location.hash + '&' + location.search).match(/bg=(\w+)/); return m && BGEngines[m[1]] ? m[1] : null; };
+(window.BG_LIST || []).forEach(([k, name, num]) => {
+  const b = document.createElement('button'); b.dataset.bg = k; b.setAttribute('aria-pressed', 'false');
+  b.innerHTML = '<i>' + num + '</i><span>' + name + '</span>'; b.addEventListener('click', () => useEngine(k)); fxBar.appendChild(b);
+});
+async function useEngine(k){
+  if (!window.BGEngines || !BGEngines[k] || k === engName) return;
+  const my = ++mounting;
+  fxBar.querySelectorAll('button').forEach(b => { b.setAttribute('aria-pressed', b.dataset.bg === k); b.removeAttribute('aria-busy'); });
+  const btn = fxBar.querySelector('[data-bg="' + k + '"]'); if (btn) { btn.setAttribute('aria-busy', 'true'); fxBar.scrollTo({ left: btn.offsetLeft - (fxBar.clientWidth - btn.offsetWidth) / 2, behavior: still ? 'auto' : 'smooth' }); }
+  if (slick) { try { slick.destroy(); } catch (e) {} slick = null; }
+  bd.classList.remove('on'); engName = k; document.body.dataset.bg = k;
+  try {
+    const e = await BGEngines[k].mount(bd, palName, '');
+    if (my !== mounting) { e.destroy(); return; }
+    slick = e; bd.classList.add('on');
+    if (still) slick.stop();
+  } catch (err) { console.error(err); engName = null; }
+  if (btn) btn.removeAttribute('aria-busy');
+  window.__eng = slick;
+  try { history.replaceState(null, '', '#bg=' + k); } catch (e) {}
+}
+useEngine(pickFromUrl() || 'fluid');
+(function thumbs(){
+  /* render each palette once, then crop the square with the most liquid in it */
+  const c = document.createElement('canvas'); c.style.cssText = 'position:fixed;left:-9999px;top:0;width:480px;height:300px';
+  document.body.appendChild(c);
+  let t = null; try { t = OilSlick.create(c, { scale: 1, still: true }); } catch (e) {}
+  const out = document.createElement('canvas'); out.width = out.height = 96; const ox = out.getContext('2d');
+  const probe = document.createElement('canvas'); probe.width = 48; probe.height = 30; const px = probe.getContext('2d', { willReadFrequently: true });
+  let crop = null;
+  document.querySelectorAll('[data-theme-pick]').forEach(b => {
+    const g = b.querySelector('[data-glass]'), inner = g.querySelector('.inner'), img = inner.querySelector('img');
+    if (t) {
+      t.palette(b.dataset.themePick);
+      if (!crop) crop = [230, 110];
+      ox.drawImage(c, crop[0], crop[1], 120, 120, 0, 0, 96, 96);
+      img.src = out.toDataURL('image/jpeg', .85);
+    } else img.src = 'assets/bg-flow.jpg';
+    inner.style.display = 'block'; img.style.width = img.style.height = '100%'; img.style.objectFit = 'cover'; draw(g);
+  });
+  c.remove();
+})();
+/* spin the thumbnail texture on hover, like the original */
+document.querySelectorAll('.dock [data-glass]').forEach(g => {
+  const img = g.querySelector('.inner img'); let tw = null; const host = g.closest('button');
+  host.addEventListener('mouseenter', () => { if (still || typeof gsap === 'undefined') return; tw = tw || gsap.to(img, { rotation: '+=360', duration: 20, ease: 'none', repeat: -1 }); tw.play(); });
+  host.addEventListener('mouseleave', () => { if (tw) tw.pause(); });
+});
+function pickTheme(t){
+  document.querySelectorAll('[data-theme-pick]').forEach(b => {
+    const on = b.dataset.themePick === t; b.setAttribute('aria-pressed', on);
+    b.querySelector('.box').className = 'box ' + (on ? 'white' : 'clear');
+  });
+  palName = t;
+  if (slick) slick.palette(t);
+}
+document.querySelectorAll('[data-theme-pick]').forEach(b => b.addEventListener('click', () => pickTheme(b.dataset.themePick)));
+
+/* chips */
+document.querySelectorAll('[data-chips]').forEach(g => g.addEventListener('click', e => { const c = e.target.closest('.chip'); if (c) g.querySelectorAll('.chip').forEach(x => x.setAttribute('aria-pressed', x === c)); }));
+
+if (typeof gsap === 'undefined') return;
+
+/* the backdrop drifts and follows the pointer, so the refraction inside every glass keeps moving */
+if (!still) {
+  const qx = gsap.quickTo(bd, 'x', { duration: 1.6, ease: 'power3' }), qy = gsap.quickTo(bd, 'y', { duration: 1.6, ease: 'power3' });
+  let lx = 0, ly = 0;
+  document.addEventListener('visibilitychange', () => { if (!slick) return; document.hidden ? slick.stop() : slick.start(); });
+  addEventListener('pointermove', e => {
+    qx((e.clientX / innerWidth - .5) * -24); qy((e.clientY / innerHeight - .5) * -18);
+    const sp = Math.hypot(e.clientX - lx, e.clientY - ly); lx = e.clientX; ly = e.clientY;
+    if (slick) slick.pointer(e.clientX, e.clientY, sp);
+  }, { passive: true });
+  gsap.from('#home .col > *', { y: 40, opacity: 0, duration: 1.2, ease: 'expo.out', stagger: .12, delay: .1 });
+  gsap.from('.dock', { yPercent: 100, duration: 1, ease: 'expo.out', delay: .5 });
+}
+
+/* tap the background: ripple, or pop a bubble */
+addEventListener('pointerdown', e => {
+  if (!slick || e.target.closest('button, a, input, label, .panel, .dock, .top, .fx')) return;
+  slick.tap(e.clientX, e.clientY);
+});
+
+/* upload step */
+const home = document.getElementById('home'), step = document.getElementById('step');
+const T = { up: ['上传底图', '一张完整底图，AI 在上面排版。保留原片，只加字和轻装饰。'], script: ['完整原文', '贴进整篇口播稿，先生成发布标题和封面文案，再带着它进入封面制作。'] };
+function show(kind){
+  document.getElementById('stepTitle').textContent = T[kind][0];
+  document.getElementById('stepDesc').textContent = T[kind][1];
+  document.getElementById('dropText').textContent = kind === 'up' ? '拖进来，或点一下选择图片' : '点这里粘贴完整原文（原型）';
+  gsap.to(home, { opacity: 0, scale: .96, duration: still ? 0 : .45, ease: 'power2.in', onComplete: () => home.style.visibility = 'hidden' });
+  gsap.set(step, { visibility: 'visible' });
+  gsap.fromTo('.panel', { opacity: 0, y: 40, scale: .97 }, { opacity: 1, y: 0, scale: 1, duration: still ? 0 : .9, ease: 'expo.out', delay: still ? 0 : .25, onStart: () => draw(document.querySelector('.panel')), onComplete: () => document.getElementById('back').focus() });
+}
+function hide(){
+  gsap.to('.panel', { opacity: 0, y: 30, duration: still ? 0 : .4, ease: 'power2.in', onComplete: () => gsap.set(step, { visibility: 'hidden' }) });
+  home.style.visibility = 'visible';
+  gsap.to(home, { opacity: 1, scale: 1, duration: still ? 0 : .7, ease: 'expo.out', delay: still ? 0 : .2, onComplete: () => document.getElementById('toUpload').focus() });
+}
+document.getElementById('toUpload').addEventListener('click', () => show('up'));
+document.getElementById('toScript').addEventListener('click', () => show('script'));
+document.getElementById('back').addEventListener('click', hide);
+addEventListener('keydown', e => { if (e.key === 'Escape' && step.style.visibility === 'visible') hide(); });
+const drop = document.getElementById('drop'), file = document.getElementById('file');
+function take(f){
+  if (!f || !f.type.startsWith('image/')) { document.getElementById('note').textContent = '请选择图片文件（JPG、PNG、WebP）。'; return; }
+  drop.innerHTML = ''; const im = new Image(); im.src = URL.createObjectURL(f); im.alt = '已选底图'; drop.appendChild(im);
+  const s = document.createElement('small'); s.textContent = f.name + ' · 点一下更换'; drop.appendChild(s);
+  requestAnimationFrame(() => draw(document.querySelector('.panel')));
+}
+file.addEventListener('change', () => take(file.files[0]));
+['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); }));
+['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); }));
+drop.addEventListener('drop', e => take(e.dataTransfer.files[0]));
+document.getElementById('next').addEventListener('click', () => { document.getElementById('note').textContent = file.files.length || drop.querySelector('img') ? '原型：下一步进入文案，设置已保留。' : '先选一张底图，再进入文案。'; });
+})();
+</script>

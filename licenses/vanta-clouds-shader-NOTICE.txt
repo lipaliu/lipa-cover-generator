@@ -1,0 +1,5 @@
+The Vanta CLOUDS effect (bg/vendor/vanta.clouds.min.js) is based on the Shadertoy shader
+"Clouds" (https://www.shadertoy.com/view/XslGRr), created by Inigo Quilez (iq/2013),
+licensed under the Creative Commons Attribution-NonCommercial-ShareAlike 3.0 Unported License.
+Used here only for internal, non-commercial evaluation. Before any commercial use, replace it
+with bg/clouds.js (written from scratch for this project).
