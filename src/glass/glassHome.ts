@@ -32,6 +32,13 @@ export const GLASS_PALETTES = [
 ] as const;
 
 const PALETTE_KEY = "baka-glass-palette";
+/* Phones and small/low-core devices get a lighter version of the same look: half-resolution
+   fluid, lower-resolution waves, 30 fps, no parallax, plain blur on the small dock swatches,
+   and the animation pauses while the page is scrolling. */
+export const LITE = typeof window !== "undefined" && (
+  matchMedia("(pointer: coarse)").matches || innerWidth < 760 || (navigator.hardwareConcurrency || 8) <= 4
+);
+const TOUCH = typeof window !== "undefined" && matchMedia("(pointer: coarse)").matches;
 const BASE = "/glass/";
 const scripts: Record<string, Promise<void>> = {};
 
@@ -87,12 +94,14 @@ export function drawGlass(g: HTMLElement) {
   const btn = g.hasAttribute("data-btn"), sat = btn ? 1.2 : 1.5, bri = btn ? 1.6 : 1.1;
   const img = g.querySelector<HTMLImageElement>(":scope > .gh-inner img");
   if (img && img.getAttribute("src")) { img.style.width = w + "px"; img.style.height = w + "px"; }
-  if (supportsUrl) {
+  const plain = LITE && g.hasAttribute("data-strength");
+  if (supportsUrl && !plain) {
     const fr = +(g.dataset.blur || 0);
     box.style.backdropFilter = `blur(${fr / 2}px) url('${dispFilter(w, h, r, d, s, cab)}') blur(${fr}px) brightness(${bri}) saturate(${sat})`;
   } else {
-    box.style.setProperty("-webkit-backdrop-filter", `blur(${Math.round(w / 10)}px) saturate(180%)`);
-    box.style.backdropFilter = `blur(${Math.round(w / 10)}px) saturate(180%)`;
+    const br = Math.min(Math.round(w / 10), 14), sat2 = plain ? 130 : 180;
+    box.style.setProperty("-webkit-backdrop-filter", `blur(${br}px) saturate(${sat2}%)`);
+    box.style.backdropFilter = `blur(${br}px) saturate(${sat2}%)`;
     if (img && img.getAttribute("src")) img.style.filter = `blur(${w / 50}px) saturate(180%)`;
   }
 }
@@ -137,7 +146,7 @@ export function mountBackdrop(bd: HTMLElement): () => void {
       const pal = readPalette();
       await loadScript(BASE + "flow-glass.js");
       if (disposed || !w.FlowGlass) return;
-      flow = w.FlowGlass.create(layer(), { palette: pal, scale: small ? 0.45 : 0.55 });
+      flow = w.FlowGlass.create(layer(), LITE ? { palette: pal, scale: 0.32, fps: 30 } : { palette: pal, scale: small ? 0.45 : 0.55 });
       if (!flow) return;
       bd.classList.add("on");
       document.dispatchEvent(new CustomEvent("glass:ready"));
@@ -145,7 +154,10 @@ export function mountBackdrop(bd: HTMLElement): () => void {
       flow.start();
       await loadScript(BASE + "fluid.js");
       if (disposed || !w.FluidBG) return;
-      fluid = w.FluidBG.create(layer(), {
+      fluid = w.FluidBG.create(layer(), LITE ? {
+        colors: fluidColorsFor(w, readPalette()), intensity: 0.22, dither: BASE + "LDR_LLL1_0.png", maxPixelRatio: 0.5, initialSplats: 4, ambient: 3.2, fps: 30, maxDt: 0.034,
+        config: { TRANSPARENT: true, DYE_RESOLUTION: 256, SIM_RESOLUTION: 64, PRESSURE_ITERATIONS: 12, DENSITY_DISSIPATION: 1.4, VELOCITY_DISSIPATION: 0.35, CURL: 24, SPLAT_RADIUS: 0.26, SPLAT_FORCE: 5200, BLOOM_ITERATIONS: 4, BLOOM_RESOLUTION: 128, BLOOM_INTENSITY: 0.6, BLOOM_THRESHOLD: 0.45, SUNRAYS: false, COLOR_UPDATE_SPEED: 4 },
+      } : {
         colors: fluidColorsFor(w, readPalette()), intensity: 0.2, dither: BASE + "LDR_LLL1_0.png", maxPixelRatio: 1, initialSplats: 5, ambient: 2.4,
         config: { TRANSPARENT: true, DYE_RESOLUTION: small ? 512 : 768, SIM_RESOLUTION: 128, DENSITY_DISSIPATION: 1.4, VELOCITY_DISSIPATION: 0.35, CURL: 24, SPLAT_RADIUS: 0.22, SPLAT_FORCE: 5200, BLOOM_INTENSITY: 0.55, BLOOM_THRESHOLD: 0.45, SUNRAYS_WEIGHT: 0.9, COLOR_UPDATE_SPEED: 4 },
       });
@@ -157,16 +169,27 @@ export function mountBackdrop(bd: HTMLElement): () => void {
 
   /* pointer: parallax of the whole backdrop, waves bend, fluid follows; tap on empty space bursts light */
   let tx = 0, ty = 0, px = 0, py = 0, raf = 0;
-  const onMove = (e: PointerEvent) => {
-    tx = (e.clientX / innerWidth - 0.5) * -24;
-    ty = (e.clientY / innerHeight - 0.5) * -18;
-    flow?.pointer(e.clientX, e.clientY, 0);
-    fluid?.pointer(e.clientX, e.clientY);
-  };
   const loop = () => {
     px += (tx - px) * 0.05; py += (ty - py) * 0.05;
     bd.style.transform = `translate3d(${px.toFixed(2)}px,${py.toFixed(2)}px,0)`;
-    raf = requestAnimationFrame(loop);
+    /* stop once settled; the next pointer move starts it again */
+    raf = Math.abs(tx - px) > 0.05 || Math.abs(ty - py) > 0.05 ? requestAnimationFrame(loop) : 0;
+  };
+  const onMove = (e: PointerEvent) => {
+    if (!TOUCH) {
+      tx = (e.clientX / innerWidth - 0.5) * -24;
+      ty = (e.clientY / innerHeight - 0.5) * -18;
+      if (!raf) raf = requestAnimationFrame(loop);
+    }
+    flow?.pointer(e.clientX, e.clientY, 0);
+    fluid?.pointer(e.clientX, e.clientY);
+  };
+  /* while the page scrolls, hold the animation so scrolling stays smooth */
+  let scrollTimer = 0, scrolling = false;
+  const onScroll = () => {
+    if (!scrolling) { scrolling = true; flow?.stop(); fluid?.stop(); }
+    clearTimeout(scrollTimer);
+    scrollTimer = window.setTimeout(() => { scrolling = false; if (!document.hidden && !still) { flow?.start(); fluid?.start(); } }, 180);
   };
   const onDown = (e: PointerEvent) => {
     const t = e.target as HTMLElement;
@@ -175,12 +198,12 @@ export function mountBackdrop(bd: HTMLElement): () => void {
   };
   const onVis = () => {
     if (document.hidden) { flow?.stop(); fluid?.stop(); }
-    else if (!still) { flow?.start(); fluid?.start(); }
+    else if (!still && !scrolling) { flow?.start(); fluid?.start(); }
   };
   if (!still) {
     addEventListener("pointermove", onMove, { passive: true });
     addEventListener("pointerdown", onDown);
-    raf = requestAnimationFrame(loop);
+    if (LITE) addEventListener("scroll", onScroll, { passive: true });
   }
   document.addEventListener("visibilitychange", onVis);
 
@@ -189,6 +212,8 @@ export function mountBackdrop(bd: HTMLElement): () => void {
     if (activeBackdrop === api) activeBackdrop = null;
     removeEventListener("pointermove", onMove);
     removeEventListener("pointerdown", onDown);
+    removeEventListener("scroll", onScroll);
+    clearTimeout(scrollTimer);
     document.removeEventListener("visibilitychange", onVis);
     cancelAnimationFrame(raf);
     flow?.stop();

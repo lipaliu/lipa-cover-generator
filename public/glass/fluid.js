@@ -75,7 +75,7 @@ pointers.push(new pointerPrototype());
 
 const { gl, ext } = getWebGLContext(canvas);
 
-if (isMobile()) {
+if (isMobile() && !(opts.config && opts.config.DYE_RESOLUTION)) {
     config.DYE_RESOLUTION = 512;
 }
 if (!ext.supportLinearFiltering) {
@@ -1006,6 +1006,8 @@ let running = false, raf = 0, ambient = 0;
 
 function update () {
     if (!running) return;
+    /* optional frame cap (phones): skip this display frame if the last one was too recent */
+    if (opts.fps && Date.now() - lastUpdateTime < 1000 / opts.fps - 4) { raf = requestAnimationFrame(update); return; }
     const dt = calcDeltaTime();
     if (opts.ambient) { ambient -= dt; if (ambient <= 0) { ambient = opts.ambient * (0.6 + Math.random() * 0.8); ambientSplat(); } }
     if (resizeCanvas())
@@ -1021,7 +1023,7 @@ function update () {
 function calcDeltaTime () {
     let now = Date.now();
     let dt = (now - lastUpdateTime) / 1000;
-    dt = Math.min(dt, 0.016666);
+    dt = Math.min(dt, opts.maxDt || 0.016666);
     lastUpdateTime = now;
     return dt;
 }

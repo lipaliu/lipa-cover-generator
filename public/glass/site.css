@@ -102,3 +102,9 @@ figcaption b { color: var(--fg); }
   .addform input, .addform select { flex: 1 1 140px; width: auto; }
 }
 @media (prefers-reduced-motion: reduce) { .btn, .shot { transition: none; } }
+
+/* phones and touch screens: smaller blur radius keeps the glass cheap to redraw while the background moves */
+@media (pointer: coarse), (max-width: 760px) {
+  .glass { -webkit-backdrop-filter: blur(14px) saturate(150%); backdrop-filter: blur(14px) saturate(150%); }
+  .nav { -webkit-backdrop-filter: blur(10px) saturate(150%); backdrop-filter: blur(10px) saturate(150%); }
+}

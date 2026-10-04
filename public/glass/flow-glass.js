@@ -134,7 +134,8 @@ void main(){
       gl.drawArrays(gl.TRIANGLES, 0, 3);
     }
     let last = 0;
-    function loop(ts) { if (!S.running) return; const dt = last ? Math.min(.05, (ts - last) / 1000) : 0; last = ts; S.now += dt; S.t += dt * .35; frame(); requestAnimationFrame(loop); }
+    const minGap = opts.fps ? 1000 / opts.fps - 4 : 0; /* optional frame cap (phones) */
+    function loop(ts) { if (!S.running) return; if (last && ts - last < minGap) { requestAnimationFrame(loop); return; } const dt = last ? Math.min(.05, (ts - last) / 1000) : 0; last = ts; S.now += dt; S.t += dt * .35; frame(); requestAnimationFrame(loop); }
     function toCanvas(x, y) { const r = canvas.getBoundingClientRect(); return [(x - r.left) * (canvas.width / r.width), (r.height - (y - r.top)) * (canvas.height / r.height)]; }
     function addRipple(x, y, a) { S.ripples[S.ri % NR] = { x, y, t: S.now, a }; S.ri++; }
     return {

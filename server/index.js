@@ -478,6 +478,7 @@ if (ACCESS_PASSWORD) {
   :focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
   .foot { margin-top: 6px; font-size: 11px; color: rgba(250,250,250,.45); text-align: center; }
   @media (max-width: 520px) { .card { border-radius: 36px; } .card > .content { padding: 32px 22px 24px; } h1 { font-size: 30px; } }
+  @media (pointer: coarse), (max-width: 760px) { .home { -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); } }
   @media (prefers-reduced-motion: reduce) { .card { animation: none; } button { transition: none; } }
 </style>
 </head>

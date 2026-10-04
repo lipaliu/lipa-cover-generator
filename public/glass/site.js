@@ -6,6 +6,9 @@
   "use strict";
   var still = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   var small = innerWidth < 700;
+  /* phones / small / low-core devices: lighter settings, 30 fps, no parallax, pause while scrolling */
+  var touch = window.matchMedia && matchMedia("(pointer: coarse)").matches;
+  var lite = touch || innerWidth < 760 || (navigator.hardwareConcurrency || 8) <= 4;
   var pal = "blush";
   try { pal = localStorage.getItem("baka-glass-palette") || "blush"; } catch (e) { /* storage unavailable */ }
 
@@ -28,7 +31,7 @@
     var r = Math.min(parseFloat(getComputedStyle(g).borderTopLeftRadius) || 0, w / 2, h / 2);
     var fr = +(g.getAttribute("data-blur") || 0), cab = +(g.getAttribute("data-cab") || 0);
     if (supportsUrl) box.style.backdropFilter = "blur(" + fr / 2 + "px) url('" + dispFilter(w, h, r, 10, 100, cab) + "') blur(" + fr + "px) brightness(1.1) saturate(1.5)";
-    else { box.style.webkitBackdropFilter = box.style.backdropFilter = "blur(24px) saturate(180%)"; }
+    else { box.style.webkitBackdropFilter = box.style.backdropFilter = "blur(14px) saturate(180%)"; }
   }
   var glasses = document.querySelectorAll("[data-glass]");
   if (window.ResizeObserver) {
@@ -46,15 +49,19 @@
   function mix(a, b, t) { var x = hex(a), y = hex(b); return "#" + x.map(function (v, i) { return Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0"); }).join(""); }
   var flow = null, fluid = null;
   load("/glass/flow-glass.js").then(function () {
-    flow = window.FlowGlass && FlowGlass.create(layer(), { palette: pal, scale: small ? 0.45 : 0.55 });
+    flow = window.FlowGlass && FlowGlass.create(layer(), lite ? { palette: pal, scale: 0.32, fps: 30 } : { palette: pal, scale: small ? 0.45 : 0.55 });
     if (!flow) return;
     bd.classList.add("on");
     if (still) { flow.draw(); return; }
     flow.start();
     return load("/glass/fluid.js").then(function () {
       var P = FlowGlass.COLORS[pal] || FlowGlass.COLORS.blush;
-      fluid = FluidBG.create(layer(), {
-        colors: [P.light, P.mid, mix(P.light, "#ffffff", 0.55), mix(P.mid, P.light, 0.5)], intensity: 0.2, dither: "/glass/LDR_LLL1_0.png", maxPixelRatio: 1, initialSplats: 4, ambient: 2.6,
+      var colors = [P.light, P.mid, mix(P.light, "#ffffff", 0.55), mix(P.mid, P.light, 0.5)];
+      fluid = FluidBG.create(layer(), lite ? {
+        colors: colors, intensity: 0.22, dither: "/glass/LDR_LLL1_0.png", maxPixelRatio: 0.5, initialSplats: 3, ambient: 3.4, fps: 30, maxDt: 0.034,
+        config: { TRANSPARENT: true, DYE_RESOLUTION: 256, SIM_RESOLUTION: 64, PRESSURE_ITERATIONS: 12, DENSITY_DISSIPATION: 1.4, VELOCITY_DISSIPATION: 0.35, CURL: 24, SPLAT_RADIUS: 0.26, SPLAT_FORCE: 5200, BLOOM_ITERATIONS: 4, BLOOM_RESOLUTION: 128, BLOOM_INTENSITY: 0.6, BLOOM_THRESHOLD: 0.45, SUNRAYS: false, COLOR_UPDATE_SPEED: 4 }
+      } : {
+        colors: colors, intensity: 0.2, dither: "/glass/LDR_LLL1_0.png", maxPixelRatio: 1, initialSplats: 4, ambient: 2.6,
         config: { TRANSPARENT: true, DYE_RESOLUTION: small ? 512 : 768, SIM_RESOLUTION: 128, DENSITY_DISSIPATION: 1.4, VELOCITY_DISSIPATION: 0.35, CURL: 24, SPLAT_RADIUS: 0.22, SPLAT_FORCE: 5200, BLOOM_INTENSITY: 0.55, BLOOM_THRESHOLD: 0.45, SUNRAYS_WEIGHT: 0.9, COLOR_UPDATE_SPEED: 4 }
       });
       fluid.start();
@@ -62,15 +69,28 @@
   }).catch(function () { /* the still image stays */ });
 
   if (still) return;
-  var tx = 0, ty = 0, px = 0, py = 0;
+  var tx = 0, ty = 0, px = 0, py = 0, raf = 0, scrolling = false, scrollTimer = 0;
+  function loop() {
+    px += (tx - px) * 0.05; py += (ty - py) * 0.05;
+    bd.style.transform = "translate3d(" + px.toFixed(2) + "px," + py.toFixed(2) + "px,0)";
+    raf = Math.abs(tx - px) > 0.05 || Math.abs(ty - py) > 0.05 ? requestAnimationFrame(loop) : 0;
+  }
+  function run(on) { if (flow) on ? flow.start() : flow.stop(); if (fluid) on ? fluid.start() : fluid.stop(); }
   addEventListener("pointermove", function (e) {
-    tx = (e.clientX / innerWidth - 0.5) * -24; ty = (e.clientY / innerHeight - 0.5) * -18;
+    if (!touch) {
+      tx = (e.clientX / innerWidth - 0.5) * -24; ty = (e.clientY / innerHeight - 0.5) * -18;
+      if (!raf) raf = requestAnimationFrame(loop);
+    }
     if (flow) flow.pointer(e.clientX, e.clientY, 0);
     if (fluid) fluid.pointer(e.clientX, e.clientY);
   }, { passive: true });
-  (function loop() { px += (tx - px) * 0.05; py += (ty - py) * 0.05; bd.style.transform = "translate3d(" + px.toFixed(2) + "px," + py.toFixed(2) + "px,0)"; requestAnimationFrame(loop); })();
+  if (lite) addEventListener("scroll", function () {
+    if (!scrolling) { scrolling = true; run(false); }
+    clearTimeout(scrollTimer);
+    scrollTimer = setTimeout(function () { scrolling = false; if (!document.hidden) run(true); }, 180);
+  }, { passive: true });
   document.addEventListener("visibilitychange", function () {
-    if (document.hidden) { if (flow) flow.stop(); if (fluid) fluid.stop(); }
-    else { if (flow) flow.start(); if (fluid) fluid.start(); }
+    if (document.hidden) run(false);
+    else if (!scrolling) run(true);
   });
 })();

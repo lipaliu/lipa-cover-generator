@@ -190,3 +190,10 @@ select option { color: #111; }
   .header-nav::-webkit-scrollbar { display: none; }
   .is-studio .header-nav { width: 100%; justify-content: center; }
 }
+
+/* phones and touch screens: smaller blur radius keeps the glass cheap to redraw while the background moves */
+@media (pointer: coarse), (max-width: 760px) {
+  :root { --gl-blur: blur(14px) saturate(150%); }
+  .header-nav { -webkit-backdrop-filter: blur(10px) saturate(150%); backdrop-filter: blur(10px) saturate(150%); }
+  .step-icon { -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
