@@ -35,7 +35,7 @@ import type { CoverResult, CoverPlan, GenerateEvent, HistoryBatch, ImageEngine, 
 import { LoginModal } from "./components/LoginModal";
 import { CreditsBadge } from "./components/CreditsBadge";
 import { RechargeModal } from "./components/RechargeModal";
-import { CoverShowcase } from "./components/CoverShowcase";
+import { GlassHome } from "./components/GlassHome";
 import {
   calculateCreditsCost,
   fetchBalance,
@@ -1802,7 +1802,7 @@ export function App() {
       </section>}
 
       {entryFlow === "choose" && (
-        <CoverShowcase onStartCover={() => { setEntryFlow("cover"); setStep(1); window.scrollTo({ top: 0 }); }}
+        <GlassHome onStartCover={() => { setEntryFlow("cover"); setStep(1); window.scrollTo({ top: 0 }); }}
           onStartText={() => { setEntryFlow("title"); window.scrollTo({ top: 0 }); }} />
       )}
 

@@ -40,6 +40,14 @@ Logo direction: use a macOS-style rounded-square app icon with four letters in a
 - The corpus descriptions in `references/aesthetic-profile.md` are not the original images. Locate the actual supplied assets before replacing the gallery; do not pass unrelated generated samples off as the user's reference library.
 - User supplied two exact cover JPGs: 马尔代夫 VLOG and 三伏天养生. These replace the initial center portrait and adjacent mountain cover respectively; keep the remaining three samples until additional replacements are supplied. Use the supplied files without regenerating their artwork.
 
+## Liquid-glass homepage supersedes the lavender gallery (2026-10-04)
+
+- The user approved a new homepage after several rounds (record: `docs/apple-redesign-decision.md`): the structure of nikdelvin/liquid-glass — full-bleed moving backdrop, centred glass slabs for the white logo and 「下一张封面，换一种可能。」, a dark glass pill 「上传底图，做我的封面」 and a light glass pill 「从完整原文开始」, and a glass palette dock at the bottom. No cover gallery on the homepage.
+- Colour: coral red (palette `blush`) is the default; the dock also offers Tahoe blue, mint, iris and silver, remembered per browser.
+- Background: our flowing-glass shader plus the fluid-glow layer adapted from PavelDoGreat/WebGL-Fluid-Simulation (MIT). The pointer drags glowing fluid, wisps drift in on their own, a tap bursts light.
+- Code: `src/components/GlassHome.tsx`, `src/glass/glassHome.ts`, `src/glass/glass-home.css`, static scripts and licences in `public/glass/`. The two buttons call the existing cover and Title Master flows unchanged. `CoverShowcase.tsx` is kept but no longer rendered.
+- Only the homepage has changed so far; the creation steps, results, login and recharge screens still use the lavender theme until the user approves their redesign.
+
 ## Title Master Integration Guardrails
 
 - Keep BAKABAKA's Image2, Seedream, SeeDance, design-matrix, prompt, regeneration, and queue pipelines unchanged.
