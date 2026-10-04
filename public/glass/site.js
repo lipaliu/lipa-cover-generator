@@ -6,10 +6,11 @@
   "use strict";
   var still = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
   var small = innerWidth < 700;
-  /* phones / small / low-core devices start lighter (no parallax, half-resolution fluid); every device
-     then steps quality down if it can't hold ~50 fps, so motion stays fluid instead of stuttering */
+  /* phones render at full CSS-pixel resolution and skip parallax; low-core devices start one step lighter;
+     every device then steps quality down if it can't hold ~50 fps, so motion stays fluid */
   var touch = window.matchMedia && matchMedia("(pointer: coarse)").matches;
-  var lite = touch || innerWidth < 760 || (navigator.hardwareConcurrency || 8) <= 4;
+  var phone = touch || innerWidth < 760;
+  var flowScale = phone ? 1 : small ? 0.45 : 0.55; /* phones: full CSS-pixel resolution, dense screens need it */
   var pal = "blush";
   try { pal = localStorage.getItem("baka-glass-palette") || "blush"; } catch (e) { /* storage unavailable */ }
 
@@ -27,7 +28,8 @@
   var supportsUrl = /url/.test(probe.style.backdropFilter);
   /* quality level this device settled on (shared with the app, remembered for a day) */
   var level = 0;
-  try { var saved = JSON.parse(localStorage.getItem("baka-glass-level") || "null"); if (saved && Date.now() - saved.at < 864e5) level = Math.max(0, Math.min(4, saved.level | 0)); } catch (e) { /* storage unavailable */ }
+  try { var saved = JSON.parse(localStorage.getItem("baka-glass-q") || "null"); if (saved && Date.now() - saved.at < 864e5) level = Math.max(0, Math.min(4, saved.level | 0)); } catch (e) { /* storage unavailable */ }
+  if ((navigator.hardwareConcurrency || 8) <= 4) level = Math.max(level, 2);
   var plainGlass = level >= 1;
   function draw(g) {
     var box = g.querySelector(".flt > .box");
@@ -54,10 +56,9 @@
   function mix(a, b, t) { var x = hex(a), y = hex(b); return "#" + x.map(function (v, i) { return Math.round(v + (y[i] - v) * t).toString(16).padStart(2, "0"); }).join(""); }
   var flow = null, fluid = null;
   load("/glass/flow-glass.js").then(function () {
-    flow = window.FlowGlass && FlowGlass.create(layer(), lite ? { palette: pal, scale: 0.32 } : { palette: pal, scale: small ? 0.45 : 0.55 });
+    flow = window.FlowGlass && FlowGlass.create(layer(), { palette: pal, scale: level >= 2 ? flowScale * 0.6 : flowScale });
     if (!flow) return;
     bd.classList.add("on");
-    if (level >= 2 && flow.setScale) flow.setScale(0.24);
     if (level >= 4 && flow.setFps) flow.setFps(30);
     if (still) { flow.draw(); return; }
     flow.start();
@@ -65,13 +66,13 @@
     return load("/glass/fluid.js").then(function () {
       var P = FlowGlass.COLORS[pal] || FlowGlass.COLORS.blush;
       var colors = [P.light, P.mid, mix(P.light, "#ffffff", 0.55), mix(P.mid, P.light, 0.5)];
-      fluid = FluidBG.create(layer(), lite ? {
-        colors: colors, intensity: 0.22, dither: "/glass/LDR_LLL1_0.png", maxPixelRatio: 0.5, initialSplats: 3, ambient: 3.4, maxDt: 0.034,
-        config: { TRANSPARENT: true, DYE_RESOLUTION: 256, SIM_RESOLUTION: 64, PRESSURE_ITERATIONS: 12, DENSITY_DISSIPATION: 1.4, VELOCITY_DISSIPATION: 0.35, CURL: 24, SPLAT_RADIUS: 0.26, SPLAT_FORCE: 5200, BLOOM_ITERATIONS: 4, BLOOM_RESOLUTION: 128, BLOOM_INTENSITY: 0.6, BLOOM_THRESHOLD: 0.45, SUNRAYS: false, COLOR_UPDATE_SPEED: 4 }
-      } : {
-        colors: colors, intensity: 0.2, dither: "/glass/LDR_LLL1_0.png", maxPixelRatio: 1, initialSplats: 4, ambient: 2.6,
-        config: { TRANSPARENT: true, DYE_RESOLUTION: small ? 512 : 768, SIM_RESOLUTION: 128, DENSITY_DISSIPATION: 1.4, VELOCITY_DISSIPATION: 0.35, CURL: 24, SPLAT_RADIUS: 0.22, SPLAT_FORCE: 5200, BLOOM_INTENSITY: 0.55, BLOOM_THRESHOLD: 0.45, SUNRAYS_WEIGHT: 0.9, COLOR_UPDATE_SPEED: 4 }
+      fluid = FluidBG.create(layer(), {
+        colors: colors, intensity: 0.2, dither: "/glass/LDR_LLL1_0.png", maxPixelRatio: 1, initialSplats: phone ? 3 : 4, ambient: phone ? 3 : 2.6, maxDt: 0.034,
+        config: phone
+          ? { TRANSPARENT: true, DYE_RESOLUTION: 512, SIM_RESOLUTION: 96, PRESSURE_ITERATIONS: 16, DENSITY_DISSIPATION: 1.4, VELOCITY_DISSIPATION: 0.35, CURL: 24, SPLAT_RADIUS: 0.24, SPLAT_FORCE: 5200, BLOOM_ITERATIONS: 6, BLOOM_RESOLUTION: 192, BLOOM_INTENSITY: 0.55, BLOOM_THRESHOLD: 0.45, SUNRAYS_RESOLUTION: 128, SUNRAYS_WEIGHT: 0.9, COLOR_UPDATE_SPEED: 4 }
+          : { TRANSPARENT: true, DYE_RESOLUTION: small ? 512 : 768, SIM_RESOLUTION: 128, DENSITY_DISSIPATION: 1.4, VELOCITY_DISSIPATION: 0.35, CURL: 24, SPLAT_RADIUS: 0.22, SPLAT_FORCE: 5200, BLOOM_INTENSITY: 0.55, BLOOM_THRESHOLD: 0.45, SUNRAYS_WEIGHT: 0.9, COLOR_UPDATE_SPEED: 4 }
       });
+      if (level >= 2 && fluid.setSunrays) fluid.setSunrays(false);
       fluid.start();
       setTimeout(function () { requestAnimationFrame(monitor); }, 1200);
     });
@@ -97,12 +98,12 @@
     if (document.hidden) run(false); else run(true);
   });
   /* adaptive quality: 1 plain frosted glass → 2 waves at lower resolution → 3 drop the fluid → 4 waves at 30 fps */
-  var slow = 0, good = 0, mLast = 0, deltas = [];
+  var slow = 0, good = 0, mLast = 0, deltas = [], warm = true;
   function stepDown() {
     level++;
-    try { localStorage.setItem("baka-glass-level", JSON.stringify({ level: level, at: Date.now() })); } catch (e) { /* storage unavailable */ }
+    try { localStorage.setItem("baka-glass-q", JSON.stringify({ level: level, at: Date.now() })); } catch (e) { /* storage unavailable */ }
     if (level === 1) { plainGlass = true; glasses.forEach(draw); }
-    else if (level === 2) { if (flow && flow.setScale) flow.setScale(0.24); }
+    else if (level === 2) { if (flow && flow.setScale) flow.setScale(flowScale * 0.6); if (fluid && fluid.setSunrays) fluid.setSunrays(false); }
     else if (level === 3) { if (fluid) { fluid.destroy(); var cs = bd.querySelectorAll("canvas"); if (cs.length > 1) cs[cs.length - 1].remove(); fluid = null; } }
     else if (level === 4) { if (flow && flow.setFps) flow.setFps(30); }
   }
@@ -112,6 +113,7 @@
     if (deltas.length >= 60) {
       var fps = 1000 / (deltas.reduce(function (a, b) { return a + b; }, 0) / deltas.length);
       deltas = [];
+      if (warm) { warm = false; requestAnimationFrame(monitor); return; }
       if (fps < 40) { slow = 0; good = 0; stepDown(); }
       else if (fps < 50) { slow++; good = 0; if (slow >= 2) { slow = 0; stepDown(); } }
       else { good++; slow = 0; }

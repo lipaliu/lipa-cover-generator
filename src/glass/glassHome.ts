@@ -9,6 +9,7 @@
 
 type Engine = {
   setFps?(n: number): void;
+  setSunrays?(on: boolean): void;
   setScale?(v: number): void;
   start(): void;
   stop(): void;
@@ -34,10 +35,10 @@ export const GLASS_PALETTES = [
 ] as const;
 
 const PALETTE_KEY = "baka-glass-palette";
-/* Phones and small/low-core devices start from a lighter version of the same look
-   (half-resolution fluid without sunrays, lower-resolution waves, no parallax, plain blur
-   on the small dock swatches). Every device then runs an adaptive check: if the page can't
-   hold ~50 fps it steps down until it can, so motion stays fluid instead of stuttering. */
+/* Phones render the background at full CSS-pixel resolution (their screens are dense, so the
+   desktop's reduced resolution looks soft there) and skip parallax; low-core devices start one
+   step lighter. Every device then runs an adaptive check: if the page can't hold ~50 fps it
+   steps down until it can, so motion stays fluid instead of stuttering. */
 export const LITE = typeof window !== "undefined" && (
   matchMedia("(pointer: coarse)").matches || innerWidth < 760 || (navigator.hardwareConcurrency || 8) <= 4
 );
@@ -88,7 +89,7 @@ const supportsUrl = (() => {
 })();
 
 /* the quality level this device settled on is remembered for a day, so the next page starts there */
-const LEVEL_KEY = "baka-glass-level";
+const LEVEL_KEY = "baka-glass-q";
 function readLevel(): number {
   try {
     const v = JSON.parse(localStorage.getItem(LEVEL_KEY) || "null");
@@ -160,7 +161,9 @@ export function mountBackdrop(bd: HTMLElement): () => void {
   const canvases: HTMLCanvasElement[] = [];
   const layer = () => { const c = document.createElement("canvas"); bd.appendChild(c); canvases.push(c); return c; };
   /* adaptive-quality state (see the monitor below); start from the level this device settled on before */
-  let level = readLevel(), slow = 0, good = 0, mraf = 0, mLast = 0;
+  const lowCore = (navigator.hardwareConcurrency || 8) <= 4;
+  const flowScale = TOUCH || innerWidth < 760 ? 1 : small ? 0.45 : 0.55;
+  let level = Math.max(readLevel(), lowCore ? 2 : 0), slow = 0, good = 0, warm = true, mraf = 0, mLast = 0;
   if (level >= 1) setGlassPlain(true);
 
   const api: Backdrop = {
@@ -173,9 +176,8 @@ export function mountBackdrop(bd: HTMLElement): () => void {
       const pal = readPalette();
       await loadScript(BASE + "flow-glass.js");
       if (disposed || !w.FlowGlass) return;
-      flow = w.FlowGlass.create(layer(), LITE ? { palette: pal, scale: 0.32 } : { palette: pal, scale: small ? 0.45 : 0.55 });
+      flow = w.FlowGlass.create(layer(), { palette: pal, scale: level >= 2 ? flowScale * 0.6 : flowScale });
       if (!flow) return;
-      if (level >= 2) flow.setScale?.(0.24);
       if (level >= 4) flow.setFps?.(30);
       bd.classList.add("on");
       document.dispatchEvent(new CustomEvent("glass:ready"));
@@ -184,13 +186,14 @@ export function mountBackdrop(bd: HTMLElement): () => void {
       if (level >= 3) { window.setTimeout(startMonitor, 1200); return; }
       await loadScript(BASE + "fluid.js");
       if (disposed || !w.FluidBG) return;
-      fluid = w.FluidBG.create(layer(), LITE ? {
-        colors: fluidColorsFor(w, readPalette()), intensity: 0.22, dither: BASE + "LDR_LLL1_0.png", maxPixelRatio: 0.5, initialSplats: 4, ambient: 3.2, maxDt: 0.034,
-        config: { TRANSPARENT: true, DYE_RESOLUTION: 256, SIM_RESOLUTION: 64, PRESSURE_ITERATIONS: 12, DENSITY_DISSIPATION: 1.4, VELOCITY_DISSIPATION: 0.35, CURL: 24, SPLAT_RADIUS: 0.26, SPLAT_FORCE: 5200, BLOOM_ITERATIONS: 4, BLOOM_RESOLUTION: 128, BLOOM_INTENSITY: 0.6, BLOOM_THRESHOLD: 0.45, SUNRAYS: false, COLOR_UPDATE_SPEED: 4 },
-      } : {
-        colors: fluidColorsFor(w, readPalette()), intensity: 0.2, dither: BASE + "LDR_LLL1_0.png", maxPixelRatio: 1, initialSplats: 5, ambient: 2.4,
-        config: { TRANSPARENT: true, DYE_RESOLUTION: small ? 512 : 768, SIM_RESOLUTION: 128, DENSITY_DISSIPATION: 1.4, VELOCITY_DISSIPATION: 0.35, CURL: 24, SPLAT_RADIUS: 0.22, SPLAT_FORCE: 5200, BLOOM_INTENSITY: 0.55, BLOOM_THRESHOLD: 0.45, SUNRAYS_WEIGHT: 0.9, COLOR_UPDATE_SPEED: 4 },
+      const phone = TOUCH || innerWidth < 760;
+      fluid = w.FluidBG.create(layer(), {
+        colors: fluidColorsFor(w, readPalette()), intensity: 0.2, dither: BASE + "LDR_LLL1_0.png", maxPixelRatio: 1, initialSplats: phone ? 4 : 5, ambient: phone ? 2.8 : 2.4, maxDt: 0.034,
+        config: phone
+          ? { TRANSPARENT: true, DYE_RESOLUTION: 512, SIM_RESOLUTION: 96, PRESSURE_ITERATIONS: 16, DENSITY_DISSIPATION: 1.4, VELOCITY_DISSIPATION: 0.35, CURL: 24, SPLAT_RADIUS: 0.24, SPLAT_FORCE: 5200, BLOOM_ITERATIONS: 6, BLOOM_RESOLUTION: 192, BLOOM_INTENSITY: 0.55, BLOOM_THRESHOLD: 0.45, SUNRAYS_RESOLUTION: 128, SUNRAYS_WEIGHT: 0.9, COLOR_UPDATE_SPEED: 4 }
+          : { TRANSPARENT: true, DYE_RESOLUTION: small ? 512 : 768, SIM_RESOLUTION: 128, DENSITY_DISSIPATION: 1.4, VELOCITY_DISSIPATION: 0.35, CURL: 24, SPLAT_RADIUS: 0.22, SPLAT_FORCE: 5200, BLOOM_INTENSITY: 0.55, BLOOM_THRESHOLD: 0.45, SUNRAYS_WEIGHT: 0.9, COLOR_UPDATE_SPEED: 4 },
       });
+      if (level >= 2) fluid.setSunrays?.(false);
       fluid.start();
       window.setTimeout(startMonitor, 1200); /* let the first frames and shader compiles settle */
     } catch {
@@ -216,14 +219,14 @@ export function mountBackdrop(bd: HTMLElement): () => void {
     fluid?.pointer(e.clientX, e.clientY);
   };
   /* adaptive quality: watch the real frame rate and step down until motion is fluid.
-     1 plain frosted glass instead of the refraction filter → 2 waves at lower resolution →
-     3 drop the fluid layer → 4 waves at an even 30 fps. */
+     1 plain frosted glass instead of the refraction filter → 2 waves at lower resolution and
+     no light rays in the fluid → 3 drop the fluid layer → 4 waves at an even 30 fps. */
   const deltas: number[] = [];
   function stepDown() {
     level++;
     saveLevel(level);
     if (level === 1) setGlassPlain(true);
-    else if (level === 2) flow?.setScale?.(0.24);
+    else if (level === 2) { flow?.setScale?.(flowScale * 0.6); fluid?.setSunrays?.(false); }
     else if (level === 3) {
       if (fluid) { fluid.destroy?.(); const c = canvases.pop(); c?.remove(); fluid = null; }
     } else if (level === 4) flow?.setFps?.(30);
@@ -238,6 +241,7 @@ export function mountBackdrop(bd: HTMLElement): () => void {
     if (deltas.length >= 60) {
       const fps = 1000 / (deltas.reduce((a, b) => a + b, 0) / deltas.length);
       deltas.length = 0;
+      if (warm) { warm = false; mraf = requestAnimationFrame(monitor); return; } /* ignore the warm-up window */
       /* clearly too slow: step at once; borderline: only after two windows in a row */
       if (fps < 40) { slow = 0; good = 0; stepDown(); }
       else if (fps < 50) { slow++; good = 0; if (slow >= 2) { slow = 0; stepDown(); } }

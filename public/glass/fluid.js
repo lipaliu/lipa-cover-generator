@@ -1454,6 +1454,7 @@ return {
         }
     },
     colors (list) { opts.colors = list; pointers.forEach(p => { p.color = generateColor(); }); },
+    setSunrays (on) { config.SUNRAYS = !!on; updateKeywords(); },
     config,
     destroy () { this.stop(); const l = gl.getExtension('WEBGL_lose_context'); if (l) l.loseContext(); }
 };
