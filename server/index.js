@@ -20,6 +20,7 @@ import authRoutes from "./routes/auth.js";
 import creditsRoutes from "./routes/credits.js";
 import billingRoutes from "./routes/billing.js";
 import { requestTitlePlans } from "./title-master.js";
+import { probeProvider, networkErrorCode } from "./provider-health.js";
 import { renderLegalPage } from "./legal.js";
 import { glassPage, glassMessage } from "./glass-page.js";
 import { getProviderUsageSummary, recordProviderUsage } from "./provider-usage.js";
@@ -695,6 +696,18 @@ if (ACCESS_PASSWORD) {
     const filePath = join(coversDir, file);
     if (!existsSync(filePath)) return adminError(res, 404, "这张的原图已被清理（重新部署会清空记录）");
     return res.sendFile(filePath);
+  });
+
+  app.get("/admin/provider-health", async (req, res) => {
+    if (!requireAdmin(req, res)) return;
+    res.setHeader("Cache-Control", "no-store");
+    const arkUrl = process.env.ARK_API_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
+    const [image2, seedream, seedreamNative] = await Promise.all([
+      probeProvider(process.env.OPENAI_API_BASE_URL || "https://api.openai.com/v1"),
+      probeProvider(arkUrl, (url, options) => undiciFetch(url, { ...options, ...(arkDispatcher ? { dispatcher: arkDispatcher } : {}) })),
+      probeProvider(arkUrl),
+    ]);
+    res.json({ node: process.version, image2, seedream, seedreamNative, fastDirect: process.env.FAST_DIRECT_MODE !== "0" });
   });
 
   app.get("/admin", async (req, res) => {
@@ -2202,7 +2215,7 @@ app.post("/api/generate", async (req, res) => {
       } catch (error) {
         completed += 1;
         if (req.accessAccount) releaseQuota(req.accessAccount.user, 1); // 失败的退回额度
-        console.warn(`[generate] 封面 ${plan.id} 失败（${jobEngine}）：${error?.message || error}`);
+        console.warn(`[generate] 封面 ${plan.id} 失败（${jobEngine}）：${error?.message || error}; networkCode=${networkErrorCode(error)}`);
         const result = {
           id: plan.id,
           combination: plan.combination,
