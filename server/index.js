@@ -22,6 +22,7 @@ import billingRoutes from "./routes/billing.js";
 import { requestTitlePlans } from "./title-master.js";
 import { probeProvider, networkErrorCode } from "./provider-health.js";
 import { openAIImageModel } from "./openai-image-config.js";
+import { generateToapisImage, usesToapisImageTasks } from "./toapis-images.js";
 import { renderLegalPage } from "./legal.js";
 import { glassPage, glassMessage } from "./glass-page.js";
 import { getProviderUsageSummary, recordProviderUsage } from "./provider-usage.js";
@@ -708,7 +709,7 @@ if (ACCESS_PASSWORD) {
       probeProvider(arkUrl, (url, options) => undiciFetch(url, { ...options, ...(arkDispatcher ? { dispatcher: arkDispatcher } : {}) })),
       probeProvider(arkUrl),
     ]);
-    res.json({ node: process.version, image2: { ...image2, model: openAIImageModel(), keyConfigured: Boolean(process.env.OPENAI_API_KEY) }, seedream, seedreamNative, fastDirect: process.env.FAST_DIRECT_MODE !== "0" });
+    res.json({ node: process.version, image2: { ...image2, model: openAIImageModel(), keyConfigured: Boolean(process.env.OPENAI_API_KEY), asyncTasks: usesToapisImageTasks(process.env.OPENAI_API_BASE_URL, openAIImageModel()) }, seedream, seedreamNative, fastDirect: process.env.FAST_DIRECT_MODE !== "0" });
   });
 
   app.get("/admin", async (req, res) => {
@@ -1341,11 +1342,15 @@ async function generateImage2Cover(openai, {
   const size = image2SizeForRatio(ratio);
   // 生图 = 一次直接调用 Image2，给足时间（Image2 要多久就多久），不提前截断、不重试，避免额外耗时。
   const timeoutMs = envNumber("IMAGE2_REQUEST_TIMEOUT_MS", 300000, { min: 60000, max: 600000 });
-  const quality = process.env.IMAGE2_QUALITY || "auto";
   const model = openAIImageModel();
+  const asyncProvider = usesToapisImageTasks(openai.baseURL, model);
+  const quality = asyncProvider ? "high" : process.env.IMAGE2_QUALITY || "auto";
+  const taskTimeoutMs = Math.min(timeoutMs, imageJobTimeoutMs("image2") - 10000);
 
   if (sourceImages.length === 0) {
-    const response = await openai.images.generate({
+    const response = asyncProvider ? await generateToapisImage(openai, {
+      model, prompt, ratio, moderation: "auto", timeoutMs: taskTimeoutMs,
+    }) : await openai.images.generate({
       model,
       prompt,
       size,
@@ -1368,7 +1373,9 @@ async function generateImage2Cover(openai, {
   const imageFiles = await Promise.all(
     sourceImages.map((sourceImage, index) => imageDataUrlToFile(sourceImage, `source-${index + 1}.png`)),
   );
-  const response = await openai.images.edit({
+  const response = asyncProvider ? await generateToapisImage(openai, {
+    model, prompt, ratio, images: imageFiles, timeoutMs: taskTimeoutMs,
+  }) : await openai.images.edit({
     model,
     image: imageFiles.length === 1 ? imageFiles[0] : imageFiles,
     prompt,
@@ -1670,6 +1677,7 @@ async function generateSeedreamCover({
 // 判断一次失败是否值得重试：只有「重试也不会好」的（内容安全审核 / 额度用尽 / 密钥无效）不重试；
 // 其余（网络抖动、超时、限流 429、5xx、未知）都当临时性，值得再试一次。
 function isTransientError(error) {
+  if (error?.noRetry) return false;
   const raw = [error?.message, error?.cause?.message, error?.cause?.code, error?.code]
     .filter(Boolean)
     .join(" ")
@@ -1748,7 +1756,8 @@ async function generateByEngine({
   // 成功的封面一次就出、零额外耗时。只有真的失败、且是临时性错误（限流/网络/超时）的那张才重试，
   // 且用递增退避把重试错开，避免几张同时撞同一个"抖动窗口"（Seedream 是 Oregon→北京 跨境链路，
   // 批量时最容易一批一起失败，所以多给两次机会）。安全审核/额度/密钥这类不重试。
-  const maxAttempts = engine === "seedream" ? 3 : 2;
+  const asyncImage2 = engine === "image2" && usesToapisImageTasks(openai?.baseURL, openAIImageModel());
+  const maxAttempts = asyncImage2 ? 1 : engine === "seedream" ? 3 : 2;
   let lastError;
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     try {
