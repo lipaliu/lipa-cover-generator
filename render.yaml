@@ -35,6 +35,8 @@ services:
         sync: false
       - key: ARK_API_BASE_URL
         sync: false
+      - key: TITLE_MASTER_SERVICE_TOKEN
+        sync: false
       - key: ACCESS_USER
         sync: false
       - key: ACCESS_PASSWORD

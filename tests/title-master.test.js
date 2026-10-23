@@ -11,6 +11,25 @@ const rawPlans = Array.from({ length: 4 }, (_, index) => ({
   coverSub: `副标题${index + 1}`,
 }));
 
+test("authenticated durable title jobs are polled without resubmission or secret redirects", async () => {
+  const old = process.env.TITLE_MASTER_SERVICE_TOKEN;
+  process.env.TITLE_MASTER_SERVICE_TOKEN = "test-service-secret";
+  const requests = [];
+  let id;
+  try {
+    const result = await requestTitlePlans({ text: "这是一段用于验证异步标题生成的完整原文。", waitImpl: async()=>{}, fetchImpl: async(url, options)=>{
+      requests.push(options.method);
+      assert.equal(options.redirect, "error");
+      assert.equal(options.headers.Authorization, "Bearer test-service-secret");
+      if(options.method === "POST") { id=options.headers["Idempotency-Key"];return {ok:true,status:202,json:async()=>({requestId:id})}; }
+      assert.equal(new URL(url).searchParams.get("requestId"),id);
+      return {ok:true,status:200,json:async()=>({plans:rawPlans})};
+    }});
+    assert.equal(result.plans.length,4);
+    assert.deepEqual(requests,["POST","GET"]);
+  } finally { if(old===undefined) delete process.env.TITLE_MASTER_SERVICE_TOKEN;else process.env.TITLE_MASTER_SERVICE_TOKEN=old; }
+});
+
 test("normalizes title-master plans without changing their content", () => {
   assert.deepEqual(normalizeTitlePlans({ plans: rawPlans }), rawPlans);
 });
