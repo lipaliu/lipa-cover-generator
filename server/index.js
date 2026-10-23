@@ -21,6 +21,7 @@ import creditsRoutes from "./routes/credits.js";
 import billingRoutes from "./routes/billing.js";
 import { requestTitlePlans } from "./title-master.js";
 import { probeProvider, networkErrorCode } from "./provider-health.js";
+import { openAIImageModel } from "./openai-image-config.js";
 import { renderLegalPage } from "./legal.js";
 import { glassPage, glassMessage } from "./glass-page.js";
 import { getProviderUsageSummary, recordProviderUsage } from "./provider-usage.js";
@@ -707,7 +708,7 @@ if (ACCESS_PASSWORD) {
       probeProvider(arkUrl, (url, options) => undiciFetch(url, { ...options, ...(arkDispatcher ? { dispatcher: arkDispatcher } : {}) })),
       probeProvider(arkUrl),
     ]);
-    res.json({ node: process.version, image2, seedream, seedreamNative, fastDirect: process.env.FAST_DIRECT_MODE !== "0" });
+    res.json({ node: process.version, image2: { ...image2, model: openAIImageModel(), keyConfigured: Boolean(process.env.OPENAI_API_KEY) }, seedream, seedreamNative, fastDirect: process.env.FAST_DIRECT_MODE !== "0" });
   });
 
   app.get("/admin", async (req, res) => {
@@ -1341,10 +1342,11 @@ async function generateImage2Cover(openai, {
   // 生图 = 一次直接调用 Image2，给足时间（Image2 要多久就多久），不提前截断、不重试，避免额外耗时。
   const timeoutMs = envNumber("IMAGE2_REQUEST_TIMEOUT_MS", 300000, { min: 60000, max: 600000 });
   const quality = process.env.IMAGE2_QUALITY || "auto";
+  const model = openAIImageModel();
 
   if (sourceImages.length === 0) {
     const response = await openai.images.generate({
-      model: "gpt-image-2",
+      model,
       prompt,
       size,
       quality,
@@ -1353,7 +1355,7 @@ async function generateImage2Cover(openai, {
     await recordProviderUsage({
       userId,
       provider: "openai",
-      model: "gpt-image-2",
+      model,
       operation,
       size,
       quality,
@@ -1367,7 +1369,7 @@ async function generateImage2Cover(openai, {
     sourceImages.map((sourceImage, index) => imageDataUrlToFile(sourceImage, `source-${index + 1}.png`)),
   );
   const response = await openai.images.edit({
-    model: "gpt-image-2",
+    model,
     image: imageFiles.length === 1 ? imageFiles[0] : imageFiles,
     prompt,
     size,
@@ -1376,7 +1378,7 @@ async function generateImage2Cover(openai, {
   await recordProviderUsage({
     userId,
     provider: "openai",
-    model: "gpt-image-2",
+    model,
     operation,
     size,
     quality,
