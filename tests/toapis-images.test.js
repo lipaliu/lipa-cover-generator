@@ -17,7 +17,7 @@ function fixture(states) {
       });
     },
   });
-  const runtime = { now: () => time, sleep: async ms => { time += ms; }, pollIntervalMs: () => 5000, onTask: () => {} };
+  const runtime = { now: () => time, sleep: async ms => { time += ms; }, pollIntervalMs: () => 5000, onTask: () => {}, onStage: () => {} };
   return { client, runtime, calls };
 }
 const completed = { id: 'task_test', status: 'completed', result: { data: [{ url: 'https://files.toapis.com/test.png' }] },
@@ -81,4 +81,85 @@ test('synchronous responses still work and missing upload URL does not submit', 
   const bad = fixture([{ success: false }]);
   await assert.rejects(generateToapisImage(bad.client, { ...request, images: [new File(['image'], 'source.png')] }, bad.runtime), /upload failed/);
   assert.equal(bad.calls.length, 1);
+});
+
+test('slow uploads and submissions receive 120s budgets, not the old 30s cap', async () => {
+  let time = 0;
+  const stages = [];
+  let submissions = 0;
+  const client = {
+    post: async (_path, options) => {
+      assert.equal(options.timeout, 120000);
+      assert.equal(options.maxRetries, 0);
+      time += 45000;
+      return { success: true, data: { url: 'https://files.toapis.com/reference.png' } };
+    },
+    images: { generate: async (_body, options) => {
+      assert.equal(options.timeout, 120000);
+      assert.equal(options.maxRetries, 0);
+      submissions++;
+      time += 45000;
+      return completed;
+    } },
+  };
+  await generateToapisImage(client, { ...request, images: [new File(['x'], 'source.png')] }, {
+    now: () => time, onTask: () => {}, onStage: event => stages.push(event),
+  });
+  assert.equal(submissions, 1);
+  assert.deepEqual(stages.filter(s => s.status === 'completed').map(s => [s.stage, s.elapsedMs]), [['upload', 45000], ['submit', 45000]]);
+});
+
+test('four concurrent covers share one upload but still create four independent tasks', async () => {
+  let uploads = 0; let submissions = 0;
+  const referenceUploads = new Map();
+  const client = {
+    post: async () => { uploads++; return {success:true, data:{url:'https://files.toapis.com/reference.png'}}; },
+    images: { generate: async body => {
+      submissions++;
+      assert.deepEqual(body.reference_images, ['https://files.toapis.com/reference.png']);
+      return completed;
+    } },
+  };
+  const runtime = { onTask: () => {}, onStage: () => {} };
+  await Promise.all(Array.from({length:4}, () => generateToapisImage(client, {
+    ...request, images:[new File(['identical bytes'], 'source.png')], referenceUploads,
+  }, runtime)));
+  assert.equal(uploads, 1);
+  assert.equal(submissions, 4);
+  // Another request has its own cache: don't share user references across requests.
+  await generateToapisImage(client, {...request, images:[new File(['identical bytes'], 'source.png')]}, runtime);
+  assert.equal(uploads, 2);
+});
+
+test('upload failure is stage-labelled and shared, never resubmitted by siblings', async () => {
+  let uploads = 0; let submissions = 0;
+  const referenceUploads = new Map();
+  const client = {
+    post: async () => { uploads++; throw new Error('Request timed out.'); },
+    images: { generate: async () => { submissions++; return completed; } },
+  };
+  const results = await Promise.allSettled(Array.from({length:4}, () => generateToapisImage(client, {
+    ...request, images:[new File(['same'], 'source.png')], referenceUploads,
+  }, {onStage:()=>{}, onTask:()=>{}})));
+  assert.equal(uploads, 1);
+  assert.equal(submissions, 0);
+  for (const r of results) {
+    assert.equal(r.status, 'rejected');
+    assert.equal(r.reason.stage, 'upload');
+    assert.equal(r.reason.noRetry, true);
+    assert.match(r.reason.message, /Image2 upload: Request timed out/);
+  }
+});
+
+test('uncertain submission fails once with a distinct stage and no automatic retry', async () => {
+  let calls = 0;
+  const client = {images:{generate:async()=>{calls++;throw new Error('Request timed out.');}}};
+  await assert.rejects(generateToapisImage(client, request, {onStage:()=>{},onTask:()=>{}}), e =>
+    e.stage === 'submit' && e.noRetry && !e.taskId);
+  assert.equal(calls, 1);
+});
+
+test('stage request limits respect the remaining total deadline', async () => {
+  const client = {images:{generate:async(_body,options)=>{assert.equal(options.timeout,20000);return completed;}}};
+  await generateToapisImage(client, {...request,timeoutMs:20000}, {onStage:()=>{},onTask:()=>{}});
 });

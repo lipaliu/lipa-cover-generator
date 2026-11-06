@@ -98,9 +98,10 @@ function imageFetchTimeoutMs() {
 function imageJobTimeoutMs(engine) {
   const prefix = engine === "seedance" ? "SEEDANCE" : engine === "seedream" ? "SEEDREAM" : "IMAGE2";
   // Seedream 5.0 Pro 单张实测 60~110s，且会随负载/大尺寸(16:9/4:3)波动更久；180s 太紧会被
-  // 批量里靠后的那张卡在超时边缘（实测第 3 张 181s 差点被砍）。给它 300s 余量，避免「直接选
-  // Seedream 批量生成时靠后几张静默失败 → 看着没出图」。Image2/SeeDance 维持原值。
-  const fallback = engine === "seedance" ? 150000 : engine === "seedream" ? 300000 : 180000;
+  // 批量里靠后的那张卡在超时边缘（实测第 3 张 181s 差点被砍）。Seedream 给 300s；
+  // ToAPIs Image2 要覆盖底图上传、任务提交、轮询及下载，给 360s；其他引擎维持原值。
+  const asyncImage2 = engine === "image2" && usesToapisImageTasks(process.env.OPENAI_API_BASE_URL, openAIImageModel());
+  const fallback = asyncImage2 ? 360000 : engine === "seedance" ? 150000 : engine === "seedream" ? 300000 : 180000;
   return envNumber([`${prefix}_JOB_TIMEOUT_MS`, "IMAGE_JOB_TIMEOUT_MS"], fallback, {
     min: 30000,
     max: 600000,
@@ -1337,6 +1338,7 @@ async function generateImage2Cover(openai, {
   ratio,
   userId = null,
   operation = "generate",
+  referenceUploads = new Map(),
 }) {
   const prompt = buildImage2Prompt(plan, { sourceMode, imageDescription, ratio, inspiration, sourceCount: sourceImages.length });
   const size = image2SizeForRatio(ratio);
@@ -1346,10 +1348,16 @@ async function generateImage2Cover(openai, {
   const asyncProvider = usesToapisImageTasks(openai.baseURL, model);
   const quality = asyncProvider ? "high" : process.env.IMAGE2_QUALITY || "auto";
   const taskTimeoutMs = Math.min(timeoutMs, imageJobTimeoutMs("image2") - 10000);
+  const asyncOptions = {
+    timeoutMs: taskTimeoutMs,
+    uploadTimeoutMs: envNumber("IMAGE2_UPLOAD_TIMEOUT_MS", 120000, { min: 30000, max: 300000 }),
+    submitTimeoutMs: envNumber("IMAGE2_SUBMIT_TIMEOUT_MS", 120000, { min: 30000, max: 300000 }),
+    referenceUploads,
+  };
 
   if (sourceImages.length === 0) {
     const response = asyncProvider ? await generateToapisImage(openai, {
-      model, prompt, ratio, moderation: "auto", timeoutMs: taskTimeoutMs,
+      model, prompt, ratio, moderation: "auto", ...asyncOptions,
     }) : await openai.images.generate({
       model,
       prompt,
@@ -1374,7 +1382,7 @@ async function generateImage2Cover(openai, {
     sourceImages.map((sourceImage, index) => imageDataUrlToFile(sourceImage, `source-${index + 1}.png`)),
   );
   const response = asyncProvider ? await generateToapisImage(openai, {
-    model, prompt, ratio, images: imageFiles, timeoutMs: taskTimeoutMs,
+    model, prompt, ratio, images: imageFiles, ...asyncOptions,
   }) : await openai.images.edit({
     model,
     image: imageFiles.length === 1 ? imageFiles[0] : imageFiles,
@@ -1716,6 +1724,7 @@ async function generateByEngine({
   ratio,
   userId = null,
   operation = "generate",
+  referenceUploads,
 }) {
   const timeoutMs = imageJobTimeoutMs(engine);
   const runOnce = async () => {
@@ -1731,6 +1740,7 @@ async function generateByEngine({
           ratio,
           userId,
           operation,
+          referenceUploads,
         }),
         timeoutMs,
         `${engineLabels[engine]} 单张生成`,
@@ -2045,6 +2055,7 @@ app.post("/api/generate", async (req, res) => {
     validateGenerateInput({ sourceMode, image, elementImages, imageDescription, title });
     const sourceImages = getSourceImages({ sourceMode, image, elementImages });
     const analysisImage = sourceImages[0] || "";
+    const referenceUploads = new Map();
     const planKeywords = [keywords, imageDescription ? `画面描述：${imageDescription}` : ""].filter(Boolean).join("\n");
 
     const openai = createOpenAIClient();
@@ -2200,6 +2211,7 @@ app.post("/api/generate", async (req, res) => {
           ratio,
           userId: req.user?.id || null,
           operation: "generate",
+          referenceUploads,
         });
         const result = {
           id: plan.id,
