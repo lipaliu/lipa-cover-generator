@@ -1,4 +1,6 @@
 import express from "express";
+import { createProviderSettings, providerEnv, providerScope } from "./provider-settings.js";
+import { mountProviderAdmin } from "./provider-admin.js";
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
@@ -100,7 +102,7 @@ function imageJobTimeoutMs(engine) {
   // Seedream 5.0 Pro 单张实测 60~110s，且会随负载/大尺寸(16:9/4:3)波动更久；180s 太紧会被
   // 批量里靠后的那张卡在超时边缘（实测第 3 张 181s 差点被砍）。Seedream 给 300s；
   // ToAPIs Image2 要覆盖最长 300s 底图上传、任务提交、轮询及下载，给 600s。
-  const asyncImage2 = engine === "image2" && usesToapisImageTasks(process.env.OPENAI_API_BASE_URL, openAIImageModel());
+  const asyncImage2 = engine === "image2" && usesToapisImageTasks(providerEnv().OPENAI_API_BASE_URL, openAIImageModel());
   const fallback = asyncImage2 ? 600000 : engine === "seedance" ? 150000 : engine === "seedream" ? 300000 : 180000;
   return envNumber([`${prefix}_JOB_TIMEOUT_MS`, "IMAGE_JOB_TIMEOUT_MS"], fallback, {
     min: 30000,
@@ -157,10 +159,10 @@ async function withConnectionRetry(fn, { retries = 3, baseDelayMs = 1200, label 
 
 // 统一创建 OpenAI 客户端（生成 / 单张重生共用）。配了代理则走 undici 代理 dispatcher。
 function createOpenAIClient() {
-  if (!process.env.OPENAI_API_KEY) return null;
+  if (!providerEnv().OPENAI_API_KEY) return null;
   return new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    baseURL: process.env.OPENAI_API_BASE_URL || "https://api.openai.com/v1",
+    apiKey: providerEnv().OPENAI_API_KEY,
+    baseURL: providerEnv().OPENAI_API_BASE_URL || "https://api.openai.com/v1",
     timeout: envNumber("OPENAI_REQUEST_TIMEOUT_MS", 120000, { min: 15000, max: 600000 }),
     maxRetries: 0,
     ...(proxyDispatcher ? { fetch: undiciFetch, fetchOptions: { dispatcher: proxyDispatcher } } : {}),
@@ -275,6 +277,7 @@ function configureArk() {
 }
 configureArk();
 
+app.use(providerScope);
 app.use(express.json({
   limit: "100mb",
   verify: (req, _res, buffer) => {
@@ -615,6 +618,9 @@ if (ACCESS_PASSWORD) {
   const adminError = (res, status, message) =>
     res.status(status).type("html").send(glassMessage({ title: "没有保存", message, backHref: "/admin", backLabel: "回到管理后台" }));
 
+  const providerStore = await createProviderSettings({ file: join(dataDir, "providers.enc.json"), pool: getPool() });
+  mountProviderAdmin(app, { requireAdmin, store: providerStore, secret: accessSecret });
+
   // 新增/修改体验账户
   app.post("/admin/accounts", (req, res) => {
     if (!requireAdmin(req, res)) return;
@@ -704,13 +710,13 @@ if (ACCESS_PASSWORD) {
   app.get("/admin/provider-health", async (req, res) => {
     if (!requireAdmin(req, res)) return;
     res.setHeader("Cache-Control", "no-store");
-    const arkUrl = process.env.ARK_API_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
+    const arkUrl = providerEnv().ARK_API_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
     const [image2, seedream, seedreamNative] = await Promise.all([
-      probeProvider(process.env.OPENAI_API_BASE_URL || "https://api.openai.com/v1"),
+      probeProvider(providerEnv().OPENAI_API_BASE_URL || "https://api.openai.com/v1"),
       probeProvider(arkUrl, (url, options) => undiciFetch(url, { ...options, ...(arkDispatcher ? { dispatcher: arkDispatcher } : {}) })),
       probeProvider(arkUrl),
     ]);
-    res.json({ node: process.version, image2: { ...image2, model: openAIImageModel(), keyConfigured: Boolean(process.env.OPENAI_API_KEY), asyncTasks: usesToapisImageTasks(process.env.OPENAI_API_BASE_URL, openAIImageModel()) }, seedream, seedreamNative, fastDirect: process.env.FAST_DIRECT_MODE !== "0" });
+    res.json({ node: process.version, image2: { ...image2, model: openAIImageModel(), keyConfigured: Boolean(providerEnv().OPENAI_API_KEY), asyncTasks: usesToapisImageTasks(providerEnv().OPENAI_API_BASE_URL, openAIImageModel()) }, seedream, seedreamNative, fastDirect: process.env.FAST_DIRECT_MODE !== "0" });
   });
 
   app.get("/admin", async (req, res) => {
@@ -816,6 +822,7 @@ if (ACCESS_PASSWORD) {
       body: `
     <h1 class="page-title">管理后台</h1>
     <p class="sub">账户管理、会员与生成记录</p>
+    <section class="glass"><h2>API 与模型</h2><p class="hint">添加 API Key、接口地址和模型，为 Image2 / Seedream 切换服务配置。</p><p style="margin-top:18px"><a class="btn" href="/admin/providers">管理 API 与模型 →</a></p></section>
     <section class="glass">
       <h2>账户</h2>
       <div class="table-wrap"><table><thead><tr><th>账户</th><th>类型</th><th>密码</th><th>累计生成</th><th>单次上限</th><th>最近生成</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table></div>
@@ -963,7 +970,7 @@ function resolveEngine(engine) {
 
 function assertEngineAvailable(engine) {
   if (engine === "image2") {
-    if (!process.env.OPENAI_API_KEY) {
+    if (!providerEnv().OPENAI_API_KEY) {
       throw new Error("Missing OPENAI_API_KEY. Add it to .env.local, then restart the server.");
     }
     return;
@@ -974,7 +981,7 @@ function assertEngineAvailable(engine) {
   }
 
   if (engine === "seedream") {
-    if (!process.env.ARK_API_KEY) {
+    if (!providerEnv().ARK_API_KEY) {
       throw new Error("缺少 ARK_API_KEY。请在 .env.local 配置火山方舟 API Key 后重启服务。");
     }
     return;
@@ -1634,12 +1641,12 @@ async function generateSeedreamCover({
   userId = null,
   operation = "generate",
 }) {
-  const apiKey = process.env.ARK_API_KEY;
+  const apiKey = providerEnv().ARK_API_KEY;
   if (!apiKey) {
     throw new Error("缺少 ARK_API_KEY。请在 .env.local 配置火山方舟 API Key 后重启服务。");
   }
-  const model = process.env.ARK_MODEL || "doubao-seedream-5-0-260128";
-  const baseUrl = process.env.ARK_API_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
+  const model = providerEnv().ARK_MODEL || "doubao-seedream-5-0-260128";
+  const baseUrl = providerEnv().ARK_API_BASE_URL || "https://ark.cn-beijing.volces.com/api/v3";
   // 用完整设计提示词（与 Image2 同款，不截断）——保证花字/排版/装饰指令完整传达。
   const prompt = buildImage2Prompt(plan, { sourceMode, ratio, inspiration, sourceCount: sourceImages.length });
   const body = {
