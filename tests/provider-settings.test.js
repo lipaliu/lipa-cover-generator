@@ -57,3 +57,16 @@ test('admin console denies non-admin/CSRF and never returns raw keys', async () 
     const backup = await (await fetch(url + '/admin/providers/backup', { headers })).text(); assert.ok(!backup.includes(input.key));
   } finally { await new Promise(r => server.close(r)); await rm(dir, { recursive: true, force: true }); }
 });
+
+test('remote encrypted profiles and site default survive a fresh server without local files', async () => {
+  const c = codec(env.ACCESS_PASSWORD); let payload = c.seal({ profiles: [], active: {} }); let fail = false;
+  const remote = { read: async () => payload, write: async next => { if (fail) throw Error('offline'); payload = next; } };
+  const s = await createProviderSettings({ env, remote, file: '/unused' });
+  await s.save({ ...input, engine: 'seedream', model: 'doubao-seedream-5-0-pro-260628' }); const id = s.list().find(p => !p.builtin).id;
+  await s.setDefault(id); assert.equal(s.defaultEngine, 'seedream'); assert.equal(providerEnv().DEFAULT_IMAGE_ENGINE, 'seedream');
+  assert.ok(!payload.includes(input.key));
+  const restarted = await createProviderSettings({ env, remote, file: '/another-empty-filesystem' });
+  assert.equal(restarted.defaultEngine, 'seedream'); assert.equal(providerEnv().ARK_MODEL, 'doubao-seedream-5-0-pro-260628'); assert.ok(restarted.list().find(p => p.id === id).active);
+  fail = true; await assert.rejects(restarted.activate('env-image2')); assert.equal(restarted.defaultEngine, 'seedream');
+  const unavailable = await createProviderSettings({ env, file: '/unused', remote: { read: async () => { throw Error('offline'); } } }); assert.ok(unavailable.error.includes('生成已暂停'));
+});

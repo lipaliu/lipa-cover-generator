@@ -400,6 +400,10 @@ export function App() {
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         setIsAdminAccount(d?.role === "admin");
+        if (d?.defaultEngine === "seedream" || d?.defaultEngine === "image2") {
+          setEngine(d.defaultEngine);
+          setSlotEngines([]);
+        }
         setAccess(isLocalLipa && d && d.user === null && d.role === "none" ? "guest" : "member");
       })
       .catch(() => setAccess("member"));

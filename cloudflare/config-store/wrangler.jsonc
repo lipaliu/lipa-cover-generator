@@ -1,0 +1,11 @@
+{
+  "name": "bakabaka-config-store",
+  "account_id": "513bc1e4d873d9db0a3bdaeee2c416ff",
+  "main": "worker.js",
+  "compatibility_date": "2026-11-01",
+  "workers_dev": true,
+  "preview_urls": false,
+  "durable_objects": { "bindings": [{ "name": "CONFIG", "class_name": "ConfigStore" }] },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["ConfigStore"] }],
+  "observability": { "enabled": false }
+}

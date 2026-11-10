@@ -1,3 +1,4 @@
+import { createRemoteStore } from './provider-remote-store.js';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomUUID } from 'node:crypto';
 import { mkdir, readFile, writeFile, rename } from 'node:fs/promises';
@@ -29,36 +30,41 @@ export function codec(secret) {
     open(value) { const b = JSON.parse(value); if (b.v !== 1) throw Error('备份版本不支持。'); const c = createDecipheriv('aes-256-gcm', key, Buffer.from(b.iv, 'base64')); c.setAuthTag(Buffer.from(b.tag, 'base64')); return JSON.parse(Buffer.concat([c.update(Buffer.from(b.data, 'base64')), c.final()]).toString()); },
   };
 }
-export async function createProviderSettings({ env = process.env, file, pool = null }) {
+export async function createProviderSettings({ env = process.env, file, pool = null, remote = createRemoteStore(env) }) {
   const crypt = codec(env.PROVIDER_CONFIG_SECRET || env.ACCESS_PASSWORD);
   const base = Object.entries(fields).map(([engine, names]) => ({ id: `env-${engine}`, engine, name: `${engine === 'image2' ? 'Image2' : 'Seedream'} · 服务器默认`, key: env[names[0]] || '', baseURL: env[names[1]] || defaults[engine][0], model: env[names[2]] || defaults[engine][1] }));
-  let state = { profiles: [], active: {} }; let error = ''; let queue = Promise.resolve();
-  const apply = () => { const overrides = {}; for (const [engine, id] of Object.entries(state.active)) { const p = state.profiles.find(p => p.id === id && p.engine === engine); if (p) fields[engine].forEach((key, i) => { overrides[key] = [p.key, p.baseURL, p.model][i]; }); } current = overrides; };
+  let state = { profiles: [], active: {}, defaultEngine: 'image2' }; let error = ''; let queue = Promise.resolve();
+  const apply = () => { const overrides = { DEFAULT_IMAGE_ENGINE: state.defaultEngine }; for (const [engine, id] of Object.entries(state.active)) { const p = state.profiles.find(p => p.id === id && p.engine === engine); if (p) fields[engine].forEach((key, i) => { overrides[key] = [p.key, p.baseURL, p.model][i]; }); } current = overrides; };
   const validateState = value => {
     if (!Array.isArray(value.profiles) || value.profiles.length > 40 || !value.active || typeof value.active !== 'object') throw Error('配置文件格式无效。');
     const ids = new Set(); const profiles = value.profiles.map(p => { if (typeof p.id !== 'string' || !/^[a-zA-Z0-9-]{1,60}$/u.test(p.id) || ids.has(p.id) || p.id.startsWith('env-')) throw Error('配置 ID 无效。'); ids.add(p.id); return validateProfile(p, p); });
     for (const [engine, id] of Object.entries(value.active)) if (!fields[engine] || !profiles.some(p => p.id === id && p.engine === engine)) throw Error('启用配置无效。');
-    return { profiles, active: { ...value.active } };
+    if (value.defaultEngine && !fields[value.defaultEngine]) throw Error('默认引擎无效。');
+    return { profiles, active: { ...value.active }, defaultEngine: value.defaultEngine || 'image2' };
   };
   try {
     let saved;
-    if (pool) { await pool.query('CREATE TABLE IF NOT EXISTS provider_settings (id INT PRIMARY KEY, payload MEDIUMTEXT NOT NULL)'); const [rows] = await pool.query('SELECT payload FROM provider_settings WHERE id=1'); saved = rows[0]?.payload; }
+    if (remote) { saved = await remote.read(); if (!saved) throw Error('持久存储尚未初始化。'); }
+    else if (pool) { await pool.query('CREATE TABLE IF NOT EXISTS provider_settings (id INT PRIMARY KEY, payload MEDIUMTEXT NOT NULL)'); const [rows] = await pool.query('SELECT payload FROM provider_settings WHERE id=1'); saved = rows[0]?.payload; }
     else { try { saved = await readFile(file, 'utf8'); } catch (e) { if (e.code !== 'ENOENT') throw e; } }
     if (saved) state = validateState(crypt.open(saved));
     apply();
-  } catch { error = '保存的配置无法读取或解密，当前使用服务器默认配置。请检查存储或恢复备份。'; }
+  } catch { error = '保存的配置无法读取或解密，生成已暂停，避免使用错误配置。请检查存储或恢复备份。'; }
   const mutate = (action, recovery = false) => {
     const run = queue.then(async () => {
       if (error && !recovery) throw Error(error);
       const next = structuredClone(state); action(next); const checked = validateState(next); const payload = crypt.seal(checked);
-      if (pool) await pool.query('INSERT INTO provider_settings (id,payload) VALUES (1,?) ON DUPLICATE KEY UPDATE payload=VALUES(payload)', [payload]);
+      if (remote) await remote.write(payload);
+      else if (pool) await pool.query('INSERT INTO provider_settings (id,payload) VALUES (1,?) ON DUPLICATE KEY UPDATE payload=VALUES(payload)', [payload]);
       else { await mkdir(dirname(file), { recursive: true }); const temp = `${file}.tmp`; await writeFile(temp, payload, { mode: 0o600 }); await rename(temp, file); }
       state = checked; error = ''; apply();
     }); queue = run.catch(() => {}); return run;
   };
   return {
-    storage: pool ? '数据库持久保存' : env.RENDER ? '当前为 Render 本地存储：重新部署或实例重建后可能丢失。修改后请下载加密备份；接入 MySQL 后可持久保存。' : '服务器本地加密保存',
+    storage: remote ? 'Cloudflare 独立持久存储 · 配置已加密，Render 重启和重新部署不会清空' : pool ? '数据库持久保存' : env.RENDER ? '当前为 Render 本地存储：重新部署或实例重建后可能丢失。修改后请下载加密备份；接入 MySQL 后可持久保存。' : '服务器本地加密保存',
     get error() { return error; },
+    get defaultEngine() { return state.defaultEngine; },
+    setDefault: id => mutate(next => { const p = [...base, ...next.profiles].find(p => p.id === id); if (!p?.key) throw Error('请先填写 API Key。'); if (id.startsWith('env-')) delete next.active[p.engine]; else next.active[p.engine] = id; next.defaultEngine = p.engine; }),
     list: () => [...base, ...state.profiles].map(({ key, ...p }) => ({ ...p, configured: Boolean(key), active: (state.active[p.engine] || `env-${p.engine}`) === p.id, builtin: p.id.startsWith('env-') })),
     save: input => mutate(next => { const old = next.profiles.find(p => p.id === input.id); if (input.id && !old) throw Error('配置不存在，请刷新页面。'); if (old && Object.values(next.active).includes(old.id)) throw Error('请先切换到其他配置，再编辑当前启用项。'); const p = validateProfile(input, old); if (old) next.profiles[next.profiles.indexOf(old)] = p; else next.profiles.push(p); }),
     activate: id => mutate(next => { const p = [...base, ...next.profiles].find(p => p.id === id); if (!p?.key) throw Error('配置不存在或尚未填写密钥。'); if (id.startsWith('env-')) delete next.active[p.engine]; else next.active[p.engine] = id; }),

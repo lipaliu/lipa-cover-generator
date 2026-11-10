@@ -596,9 +596,10 @@ if (ACCESS_PASSWORD) {
   // 当前登录的是谁（前端用它决定要不要显示「管理后台」按钮）
   app.get("/api/whoami", (req, res) => {
     const a = req.accessAccount;
-    if (!a) return res.json({ user: null, role: "none" });
+    if (!a) return res.json({ user: null, role: "none", defaultEngine: providerEnv().DEFAULT_IMAGE_ENGINE || "image2" });
     return res.json({
       user: a.user,
+      defaultEngine: providerEnv().DEFAULT_IMAGE_ENGINE || "image2",
       role: a.role,
       quota: a.quota === Infinity ? null : a.quota,
       used: usageOf(a.user),
@@ -620,6 +621,7 @@ if (ACCESS_PASSWORD) {
 
   const providerStore = await createProviderSettings({ file: join(dataDir, "providers.enc.json"), pool: getPool() });
   mountProviderAdmin(app, { requireAdmin, store: providerStore, secret: accessSecret });
+  app.use(["/api/generate", "/api/regenerate"], (_req, res, next) => providerStore.error ? res.status(503).json({ error: providerStore.error }) : next());
 
   // 新增/修改体验账户
   app.post("/admin/accounts", (req, res) => {
@@ -1980,7 +1982,7 @@ app.post("/api/generate", async (req, res) => {
     title,
     subtitle = "",
     keywords = "",
-    engine: requestedEngine = "image2",
+    engine: requestedEngine = providerEnv().DEFAULT_IMAGE_ENGINE || "image2",
     count: requestedCount,
     sourceMode: requestedSourceMode = "base",
     imageDescription = "",
