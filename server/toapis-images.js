@@ -11,8 +11,8 @@ export function usesToapisImageTasks(baseURL, model) {
 }
 
 export async function generateToapisImage(client, {
-  model, prompt, ratio, images = [], moderation, timeoutMs = 300000,
-  uploadTimeoutMs = 120000, submitTimeoutMs = 120000, pollTimeoutMs = 30000,
+  model, prompt, ratio, images = [], moderation, timeoutMs = 540000,
+  uploadTimeoutMs = 300000, submitTimeoutMs = 120000, pollTimeoutMs = 30000,
   // This map belongs to ONE /api/generate request, never to a user/global cache.
   referenceUploads = new Map(),
 }, {

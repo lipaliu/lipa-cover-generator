@@ -83,15 +83,15 @@ test('synchronous responses still work and missing upload URL does not submit', 
   assert.equal(bad.calls.length, 1);
 });
 
-test('slow uploads and submissions receive 120s budgets, not the old 30s cap', async () => {
+test('a near-five-minute upload leaves time for submission without retrying', async () => {
   let time = 0;
   const stages = [];
   let submissions = 0;
   const client = {
     post: async (_path, options) => {
-      assert.equal(options.timeout, 120000);
+      assert.equal(options.timeout, 300000);
       assert.equal(options.maxRetries, 0);
-      time += 45000;
+      time += 280000;
       return { success: true, data: { url: 'https://files.toapis.com/reference.png' } };
     },
     images: { generate: async (_body, options) => {
@@ -106,7 +106,7 @@ test('slow uploads and submissions receive 120s budgets, not the old 30s cap', a
     now: () => time, onTask: () => {}, onStage: event => stages.push(event),
   });
   assert.equal(submissions, 1);
-  assert.deepEqual(stages.filter(s => s.status === 'completed').map(s => [s.stage, s.elapsedMs]), [['upload', 45000], ['submit', 45000]]);
+  assert.deepEqual(stages.filter(s => s.status === 'completed').map(s => [s.stage, s.elapsedMs]), [['upload', 280000], ['submit', 45000]]);
 });
 
 test('four concurrent covers share one upload but still create four independent tasks', async () => {

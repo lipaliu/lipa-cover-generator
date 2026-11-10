@@ -99,9 +99,9 @@ function imageJobTimeoutMs(engine) {
   const prefix = engine === "seedance" ? "SEEDANCE" : engine === "seedream" ? "SEEDREAM" : "IMAGE2";
   // Seedream 5.0 Pro 单张实测 60~110s，且会随负载/大尺寸(16:9/4:3)波动更久；180s 太紧会被
   // 批量里靠后的那张卡在超时边缘（实测第 3 张 181s 差点被砍）。Seedream 给 300s；
-  // ToAPIs Image2 要覆盖底图上传、任务提交、轮询及下载，给 360s；其他引擎维持原值。
+  // ToAPIs Image2 要覆盖最长 300s 底图上传、任务提交、轮询及下载，给 600s。
   const asyncImage2 = engine === "image2" && usesToapisImageTasks(process.env.OPENAI_API_BASE_URL, openAIImageModel());
-  const fallback = asyncImage2 ? 360000 : engine === "seedance" ? 150000 : engine === "seedream" ? 300000 : 180000;
+  const fallback = asyncImage2 ? 600000 : engine === "seedance" ? 150000 : engine === "seedream" ? 300000 : 180000;
   return envNumber([`${prefix}_JOB_TIMEOUT_MS`, "IMAGE_JOB_TIMEOUT_MS"], fallback, {
     min: 30000,
     max: 600000,
@@ -1343,14 +1343,14 @@ async function generateImage2Cover(openai, {
   const prompt = buildImage2Prompt(plan, { sourceMode, imageDescription, ratio, inspiration, sourceCount: sourceImages.length });
   const size = image2SizeForRatio(ratio);
   // 生图 = 一次直接调用 Image2，给足时间（Image2 要多久就多久），不提前截断、不重试，避免额外耗时。
-  const timeoutMs = envNumber("IMAGE2_REQUEST_TIMEOUT_MS", 300000, { min: 60000, max: 600000 });
   const model = openAIImageModel();
   const asyncProvider = usesToapisImageTasks(openai.baseURL, model);
+  const timeoutMs = envNumber("IMAGE2_REQUEST_TIMEOUT_MS", asyncProvider ? 540000 : 300000, { min: 60000, max: 600000 });
   const quality = asyncProvider ? "high" : process.env.IMAGE2_QUALITY || "auto";
   const taskTimeoutMs = Math.min(timeoutMs, imageJobTimeoutMs("image2") - 10000);
   const asyncOptions = {
     timeoutMs: taskTimeoutMs,
-    uploadTimeoutMs: envNumber("IMAGE2_UPLOAD_TIMEOUT_MS", 120000, { min: 30000, max: 300000 }),
+    uploadTimeoutMs: envNumber("IMAGE2_UPLOAD_TIMEOUT_MS", 300000, { min: 30000, max: 300000 }),
     submitTimeoutMs: envNumber("IMAGE2_SUBMIT_TIMEOUT_MS", 120000, { min: 30000, max: 300000 }),
     referenceUploads,
   };
