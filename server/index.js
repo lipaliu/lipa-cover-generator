@@ -962,7 +962,7 @@ function normalizeCount(value) {
 }
 
 function normalizeEngine(value) {
-  const key = String(value || "image2").toLowerCase().replace(/\s+/gu, "");
+  const key = String(value || providerEnv().DEFAULT_IMAGE_ENGINE || "image2").toLowerCase().replace(/\s+/gu, "");
   return engineAliases[key] || "image2";
 }
 
@@ -1833,7 +1833,7 @@ app.get("/api/download/:filename", (req, res) => {
 
 // 单张重生：某一张失败或不满意时，单独重生（可换引擎）。商业账户按 1 张计费。
 app.post("/api/regenerate", async (req, res) => {
-  const requestedEngineRaw = req.body?.engine || "image2";
+  const requestedEngineRaw = req.body?.engine || providerEnv().DEFAULT_IMAGE_ENGINE || "image2";
   const billingEngine = resolveEngine(normalizeEngine(requestedEngineRaw));
   const billingSourceImageCount = sourceImageCountForCredits(req.body || {});
   const regenerateLocalFree = isLocalFreeMode(req);
@@ -1959,7 +1959,7 @@ app.post("/api/generate", async (req, res) => {
     }
     const requestedCount = Number(req.body?.ratios?.reduce?.((s, r) => s + (r.count || 0), 0) || req.body?.count || 4);
     const creditsCost = getCreditsCost(Math.max(1, requestedCount), {
-      engine: req.body?.engine,
+      engine: normalizeEngine(req.body?.engine),
       slotEngines: Array.isArray(req.body?.slotEngines) ? req.body.slotEngines : [],
       sourceImageCount: sourceImageCountForCredits(req.body || {}),
     });
